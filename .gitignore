@@ -1,0 +1,13 @@
+# Build artifact — regenerated from variation-fee-calculator/ via the zip script
+variation-fee-calculator.zip
+
+# Excel example/source files (not part of the tool itself)
+*.xlsx
+~$*.xlsx
+
+# Other non-project files in this folder
+*.docx
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
