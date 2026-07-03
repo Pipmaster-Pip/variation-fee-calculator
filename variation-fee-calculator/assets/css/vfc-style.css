@@ -555,6 +555,7 @@
 .vfc-app .breakdown-row .bd-name{ font-size:13.5px; font-weight:600; color:var(--ink); }
 .vfc-app .breakdown-row .bd-meta{ font-size:11.5px; color:var(--ink-faint); font-family:var(--mono); }
 .vfc-app .breakdown-row .bd-meta b{ color:var(--ink-soft); font-weight:700; }
+.vfc-app .breakdown-row .bd-items{ display:flex; flex-direction:column; gap:2px; margin-top:6px; }
 .vfc-app .bd-item-line{
   display:flex;
   justify-content:space-between;

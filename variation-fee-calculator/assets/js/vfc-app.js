@@ -635,6 +635,29 @@ function renderSpecialPanel() {
       ensureCountryConfig(cc).specialByType[type] = sel.value || null;
     });
   });
+
+  equalizeSelectWidths(blocks.querySelectorAll('select.field-select'));
+}
+
+// Gives every <select> in the list the same width, wide enough to fit the
+// longest option label across all of them (measured via canvas text
+// metrics, since a <select>'s natural width isn't otherwise queryable
+// cross-browser without rendering every option).
+function equalizeSelectWidths(selects) {
+  if (!selects.length) return;
+  const canvas = equalizeSelectWidths._canvas || (equalizeSelectWidths._canvas = document.createElement('canvas'));
+  const ctx = canvas.getContext('2d');
+  const cs = getComputedStyle(selects[0]);
+  ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  let maxTextWidth = 0;
+  selects.forEach(sel => {
+    Array.from(sel.options).forEach(opt => {
+      const w = ctx.measureText(opt.textContent).width;
+      if (w > maxTextWidth) maxTextWidth = w;
+    });
+  });
+  const width = Math.ceil(maxTextWidth) + 48; // padding + dropdown arrow room
+  selects.forEach(sel => { sel.style.width = width + 'px'; });
 }
 
 // ---- Shared stepper widget ----
@@ -1007,10 +1030,10 @@ function renderStepResult() {
           <div class="bd-left">
             <span class="bd-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></span>
             <span class="bd-meta"><b>${roleLabel(cr.role)}</b> · <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b></span>
-            ${itemLinesHtml}
           </div>
           ${amountBlock}
         </div>
+        <div class="bd-items">${itemLinesHtml}</div>
         ${annotations}
         ${localBlock}
       </div>
