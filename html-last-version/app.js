@@ -925,7 +925,7 @@ function renderStepResult() {
 
       // No extra "(before cap:)" hint needed — the raw amount IS the line display
       const uncappedHint = '';
-      return { html: `<span class="bd-meta" style="display:block;">${countLabel} ${label} – ${displayAmt}${uncappedHint}</span>`, label, countLabel, eurValue: displayAmtValue };
+      return { html: `<span class="bd-meta bd-item-line">${countLabel} ${label}${uncappedHint}<span class="bd-item-amount">${displayAmt}</span></span>`, label, countLabel, eurValue: displayAmtValue };
     });
     const itemLinesHtml = itemLines.map(l => l.html).join('');
 
@@ -969,7 +969,7 @@ function renderStepResult() {
     const localItemLines = hasLocal ? itemLines.map(l => {
       const localValue = (l.eurValue !== null && l.eurValue !== undefined) ? l.eurValue * cr.fxRate : null;
       const localAmt = localValue !== null ? fmtLocalCurrency(localValue, cr.currency) : '–';
-      return `<span class="bd-meta" style="display:block;">${l.countLabel} ${l.label} – ${localAmt}</span>`;
+      return `<span class="bd-meta bd-item-line">${l.countLabel} ${l.label}<span class="bd-item-amount">${localAmt}</span></span>`;
     }).join('') : '';
     const localBlock = hasLocal ? `
       <div class="local-currency-row">
@@ -1143,26 +1143,29 @@ function exportNotesFor(cr) {
   return notes.join(' | ');
 }
 
-function exportExcel(res) {
-  if (typeof XLSX === 'undefined') {
-    alert('Excel export library not loaded. Please check your internet connection and try again.');
-    return;
-  }
-
+// Starts a new "sheet build" — an object with a pushRow() helper and the
+// tracking arrays exportSheetToWorkbook() later needs to apply number/date
+// formats and (best-effort) bold, since aoa_to_sheet itself only takes plain
+// values.
+function newSheetBuilder() {
   const ws_data = [];
   const numberCells = []; // { r, c, format } — 0-indexed, applied after the sheet is built
   const dateCells = [];   // { r, c, format }
   const boldRows = [];    // 0-indexed row numbers to bold (best-effort; harmless if unsupported)
-
   function pushRow(row) {
     ws_data.push(row);
     return ws_data.length - 1; // 0-indexed row just added
   }
+  return { ws_data, numberCells, dateCells, boldRows, pushRow };
+}
 
+// Shared metadata block (title/copyright/dates/counts/grand total) at the
+// top of every export sheet.
+function pushMetadataRows(sheet, res) {
+  const { pushRow, boldRows, dateCells, numberCells } = sheet;
   const lastUpdatedDate = (typeof IMPRINT !== 'undefined' && IMPRINT.length > 0 && IMPRINT[0].date)
     ? new Date(IMPRINT[0].date + 'T00:00:00') : null;
 
-  // ── Metadata block ──
   boldRows.push(pushRow(['Variation Fee Calculator']));
   pushRow(['© Dr. Tom Deutschle']);
   pushRow(['www.pharmazulassung.de']);
@@ -1184,6 +1187,58 @@ function exportExcel(res) {
     numberCells.push({ r, c: 1, format: EXCEL_CURRENCY_FORMATS.EUR });
   }
   pushRow([]);
+}
+
+// Turns a sheet builder's tracked rows/formats into an actual worksheet and
+// appends it to the workbook. cellDates:true is essential here — without it,
+// aoa_to_sheet silently converts JS Date values to raw Excel serial numbers
+// typed as plain numbers, and the later "ws[addr].t = 'd'" pass then
+// re-interprets that already-converted serial as if it were a JS Date's
+// millisecond timestamp, corrupting the date (this was the "Calculation
+// date shows 1970" bug).
+function appendSheet(wb, sheet, sheetName, colWidths) {
+  const { ws_data, numberCells, dateCells, boldRows } = sheet;
+  const ws = XLSX.utils.aoa_to_sheet(ws_data, { cellDates: true });
+  if (colWidths) ws['!cols'] = colWidths.map(wch => ({ wch }));
+
+  numberCells.forEach(({ r, c, format }) => {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    if (ws[addr] && typeof ws[addr].v === 'number') {
+      ws[addr].z = format;
+      ws[addr].t = 'n';
+    }
+  });
+  dateCells.forEach(({ r, c, format }) => {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    if (ws[addr]) {
+      ws[addr].t = 'd';
+      ws[addr].z = format;
+    }
+  });
+  boldRows.forEach(r => {
+    const row = ws_data[r];
+    if (!row) return;
+    row.forEach((_, c) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (ws[addr]) ws[addr].s = Object.assign({}, ws[addr].s, { font: Object.assign({}, ws[addr].s && ws[addr].s.font, { bold: true }) });
+    });
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+}
+
+function exportExcel(res) {
+  if (typeof XLSX === 'undefined') {
+    alert('Excel export library not loaded. Please check your internet connection and try again.');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: "Variation Fees" ──
+  const sheet1 = newSheetBuilder();
+  const { ws_data, pushRow, numberCells, boldRows } = sheet1;
+  pushMetadataRows(sheet1, res);
 
   // ── Table 1: Euro (all countries) ──
   boldRows.push(pushRow(['Euro (all countries):']));
@@ -1254,48 +1309,28 @@ function exportExcel(res) {
     });
   }
 
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  appendSheet(wb, sheet1, 'Variation Fees', [22, 6, 20, 10, 16, 16, 16, 16, 14, 44]);
 
-  // ── Column widths (fixed 10-column layout, both tables share it) ──
-  ws['!cols'] = [
-    { wch: 22 }, // Country
-    { wch: 6  }, // Code
-    { wch: 20 }, // Role
-    { wch: 10 }, // Strengths
-    { wch: 16 }, // Type IA
-    { wch: 16 }, // Type IB
-    { wch: 16 }, // Type II
-    { wch: 16 }, // Total / Total (local)
-    { wch: 14 }, // n.a. / Exchange rate
-    { wch: 44 }, // Notes
-  ];
-
-  // ── Apply number/date formats and (best-effort) bold ──
-  numberCells.forEach(({ r, c, format }) => {
-    const addr = XLSX.utils.encode_cell({ r, c });
-    if (ws[addr] && typeof ws[addr].v === 'number') {
-      ws[addr].z = format;
-      ws[addr].t = 'n';
-    }
-  });
-  dateCells.forEach(({ r, c, format }) => {
-    const addr = XLSX.utils.encode_cell({ r, c });
-    if (ws[addr]) {
-      ws[addr].t = 'd';
-      ws[addr].z = format;
-    }
-  });
-  boldRows.forEach(r => {
-    const row = ws_data[r];
-    if (!row) return;
-    row.forEach((_, c) => {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      if (ws[addr]) ws[addr].s = Object.assign({}, ws[addr].s, { font: Object.assign({}, ws[addr].s && ws[addr].s.font, { bold: true }) });
+  // ── Sheet 2: "Variation cases" ──
+  // For each filed type, lists every selected country's resolved special
+  // case (e.g. "complex", "full & abbreviated application") — or "standard"
+  // where the source fee table has no distinct variant for that country/
+  // type. This documents *which* row of the fee table each country's figure
+  // in Sheet 1 actually came from.
+  const sheet2 = newSheetBuilder();
+  pushMetadataRows(sheet2, res);
+  ['IA', 'IB', 'II'].forEach(type => {
+    if (appState.globalCounts[type] <= 0) return;
+    sheet2.boldRows.push(sheet2.pushRow([typeLabel(type)]));
+    sheet2.boldRows.push(sheet2.pushRow(['Country', 'Code', 'Special case']));
+    res.countries.forEach(cr => {
+      const item = cr.items.find(it => it.row.type === type);
+      if (!item) return;
+      sheet2.pushRow([COUNTRY_NAMES[cr.cc], cr.cc, item.row.special || 'standard']);
     });
+    sheet2.pushRow([]);
   });
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Variation Fees');
+  appendSheet(wb, sheet2, 'Variation cases', [22, 6, 40]);
 
   // Generate filename with date
   const dateStr = new Date().toISOString().slice(0,10);

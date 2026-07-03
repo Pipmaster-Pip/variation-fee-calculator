@@ -542,6 +542,17 @@
   .breakdown-row .bd-name{ font-size:13.5px; font-weight:600; color:var(--ink); }
   .breakdown-row .bd-meta{ font-size:11.5px; color:var(--ink-faint); font-family:var(--mono); }
   .breakdown-row .bd-meta b{ color:var(--ink-soft); font-weight:700; }
+  .bd-item-line{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:12px;
+  }
+  .bd-item-line .bd-item-amount{
+    white-space:nowrap;
+    text-align:right;
+    flex-shrink:0;
+  }
   .breakdown-row .bd-amount-col{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0; }
   .breakdown-row .bd-amount{
     font-family:var(--mono);
