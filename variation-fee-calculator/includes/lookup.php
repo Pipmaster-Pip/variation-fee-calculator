@@ -60,15 +60,21 @@ function vcl_register_assets() {
 add_action( 'wp_enqueue_scripts', 'vcl_register_assets' );
 
 /**
- * Shortcode: [variation_classification_lookup]
+ * Shortcode: [variation_classification_lookup calculator_url="/gebuehrenrechner/"]
  * Renders the lookup markup directly into the page (no iframe) and enqueues
  * its assets. Intended for use on its own dedicated page -- .vcl-app breaks
  * out to the full viewport width, which would look wrong mixed in with
  * normal article content on a shared page.
+ *
+ * calculator_url points the Summary's "Export to Variation Fee Calculator" button at
+ * the page carrying [variation_fee_calculator]; leave unset to hide/disable that button.
  */
-function vcl_shortcode() {
+function vcl_shortcode( $atts ) {
+	$atts = shortcode_atts( array( 'calculator_url' => '' ), $atts, 'variation_classification_lookup' );
+
 	wp_enqueue_style( 'vcl-style' );
 	wp_enqueue_script( 'vcl-app' );
+	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array( 'calculatorUrl' => $atts['calculator_url'] ) );
 
 	ob_start();
 	?>
@@ -117,6 +123,9 @@ function vcl_shortcode() {
 	      </div>
 	    </div>
 	    <div class="summary-list" id="vcl-summaryList"></div>
+	    <div class="summary-footer">
+	      <button type="button" id="vcl-summaryExportCalculator" class="summary-footer__button">Export to Variation Fee Calculator &rarr;</button>
+	    </div>
 	  </div>
 	</div>
 

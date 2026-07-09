@@ -68,6 +68,7 @@
     summaryCollapseAll: document.getElementById("vcl-summaryCollapseAll"),
     summaryExportDocx: document.getElementById("vcl-summaryExportDocx"),
     summaryPrint: document.getElementById("vcl-summaryPrint"),
+    summaryExportCalculator: document.getElementById("vcl-summaryExportCalculator"),
     guidelineRef: document.getElementById("vcl-guidelineRef"),
     applicableFrom: document.getElementById("vcl-applicableFrom"),
   };
@@ -659,6 +660,41 @@
     window.addEventListener("afterprint", restore);
 
     window.print();
+  });
+
+  // Bucket every selected unit by the type that currently, actually applies (so a variant
+  // still defaulting to "IB (default)" is counted as IB, not as its listed IA/IAIN type) --
+  // IAIN counts toward IA, since the Calculator only has three fee buckets.
+  function totalsByBucket() {
+    const totals = { IA: 0, IB: 0, II: 0 };
+    buildSummaryLineItems().forEach((item) => {
+      const label = effectiveVariantType(item.entry, item.variant).label;
+      if (label.startsWith("IA")) totals.IA += 1;
+      else if (label.startsWith("IB")) totals.IB += 1;
+      else if (label.startsWith("II")) totals.II += 1;
+    });
+    return totals;
+  }
+
+  el.summaryExportCalculator.addEventListener("click", () => {
+    const items = buildSummaryLineItems();
+    if (items.length === 0) {
+      window.alert("No variations selected yet -- nothing to export.");
+      return;
+    }
+    const calculatorUrl = window.VCL_CONFIG && window.VCL_CONFIG.calculatorUrl;
+    if (!calculatorUrl) {
+      window.alert(
+        "The Fee Calculator link isn't configured for this page -- add calculator_url to the [variation_classification_lookup] shortcode."
+      );
+      return;
+    }
+    const totals = totalsByBucket();
+    const url = new URL(calculatorUrl, window.location.href);
+    url.searchParams.set("ia", totals.IA);
+    url.searchParams.set("ib", totals.IB);
+    url.searchParams.set("ii", totals.II);
+    window.open(url.toString(), "_blank", "noopener");
   });
 
   async function exportSummaryToDocx() {

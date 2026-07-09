@@ -322,6 +322,19 @@ const appState = {
   results: null
 };
 
+// Optional pre-fill from a companion tool (e.g. the Variation Classification Lookup's
+// "Export to Fee Calculator" button) via URL query params ?ia=&ib=&ii= -- only seeds the
+// Variations step's counters; the user still walks through Countries and Country details
+// themselves before reaching them.
+(function prefillFromQueryParams() {
+  const params = new URLSearchParams(window.location.search);
+  ['IA', 'IB', 'II'].forEach((type) => {
+    const raw = params.get(type.toLowerCase());
+    const val = raw === null ? NaN : parseInt(raw, 10);
+    if (Number.isInteger(val) && val >= 0) appState.globalCounts[type] = val;
+  });
+})();
+
 function ensureCountryConfig(cc) {
   if (!appState.countryConfig[cc]) {
     const roles = rolesForCountry(cc);
