@@ -197,7 +197,9 @@
 }
 
 .vcl-app .browse-tree {
-  padding: 0 12px 16px;
+  /* Top padding matters here: without it, the search box's own border-bottom sits flush
+     against the Summary button's top edge (0px gap) and the two lines visually merge. */
+  padding: 16px 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -259,7 +261,12 @@
 
 /* --- Level 2: sections (Q.I, Q.II, ... -- currently only Q) --- */
 .vcl-app .section-row {
-  width: 100%;
+  /* Bleeds out through .chapter__body's own padding (18px left / 4px right) so the
+     hover/active background lines up with the chapter row above it instead of reading
+     as a narrower, indented box; the matching extra padding keeps the text itself at
+     its original indent. */
+  width: calc(100% + 22px);
+  margin-left: -18px;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -267,7 +274,7 @@
   border: none;
   border-radius: 5px;
   text-align: left;
-  padding: 6px 8px;
+  padding: 6px 12px 6px 26px;
   cursor: pointer;
   font-family: inherit;
   color: var(--ink);

@@ -119,6 +119,12 @@
     return "badge";
   }
 
+  // Nav-only display shortening: "IB (unforeseen)" wraps awkwardly in the ~250px-wide browse
+  // column cards. The detail panel (which has room) keeps showing the full type text.
+  function navBadgeLabel(type) {
+    return type === "IB (unforeseen)" ? "IB (unf.)" : type;
+  }
+
   // How a variant should be labelled in the Summary: the code suffix and whether a subtitle
   // is worth showing. Some variants (e.g. the "z-ib"/"z-ii" catch-all pair behind a single
   // "(z) Other variation" label) already carry their own bracketed short form in the label --
@@ -191,7 +197,7 @@
     card.innerHTML = `
       <div class="result-card__head">
         <span class="mono result-card__code">${entry.code}</span>
-        <div class="result-card__badges">${types.map((t) => `<span class="${typeBadgeClass(t)}">${t}</span>`).join("")}</div>
+        <div class="result-card__badges">${types.map((t) => `<span class="${typeBadgeClass(t)}">${navBadgeLabel(t)}</span>`).join("")}</div>
       </div>
       <div class="result-card__title">${entry.title}</div>
     `;
@@ -491,7 +497,7 @@
     // primary job of this tool, grouping guidance is a secondary reference -- but it stays
     // reachable in one click regardless of what's being searched/browsed above it.
     const groupingDivider = document.createElement("div");
-    groupingDivider.className = "tabs-divider";
+    groupingDivider.className = "tabs-divider tabs-divider--flush";
     el.browseTree.appendChild(groupingDivider);
 
     const groupingBtn = document.createElement("button");
