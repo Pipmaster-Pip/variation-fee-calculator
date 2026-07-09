@@ -6,8 +6,10 @@
   const SELECTIONS_STORAGE_KEY = "variationLookupSelections";
 
   // Selection shape: state.selections["E.1|a"] = { qty: number, units: [unit, unit, ...] }
-  // unit = { docs: { [docNum]: { checked: bool, note: string } } } -- one entry per physical
-  // instance of that variant/type in the application (e.g. 3x the same code for 3 different sites).
+  // unit = { docs: { [docNum]: { checked: bool, note: string } }, note: string } -- one entry
+  // per physical instance of that variant/type in the application (e.g. 3x the same code for
+  // 3 different sites). unit.note is the free-text justification for that whole Summary line,
+  // separate from the per-document notes inside unit.docs.
   function loadSelections() {
     try {
       const raw = JSON.parse(localStorage.getItem(SELECTIONS_STORAGE_KEY) || "{}");
@@ -18,9 +20,9 @@
         if (typeof v === "number") {
           // Legacy format from an earlier version of this tool: just a quantity, no per-unit data.
           qty = Math.floor(v);
-          units = Array.from({ length: Math.max(0, qty) }, () => ({ docs: {} }));
+          units = Array.from({ length: Math.max(0, qty) }, () => ({ docs: {}, note: "" }));
         } else if (v && typeof v === "object" && Array.isArray(v.units)) {
-          units = v.units.map((u) => ({ docs: (u && u.docs) || {} }));
+          units = v.units.map((u) => ({ docs: (u && u.docs) || {}, note: (u && u.note) || "" }));
           qty = units.length;
         } else {
           return;
@@ -183,6 +185,38 @@
 
   function jumpToTop() {
     el.appRoot.scrollIntoView({ block: "start", behavior: "auto" });
+  }
+
+  // Deep-linking: reflects the currently open entry in the page URL (?code=Q.I.a) via
+  // replaceState, so no extra back-button history entry is created for every click. Read
+  // back on page load by openEntryFromUrl() so a link with ?code=... reopens that exact
+  // entry instead of the app's default Summary view.
+  function syncUrlToState() {
+    const url = new URL(window.location.href);
+    if (state.activeEntry) {
+      url.searchParams.set("code", state.activeEntry);
+    } else {
+      url.searchParams.delete("code");
+    }
+    if (url.toString() !== window.location.href) {
+      window.history.replaceState(null, "", url.toString());
+    }
+  }
+
+  function openEntryFromUrl() {
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!code) return;
+    const entry = ENTRIES.find((e) => e.code === code);
+    if (!entry) return;
+    state.activeChapter = entry.chapter;
+    state.activeSection = entry.section || null;
+    state.activeEntry = entry.code;
+    state.view = "browse";
+    const heading = subsectionHeading(entry);
+    if (heading) {
+      state.openHeading = heading;
+      state.forcedClosedHeadings.delete(heading);
+    }
   }
 
   function makeEntryCard(entry) {
@@ -555,7 +589,7 @@
     } else {
       const existing = state.selections[key];
       const units = existing ? existing.units.slice(0, qty) : [];
-      while (units.length < qty) units.push({ docs: {} });
+      while (units.length < qty) units.push({ docs: {}, note: "" });
       state.selections[key] = { qty, units };
     }
     saveSelections();
@@ -805,6 +839,8 @@
     items.forEach((item, idx) => {
       const eff = effectiveVariantType(item.entry, item.variant);
       const labelInfo = summaryLabelInfo(item.entry, item.variant);
+      const unit = state.selections[item.key] && state.selections[item.key].units[item.unitIndex];
+      const note = unit && unit.note && unit.note.trim();
 
       children.push(
         new Paragraph({
@@ -816,13 +852,22 @@
             new TextRun({ text: ` `, italics: true }),
             new TextRun({ text: item.entry.title }),
           ],
-          spacing: { after: labelInfo.subtitle ? 40 : 200 },
+          spacing: { after: labelInfo.subtitle || note ? 40 : 200 },
         })
       );
       if (labelInfo.subtitle) {
         children.push(
           new Paragraph({
             children: [new TextRun({ text: labelInfo.subtitle })],
+            indent: { left: 360 },
+            spacing: { after: note ? 40 : 200 },
+          })
+        );
+      }
+      if (note) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: "Note: ", bold: true, italics: true }), new TextRun({ text: note, italics: true })],
             indent: { left: 360 },
             spacing: { after: 200 },
           })
@@ -917,6 +962,16 @@
         saveSelections(); // no re-render here, so the input keeps focus/cursor while typing
       });
     });
+
+    el.summaryList.querySelectorAll("textarea[data-note-line]").forEach((ta) => {
+      ta.addEventListener("input", (ev) => {
+        const [key, unitIndex] = splitLineKey(ev.target.getAttribute("data-note-line"));
+        const sel = state.selections[key];
+        if (!sel || !sel.units[unitIndex]) return;
+        sel.units[unitIndex].note = ev.target.value;
+        saveSelections(); // no re-render here, so the textarea keeps focus/cursor while typing
+      });
+    });
   }
 
   function renderSummary() {
@@ -972,6 +1027,12 @@
                 <div class="summary-item__section">
                   <h4>Documentation to be supplied</h4>
                   ${unitDocsHtml(item.entry, item.variant, item.key, item.unitIndex)}
+                </div>
+                <div class="summary-item__section">
+                  <h4>Notes</h4>
+                  <textarea class="summary-note" data-note-line="${lineKey}" placeholder="Optional justification or remarks for this item…">${escapeAttr(
+              unit.note || ""
+            )}</textarea>
                 </div>
               </div>
             `
@@ -1035,6 +1096,7 @@
 
   function renderDetail() {
     const entry = ENTRIES.find((e) => e.code === state.activeEntry);
+    syncUrlToState();
     if (!entry) {
       el.detail.classList.add("hidden");
       el.detailEmpty.classList.remove("hidden");
@@ -1182,6 +1244,39 @@
     renderBrowse();
   });
 
+  // Keyboard navigation: Up/Down moves through the currently visible browse-column buttons
+  // (chapter/section rows, group toggles, result cards, the pinned Summary/Grouping tabs) --
+  // Enter/Space already activate a focused <button> natively, so no extra handling needed
+  // for that part. Down from the search box jumps straight into the first result; Up from
+  // the very first item jumps back out to the search box.
+  function focusableInBrowseTree() {
+    return Array.from(el.browseTree.querySelectorAll("button:not([disabled])"));
+  }
+
+  el.browseTree.addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+    const items = focusableInBrowseTree();
+    const idx = items.indexOf(document.activeElement);
+    if (idx === -1) return;
+    ev.preventDefault();
+    if (ev.key === "ArrowUp" && idx === 0) {
+      el.search.focus();
+      return;
+    }
+    const nextIdx = ev.key === "ArrowDown" ? Math.min(idx + 1, items.length - 1) : idx - 1;
+    items[nextIdx].focus();
+  });
+
+  el.search.addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowDown") return;
+    const items = focusableInBrowseTree();
+    if (items.length) {
+      ev.preventDefault();
+      items[0].focus();
+    }
+  });
+
+  openEntryFromUrl();
   renderBrowse();
   switchViewVisibility();
   renderDetail();

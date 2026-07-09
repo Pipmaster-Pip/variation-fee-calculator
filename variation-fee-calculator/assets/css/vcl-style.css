@@ -1211,6 +1211,27 @@
   background: var(--panel);
 }
 
+/* --- Free-text justification for a whole Summary line, included in the .docx export --- */
+.vcl-app .summary-note {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  background: var(--accent-bg);
+  color: var(--ink);
+}
+
+.vcl-app .summary-note:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: var(--panel);
+}
+
 /* --- Printing: only the Summary detail section, always fully expanded --- */
 @media print {
   body * { visibility: hidden; }
