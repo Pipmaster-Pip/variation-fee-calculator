@@ -45,6 +45,7 @@
     selectionExpanded: false,
     view: "summary", // "browse" | "summary" -- the app opens on the Summary page
     summaryExpandedUnits: new Set(), // "E.1|a#0" -> that unit's long form is open in the Summary view
+    groupingOpenSections: new Set(), // "acceptable" | "notAcceptable" | "singleChangeInstead" -- which grouping-guidance sections are expanded
   };
 
   const el = {
@@ -406,11 +407,25 @@
     container.appendChild(wrap);
   }
 
-  // Static content, so this only ever needs to run once (called from the init sequence below) --
-  // unlike renderDetail()/renderSummary(), nothing here depends on live selection state.
+  // Only the intro (head + general notes) is shown in full; the three example lists are long,
+  // so each sits behind its own toggle and only the clicked one(s) expand -- otherwise this view
+  // was a wall of 52 bullet points to scroll past before reaching anything else.
   function renderGrouping() {
     const g = GROUPING_GUIDANCE;
-    const list = (items) => `<ul class="grouping-list">${items.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+
+    const section = (key, badgeClass, label, items) => {
+      const isOpen = state.groupingOpenSections.has(key);
+      return `
+        <div class="grouping-section">
+          <button type="button" class="grouping-section__title" data-grouping-toggle="${key}">
+            <span class="grouping-section__chevron">${isOpen ? "▾" : "▸"}</span>
+            <span class="grouping-section__badge ${badgeClass}">${label}</span>
+            <span class="grouping-section__count">${items.length}</span>
+          </button>
+          ${isOpen ? `<ul class="grouping-list">${items.map((t) => `<li>${t}</li>`).join("")}</ul>` : ""}
+        </div>
+      `;
+    };
 
     el.groupingCol.innerHTML = `
       <div class="grouping-head">
@@ -419,21 +434,21 @@
         <p>${g.source.docTitle} — ${g.source.docRef}</p>
       </div>
       <ul class="grouping-notes">${g.generalNotes.map((t) => `<li>${t}</li>`).join("")}</ul>
-      <div class="grouping-section">
-        <h4 class="grouping-section__title"><span class="grouping-section__badge grouping-section__badge--ok">Acceptable groupings</span></h4>
-        ${list(g.acceptable)}
-      </div>
-      <div class="grouping-section">
-        <h4 class="grouping-section__title"><span class="grouping-section__badge grouping-section__badge--no">Not acceptable groupings</span></h4>
-        ${list(g.notAcceptable)}
-      </div>
-      <div class="grouping-section">
-        <h4 class="grouping-section__title"><span class="grouping-section__badge grouping-section__badge--alt">Acceptable as single change instead of grouping</span></h4>
-        ${list(g.singleChangeInstead)}
-      </div>
+      ${section("acceptable", "grouping-section__badge--ok", "Acceptable groupings", g.acceptable)}
+      ${section("notAcceptable", "grouping-section__badge--no", "Not acceptable groupings", g.notAcceptable)}
+      ${section("singleChangeInstead", "grouping-section__badge--alt", "Acceptable as single change instead of grouping", g.singleChangeInstead)}
       <p class="grouping-source">¹ ${g.footnote}</p>
       <p class="grouping-source">Source: ${g.source.docRef} (${g.source.docDate}) — ${g.source.docTitle}.</p>
     `;
+
+    el.groupingCol.querySelectorAll("[data-grouping-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.groupingToggle;
+        if (state.groupingOpenSections.has(key)) state.groupingOpenSections.delete(key);
+        else state.groupingOpenSections.add(key);
+        renderGrouping();
+      });
+    });
   }
 
   // Rebuilds the entire browse column: pinned Summary button, then either the flat global
@@ -462,7 +477,7 @@
     el.browseTree.appendChild(summaryBtn);
 
     const divider = document.createElement("div");
-    divider.className = "tabs-divider";
+    divider.className = "tabs-divider tabs-divider--flush";
     el.browseTree.appendChild(divider);
 
     const q = normalize(state.query);

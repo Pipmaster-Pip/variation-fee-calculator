@@ -188,6 +188,14 @@
   margin: 12px 14px 10px;
 }
 
+/* Full-width variant under the pinned Summary button: replaces the old inset divider,
+   which sat right above the first chapter's own border-top and read as two clashing
+   lines. margin-left/right:0 makes it flush with the Summary button's edges; the larger
+   top margin matches the visual gap the search box gets from its own padding. */
+.vcl-app .tabs-divider--flush {
+  margin: 16px 0 10px;
+}
+
 .vcl-app .browse-tree {
   padding: 0 12px 16px;
   display: flex;
@@ -195,9 +203,11 @@
   gap: 3px;
 }
 
-/* --- Level 1: chapters (E, Q, C, M) --- */
-.vcl-app .chapter { border-top: 1px solid var(--border-soft); }
-.vcl-app .chapter:first-of-type { border-top: none; }
+/* --- Level 1: chapters (E, Q, C, M) ---
+   Border sits between two chapters only (not on .chapter itself + a first-of-type
+   override): :first-of-type counts *any* preceding div sibling of the same tag, so it
+   silently stopped matching once a divider div was placed before the chapter list. */
+.vcl-app .chapter + .chapter { border-top: 1px solid var(--border-soft); }
 
 .vcl-app .chapter__head {
   --accent: #888;
@@ -955,9 +965,32 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   font-size: 14px;
   font-weight: 600;
-  margin: 0 0 12px;
+  font-family: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 6px;
+  margin: 0 0 6px -6px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.vcl-app .grouping-section__title:hover { background: var(--paper); }
+
+.vcl-app .grouping-section__chevron {
+  font-size: 10px;
+  color: var(--muted);
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.vcl-app .grouping-section__count {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .vcl-app .grouping-section__badge {
