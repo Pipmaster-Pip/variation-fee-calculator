@@ -127,6 +127,8 @@ function vcl_shortcode( $atts ) {
 	      <button type="button" id="vcl-summaryExportCalculator" class="summary-footer__button">Export to Variation Fee Calculator &rarr;</button>
 	    </div>
 	  </div>
+
+	  <div class="grouping-col hidden" id="vcl-groupingCol"></div>
 	</div>
 
 	</div>

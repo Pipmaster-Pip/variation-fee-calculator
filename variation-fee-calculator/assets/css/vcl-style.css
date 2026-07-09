@@ -32,6 +32,8 @@
   --ib-bg: #FBF0E2;
   --ii: #B23A2E;
   --ii-bg: #FBEAE7;
+  --group: #5B4B8A;
+  --group-bg: #EEEAF5;
 
   /* Breakout, centered on the true viewport regardless of the theme's own
      container width -- leaves a gutter on each side where the theme's own
@@ -815,12 +817,6 @@
 .vcl-app .selection-bar__link:hover { background: var(--paper); }
 
 /* --- Pinned "Summary" tab --- */
-.vcl-app .tabs-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 2px 12px 4px 0;
-}
-
 .vcl-app .tab__count {
   font-family: "IBM Plex Mono", monospace;
   font-size: 10.5px;
@@ -904,6 +900,111 @@
 }
 
 .vcl-app .summary-footer__button:hover { background: #184A47; }
+
+/* --- Grouping guidance: occupies the same grid cell as .detail-col/.summary-col
+   (only one of the three is ever visible at a time). --- */
+.vcl-app .grouping-col {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 28px 6px 40px 0;
+  overflow-y: auto;
+}
+
+.vcl-app .grouping-head {
+  margin-bottom: 4px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--group);
+}
+
+.vcl-app .grouping-head__eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--group);
+  margin: 0 0 8px;
+}
+
+.vcl-app .grouping-head h3 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.vcl-app .grouping-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.vcl-app .grouping-notes {
+  margin: 16px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.vcl-app .grouping-notes li { margin-bottom: 8px; }
+
+.vcl-app .grouping-section { margin-top: 24px; }
+
+.vcl-app .grouping-section__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.vcl-app .grouping-section__badge {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+.vcl-app .grouping-section__badge--ok { background: var(--ia-bg); color: var(--ia); }
+.vcl-app .grouping-section__badge--no { background: var(--ii-bg); color: var(--ii); }
+.vcl-app .grouping-section__badge--alt { background: var(--group-bg); color: var(--group); }
+
+.vcl-app .grouping-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vcl-app .grouping-list li {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.vcl-app .code-chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.vcl-app .grouping-source {
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
 
 .vcl-app .summary-item {
   border: 1px solid var(--border);

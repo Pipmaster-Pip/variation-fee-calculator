@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const { CLASSIFICATION_META, SECTIONS, CHAPTERS, ENTRIES } = window.VCL_DATA;
+  const { CLASSIFICATION_META, SECTIONS, CHAPTERS, ENTRIES, GROUPING_GUIDANCE } = window.VCL_DATA;
 
   const SELECTIONS_STORAGE_KEY = "variationLookupSelections";
 
@@ -69,6 +69,7 @@
     summaryExportDocx: document.getElementById("vcl-summaryExportDocx"),
     summaryPrint: document.getElementById("vcl-summaryPrint"),
     summaryExportCalculator: document.getElementById("vcl-summaryExportCalculator"),
+    groupingCol: document.getElementById("vcl-groupingCol"),
     guidelineRef: document.getElementById("vcl-guidelineRef"),
     applicableFrom: document.getElementById("vcl-applicableFrom"),
   };
@@ -78,12 +79,15 @@
   el.guidelineRef.textContent = CLASSIFICATION_META.guidelineRef;
   el.applicableFrom.textContent = CLASSIFICATION_META.applicableFrom;
 
-  // The browse column (search + chapter/section/subsection accordion) stays on screen in both
-  // views -- only the right-hand column switches between the entry detail and the Summary.
+  // The browse column (search + chapter/section/subsection accordion) stays on screen in every
+  // view -- only the right-hand column switches between the entry detail, the Summary, and the
+  // (static) Grouping guidance.
   function switchViewVisibility() {
     const isSummary = state.view === "summary";
-    el.detailCol.classList.toggle("hidden", isSummary);
+    const isGrouping = state.view === "grouping";
+    el.detailCol.classList.toggle("hidden", isSummary || isGrouping);
     el.summaryCol.classList.toggle("hidden", !isSummary);
+    el.groupingCol.classList.toggle("hidden", !isGrouping);
   }
 
   function normalize(s) {
@@ -402,8 +406,39 @@
     container.appendChild(wrap);
   }
 
+  // Static content, so this only ever needs to run once (called from the init sequence below) --
+  // unlike renderDetail()/renderSummary(), nothing here depends on live selection state.
+  function renderGrouping() {
+    const g = GROUPING_GUIDANCE;
+    const list = (items) => `<ul class="grouping-list">${items.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+
+    el.groupingCol.innerHTML = `
+      <div class="grouping-head">
+        <p class="grouping-head__eyebrow">Reference — not tied to your current selection</p>
+        <h3>${g.title}</h3>
+        <p>${g.source.docTitle} — ${g.source.docRef}</p>
+      </div>
+      <ul class="grouping-notes">${g.generalNotes.map((t) => `<li>${t}</li>`).join("")}</ul>
+      <div class="grouping-section">
+        <h4 class="grouping-section__title"><span class="grouping-section__badge grouping-section__badge--ok">Acceptable groupings</span></h4>
+        ${list(g.acceptable)}
+      </div>
+      <div class="grouping-section">
+        <h4 class="grouping-section__title"><span class="grouping-section__badge grouping-section__badge--no">Not acceptable groupings</span></h4>
+        ${list(g.notAcceptable)}
+      </div>
+      <div class="grouping-section">
+        <h4 class="grouping-section__title"><span class="grouping-section__badge grouping-section__badge--alt">Acceptable as single change instead of grouping</span></h4>
+        ${list(g.singleChangeInstead)}
+      </div>
+      <p class="grouping-source">¹ ${g.footnote}</p>
+      <p class="grouping-source">Source: ${g.source.docRef} (${g.source.docDate}) — ${g.source.docTitle}.</p>
+    `;
+  }
+
   // Rebuilds the entire browse column: pinned Summary button, then either the flat global
-  // search results (query active) or the chapter/section/subsection accordion (browsing).
+  // search results (query active) or the chapter/section/subsection accordion (browsing), then
+  // the pinned Grouping guidance button.
   function renderBrowse() {
     el.browseTree.innerHTML = "";
 
@@ -433,10 +468,32 @@
     const q = normalize(state.query);
     if (q) {
       renderSearchResults(el.browseTree, q);
-      return;
+    } else {
+      Object.values(CHAPTERS).forEach((chapter) => renderChapterBranch(el.browseTree, chapter));
     }
 
-    Object.values(CHAPTERS).forEach((chapter) => renderChapterBranch(el.browseTree, chapter));
+    // Pinned below the chapter list rather than up with Summary: the classification is the
+    // primary job of this tool, grouping guidance is a secondary reference -- but it stays
+    // reachable in one click regardless of what's being searched/browsed above it.
+    const groupingDivider = document.createElement("div");
+    groupingDivider.className = "tabs-divider";
+    el.browseTree.appendChild(groupingDivider);
+
+    const groupingBtn = document.createElement("button");
+    groupingBtn.type = "button";
+    groupingBtn.className = "tab" + (state.view === "grouping" ? " tab--active" : "");
+    groupingBtn.style.setProperty("--accent", "var(--group)");
+    groupingBtn.innerHTML = `
+      <span class="tab__code">${GROUPING_GUIDANCE.title}</span>
+      <span class="tab__title">${GROUPING_GUIDANCE.subtitle}</span>
+    `;
+    groupingBtn.addEventListener("click", () => {
+      state.view = "grouping";
+      renderBrowse();
+      switchViewVisibility();
+      jumpToTop();
+    });
+    el.browseTree.appendChild(groupingBtn);
   }
 
   function conditionKey(entryCode, variantId) {
@@ -1109,4 +1166,5 @@
   renderDetail();
   renderSelectionBar();
   renderSummary();
+  renderGrouping();
 })();
