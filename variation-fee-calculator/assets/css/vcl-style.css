@@ -1,0 +1,1068 @@
+/* ============================================================================
+ * Variation Classification Lookup -- WordPress plugin styles.
+ * Everything is scoped under .vcl-app so it can never leak into the theme,
+ * and the theme's CSS can never reach in and override it (no bare `body`,
+ * `*`, or unscoped class selectors) -- same discipline as vfc-style.css.
+ *
+ * Palette is aligned with the sibling vfc-app (same --ink/--paper/--accent
+ * etc. values) so the two feel like one family, even though this tool keeps
+ * its own IBM Plex type and 3-column layout.
+ *
+ * Unlike the Fee Calculator (which just centers a narrow 880px column), this
+ * app needs a lot more width for its 3-column layout, but should still read
+ * as a framed "card" sitting on the theme's page background rather than
+ * running edge-to-edge -- so .vcl-app breaks out of the theme's centered
+ * content wrapper and re-centers itself on the true viewport at 80% width
+ * (10% gutter on each side), instead of the usual 100vw full-bleed trick.
+ * ============================================================================ */
+
+.vcl-app {
+  --paper: #FBFAF8;
+  --panel: #FFFFFF;
+  --ink: #1A2332;
+  --muted: #4A5568;
+  --ink-faint: #8A93A3;
+  --border: #E2E5EA;
+  --border-soft: #EEF0F2;
+  --accent: #1F5F5B;
+  --accent-bg: #E8F1F0;
+  --ia: #1F5F5B;
+  --ia-bg: #E8F1F0;
+  --ib: #A8651A;
+  --ib-bg: #FBF0E2;
+  --ii: #B23A2E;
+  --ii-bg: #FBEAE7;
+
+  /* Breakout, centered on the true viewport regardless of the theme's own
+     container width -- leaves a gutter on each side where the theme's own
+     page background shows through, framing this app as a card. Capped at
+     1016px (= the 960px page-shell below plus this card's own 28px+28px
+     padding) so the card hugs its now much narrower content on wide
+     screens instead of ballooning out to 80vw of the full viewport; still
+     shrinks with the viewport below that via width:80vw. margin-left uses
+     max() (not transform: translateX(-50%)) to stay centered at any
+     resulting width -- a transform here would create a new containing
+     block, breaking position:fixed on the Selection bar further down. */
+  position: relative;
+  left: 50%;
+  width: 80vw;
+  max-width: 1016px;
+  margin-left: max(-40vw, -508px);
+
+  margin-top: 24px;
+  margin-bottom: 24px;
+  padding-left: 28px;
+  padding-right: 28px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", -apple-system, sans-serif;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(20, 30, 40, 0.06), 0 4px 16px rgba(20, 30, 40, 0.08);
+}
+
+.vcl-app, .vcl-app * { box-sizing: border-box; }
+
+.vcl-app .mono { font-family: "IBM Plex Mono", monospace; }
+
+.vcl-app header.app-header {
+  padding: 28px 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.vcl-app .app-header__eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+.vcl-app .app-header h1 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 26px;
+  margin: 0 0 8px;
+}
+
+.vcl-app .app-header p.app-header__copyright {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.vcl-app .app-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.vcl-app .app-header p strong { color: var(--ink); }
+
+/* Caps the whole page (header + layout) at roughly the companion Calculator's own
+   880px measure, so the two tools feel like one family in width, not just palette. */
+.vcl-app .page-shell {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.vcl-app .layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  /* Matches this card's own 28px side padding, so the gap from the browse column's right
+     edge to the detail/summary column's content equals the card's left margin
+     (detail/summary columns carry no left padding of their own -- see below). */
+  column-gap: 28px;
+  min-height: calc(100vh - 120px);
+}
+
+/* --- Browse column: search box + pinned Summary + chapter/section/subsection accordion.
+   Nav and results used to be two separate columns (260px + 380px); merging them into one
+   ~300px accordion is what let the whole layout narrow to page-shell's ~960px. --- */
+.vcl-app .browse-col {
+  margin: 24px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.vcl-app .tab {
+  --accent: #888;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px 10px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  box-shadow: inset 4px 0 0 var(--accent);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.vcl-app .tab:hover { transform: translateX(-2px); }
+
+.vcl-app .tab--active {
+  background: var(--paper);
+  box-shadow: inset 6px 0 0 var(--accent);
+  font-weight: 600;
+}
+
+.vcl-app .tab__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.vcl-app .tab__title {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.vcl-app .tab__pill {
+  margin-top: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.vcl-app .tabs-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 14px 10px;
+}
+
+.vcl-app .browse-tree {
+  padding: 0 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* --- Level 1: chapters (E, Q, C, M) --- */
+.vcl-app .chapter { border-top: 1px solid var(--border-soft); }
+.vcl-app .chapter:first-of-type { border-top: none; }
+
+.vcl-app .chapter__head {
+  --accent: #888;
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  padding: 10px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.vcl-app .chapter__head:hover { background: var(--paper); }
+.vcl-app .chapter[data-open="true"] > .chapter__head { background: var(--accent-bg); }
+.vcl-app .chapter--pending .chapter__head { cursor: default; opacity: 0.55; }
+
+.vcl-app .chapter__chevron {
+  font-size: 10px;
+  color: var(--accent);
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.vcl-app .chapter__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.vcl-app .chapter__title {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.vcl-app .chapter__body {
+  padding: 2px 4px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* --- Level 2: sections (Q.I, Q.II, ... -- currently only Q) --- */
+.vcl-app .section-row {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.vcl-app .section-row:hover { background: var(--paper); }
+.vcl-app .section-row--active { background: var(--border-soft); }
+.vcl-app .section-row--active .section-row__code { font-weight: 700; }
+.vcl-app .section-row--pending { opacity: 0.55; }
+
+.vcl-app .section-row__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.vcl-app .section-row__title {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* --- Level 3: subsection groups nest inside an open section via .group-toggle below --- */
+.vcl-app .subsection-body {
+  margin: 2px 0 6px 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* --- Search box (always visible, above the accordion) --- */
+.vcl-app .search-box {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.vcl-app .search-box input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.vcl-app .search-box input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.vcl-app .results-meta {
+  padding: 6px 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vcl-app .results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vcl-app .result-card {
+  --accent: #888;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.vcl-app .result-card:hover { background: var(--paper); }
+
+.vcl-app .result-card--active {
+  background: var(--paper);
+  border-color: var(--accent);
+}
+
+.vcl-app .result-card__badges .badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  letter-spacing: 0.02em;
+}
+
+.vcl-app .result-card__badges .type-ia { box-shadow: inset 0 0 0 1.5px rgba(47, 125, 91, 0.35); }
+.vcl-app .result-card__badges .type-ib { box-shadow: inset 0 0 0 1.5px rgba(166, 121, 10, 0.35); }
+.vcl-app .result-card__badges .type-ii { box-shadow: inset 0 0 0 1.5px rgba(178, 58, 46, 0.35); }
+
+.vcl-app .result-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.vcl-app .result-card__code {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.vcl-app .result-card__badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+
+.vcl-app .result-card__title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.vcl-app .tab__pill--partial {
+  color: var(--ib);
+  border-color: #E4C87A;
+  background: var(--ib-bg);
+}
+
+.vcl-app .partial-note {
+  background: var(--accent-bg);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 4px 10px;
+}
+
+.vcl-app .group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  text-align: left;
+  padding: 12px 6px 8px;
+  margin-top: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.vcl-app .results-list > .group-toggle:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 2px;
+}
+
+.vcl-app .group-toggle:hover .group-toggle__label { color: var(--accent); }
+
+.vcl-app .group-toggle__chevron {
+  font-size: 10px;
+  color: var(--muted);
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.vcl-app .group-toggle__label {
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  color: var(--muted);
+  flex: 1;
+}
+
+.vcl-app .group-toggle__range {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+.vcl-app .group-toggle--open .group-toggle__label { color: var(--ink); }
+
+.vcl-app .group-toggle__count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.vcl-app .group-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.vcl-app .empty-note {
+  padding: 16px 4px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* --- Detail panel --- */
+.vcl-app .detail-col {
+  /* No left padding: the 28px column-gap already provides that margin, matching this
+     card's own left padding. Right padding stays minimal so content runs out almost to
+     the card edge, level with the app-header's full-width divider. */
+  padding: 28px 6px 40px 0;
+  overflow-y: auto;
+}
+
+.vcl-app .detail-empty {
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 420px;
+  line-height: 1.6;
+  padding-top: 40px;
+}
+
+.vcl-app .hidden { display: none !important; }
+
+.vcl-app .detail-head {
+  --accent: #888;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.vcl-app .detail-head__code {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--panel);
+  background: var(--accent);
+  padding: 4px 12px;
+  border-radius: 7px;
+  margin-bottom: 10px;
+}
+
+.vcl-app .detail-head h3 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.vcl-app .variant-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background: var(--panel);
+}
+
+.vcl-app .variant-block__head .badge {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 5px 14px;
+  letter-spacing: 0.03em;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.vcl-app .variant-block__head .type-ia { box-shadow: inset 0 0 0 1.5px rgba(47, 125, 91, 0.35); }
+.vcl-app .variant-block__head .type-ib { box-shadow: inset 0 0 0 1.5px rgba(166, 121, 10, 0.35); }
+.vcl-app .variant-block__head .type-ii { box-shadow: inset 0 0 0 1.5px rgba(178, 58, 46, 0.35); }
+
+.vcl-app .variant-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.vcl-app .variant-block__label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.vcl-app .variant-block__section { margin-top: 12px; }
+
+.vcl-app .variant-block__section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.vcl-app .condition-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.vcl-app .condition-row input { margin-top: 3px; flex-shrink: 0; }
+
+.vcl-app .doc-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.vcl-app .doc-list li { margin-bottom: 6px; }
+
+.vcl-app .muted-text { color: var(--muted); font-size: 13px; margin: 0; }
+
+.vcl-app .status {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vcl-app .status--ok { background: var(--ia-bg); color: var(--ia); }
+.vcl-app .status--warn { background: var(--ib-bg); color: var(--ib); }
+
+.vcl-app .badge {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.vcl-app .type-ia { background: var(--ia-bg); color: var(--ia); }
+.vcl-app .type-ib { background: var(--ib-bg); color: var(--ib); }
+.vcl-app .type-ii { background: var(--ii-bg); color: var(--ii); }
+
+/* Muted state for whichever of the two IA/IB-by-default badges does NOT currently apply. */
+.vcl-app .badge--dim { opacity: 0.38; filter: saturate(0.6); }
+
+.vcl-app .variant-group-heading {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 18px 2px 6px;
+  font-style: italic;
+}
+
+.vcl-app .note-block--variant {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+}
+
+.vcl-app .note-block {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--ib-bg);
+  border-left: 3px solid var(--ib);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin: 14px 0;
+}
+
+.vcl-app .note-block--chapter {
+  background: var(--accent-bg);
+  border-left-color: var(--accent);
+}
+
+.vcl-app .note-block strong { font-weight: 600; }
+
+.vcl-app .source-note {
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .vcl-app .layout { grid-template-columns: 1fr; }
+  .vcl-app .browse-col { margin-bottom: 20px; }
+}
+
+/* --- Quantity stepper (per variant type) --- */
+.vcl-app .qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.vcl-app .qty-stepper button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.vcl-app .qty-stepper button:hover:not(:disabled) { background: var(--paper); }
+.vcl-app .qty-stepper button:disabled { opacity: 0.3; cursor: default; }
+
+.vcl-app .qty-stepper__value {
+  min-width: 22px;
+  text-align: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.vcl-app .variant-block__head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.vcl-app.has-selection { padding-bottom: 56px; }
+
+/* --- Fixed selection summary bar --- */
+.vcl-app .selection-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 14px rgba(28, 37, 48, 0.08);
+}
+
+.vcl-app .selection-bar__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  gap: 12px;
+}
+
+.vcl-app .selection-bar__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.vcl-app .selection-bar__chevron { font-size: 10px; color: var(--muted); }
+
+.vcl-app .selection-bar__clear {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.vcl-app .selection-bar__clear:hover { color: var(--ii); border-color: var(--ii); }
+
+.vcl-app .selection-bar__list {
+  max-height: 40vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-soft);
+  padding: 10px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vcl-app .selection-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.vcl-app .selection-chip__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.vcl-app .selection-chip__title {
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.vcl-app .selection-chip__remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.vcl-app .selection-chip__remove:hover { color: var(--ii); }
+
+.vcl-app .selection-bar__buttons { display: flex; gap: 8px; flex-shrink: 0; }
+
+.vcl-app .selection-bar__link {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.vcl-app .selection-bar__link:hover { background: var(--paper); }
+
+/* --- Pinned "Summary" tab --- */
+.vcl-app .tabs-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 12px 4px 0;
+}
+
+.vcl-app .tab__count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+/* Darker, higher-contrast text for the pinned Summary tab specifically. */
+.vcl-app .tab--summary .tab__code { color: var(--ib); letter-spacing: 0.06em; }
+.vcl-app .tab--summary .tab__title { color: var(--ink); font-weight: 500; letter-spacing: 0.03em; }
+.vcl-app .tab--summary .tab__count { color: var(--ib); border-color: #E4C87A; letter-spacing: 0.04em; }
+
+/* --- Summary column: occupies the same grid cell as .detail-col (only one of the two
+   is ever visible at a time), since the browse column now stays on screen throughout. --- */
+.vcl-app .summary-col {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 28px 6px 40px 0;
+  overflow-y: auto;
+}
+
+.vcl-app .summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--ib);
+}
+
+.vcl-app .summary-header__title {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.vcl-app .summary-header__count { margin: 0; color: var(--muted); font-size: 13px; }
+
+.vcl-app .summary-header__actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.vcl-app .summary-header__actions button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.vcl-app .summary-header__actions button:hover { background: var(--paper); }
+
+.vcl-app .summary-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.vcl-app .summary-item__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.vcl-app .summary-item__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  padding: 0;
+}
+
+.vcl-app .summary-item__chevron { font-size: 20px; color: var(--muted); width: 20px; flex-shrink: 0; }
+
+.vcl-app .summary-item__num {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.vcl-app .summary-item__code {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.vcl-app .summary-item__typecol {
+  display: inline-flex;
+  justify-content: flex-start;
+  flex-shrink: 0;
+}
+
+.vcl-app .summary-item__head .type-ia { box-shadow: inset 0 0 0 1.5px rgba(47, 125, 91, 0.35); }
+.vcl-app .summary-item__head .type-ib { box-shadow: inset 0 0 0 1.5px rgba(166, 121, 10, 0.35); }
+.vcl-app .summary-item__head .type-ii { box-shadow: inset 0 0 0 1.5px rgba(178, 58, 46, 0.35); }
+
+.vcl-app .summary-item__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.vcl-app .summary-item__title {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vcl-app .summary-item__subtitle {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vcl-app .summary-item__doccount {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.vcl-app .summary-item__remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.vcl-app .summary-item__remove:hover { color: var(--ii); }
+
+.vcl-app .summary-item__body {
+  border-top: 1px solid var(--border-soft);
+  padding: 14px 16px 16px;
+  background: var(--paper);
+}
+
+.vcl-app .summary-item__section { margin-bottom: 14px; }
+.vcl-app .summary-item__section:last-child { margin-bottom: 0; }
+
+.vcl-app .summary-item__section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+/* --- eAF-style documentation checklist: checkbox + description, then a Note field --- */
+.vcl-app .doc-check-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.vcl-app .doc-check-item:last-child { border-bottom: none; }
+
+.vcl-app .doc-check-item__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.vcl-app .doc-check-item__row input { margin-top: 3px; flex-shrink: 0; }
+
+.vcl-app .doc-check-item__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0 24px;
+  font-size: 12px;
+}
+
+.vcl-app .doc-check-item__note span { color: var(--muted); flex-shrink: 0; }
+
+.vcl-app .doc-check-item__note input[type="text"] {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  background: var(--accent-bg);
+}
+
+.vcl-app .doc-check-item__note input[type="text"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: var(--panel);
+}
+
+/* --- Printing: only the Summary detail section, always fully expanded --- */
+@media print {
+  body * { visibility: hidden; }
+  #vcl-summaryCol, #vcl-summaryCol * { visibility: visible; }
+  #vcl-summaryCol {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    grid-column: auto;
+    overflow: visible;
+    padding: 0;
+  }
+  .vcl-app .summary-header__actions,
+  .vcl-app .summary-item__remove,
+  .vcl-app .summary-item__chevron {
+    display: none !important;
+  }
+  .vcl-app .summary-item { break-inside: avoid; }
+}

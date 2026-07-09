@@ -24,6 +24,32 @@ ins Seiten-DOM (**kein iframe**) über den Shortcode
 hält einen einzigen globalen JS-Zustand (`appState`); zwei Instanzen auf
 derselben Seite würden sich gegenseitig überschreiben.
 
+## Variation Classification Lookup (zweiter Shortcode)
+
+Dasselbe Plugin enthält außerdem das **Variation Classification Lookup**
+(Nachschlagewerk zur EU Variation Classification Guideline) als eigenen
+Shortcode:
+
+```
+[variation_classification_lookup]
+```
+
+**Auf einer eigenen Seite verwenden, nicht zusammen mit anderem Content.**
+`.vcl-app` bricht bewusst aus der normalen (meist zentrierten,
+breitenbegrenzten) Theme-Content-Spalte aus und nimmt die volle
+Viewport-Breite ein (`width:100vw` + negative Margins) — sieht neben
+normalem Fließtext oder in einer Spalte mit Sidebar entsprechend seltsam
+aus. Am besten eine neue Seite anlegen, im Theme (falls verfügbar) ein
+"volle Breite, keine Sidebar"-Seitentemplate wählen und dort nur diesen
+einen Shortcode einfügen.
+
+Technisch getrennt vom Rechner: eigene Assets (`vcl-*` statt `vfc-*`),
+eigene Daten (`window.VCL_DATA` statt `window.VFC_DATA`), eigene
+DOM-ID-Präfixe (`vcl-` statt `vfc-`) — beide Tools können unabhängig
+voneinander auf derselben Website laufen, ohne sich zu stören. Eine
+Datenübergabe (ausgewählte Variations → Gebührenrechner) ist als
+nächster Schritt geplant, aber noch nicht umgesetzt.
+
 ## Warum kein iframe, und wie die Design-Isolation funktioniert
 
 - **CSS** ist komplett unter der Klasse `.vfc-app` gekapselt
@@ -59,6 +85,14 @@ derselben Seite würden sich gegenseitig überschreiben.
 - `assets/js/vfc-data.js` — Gebührendaten (aus Excel generiert).
 - `convert.py` — WordPress-Variante des Konverters, erzeugt
   `assets/js/vfc-data.js` im gekapselten Format.
+- `includes/lookup.php` — registriert den zweiten Shortcode
+  `[variation_classification_lookup]` und dessen Assets.
+- `assets/css/vcl-style.css` — gekapseltes Design des Lookup, unter
+  `.vcl-app` genestet, inkl. Full-Bleed-Breakout auf volle Viewport-Breite.
+- `assets/js/vcl-app.js` — Lookup-Logik + UI (IIFE-gekapselt, IDs
+  `vcl-`-präfixiert, Daten aus `window.VCL_DATA`).
+- `assets/js/vcl-data.js` — Guideline-Klassifikationsdaten, gekapselt in
+  `window.VCL_DATA`.
 
 ## Gebühren aktualisieren (aus neuer Excel-Datei) — ohne FTP
 

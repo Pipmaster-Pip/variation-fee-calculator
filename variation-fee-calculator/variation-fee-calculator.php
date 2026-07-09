@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Variation Fee Calculator
- * Description: Berechnet amtliche Behördengebühren für Variations (Typ IA/IB/II) in der Pharma-Zulassung für EU-27, EMA, CH, IS, NO, UK und RS. Einbindung per Shortcode [variation_fee_calculator].
+ * Description: Berechnet amtliche Behördengebühren für Variations (Typ IA/IB/II) in der Pharma-Zulassung für EU-27, EMA, CH, IS, NO, UK und RS. Einbindung per Shortcode [variation_fee_calculator]. Enthält außerdem das Variation Classification Lookup (Nachschlagewerk zur EU Variation Classification Guideline) als eigene Seite via Shortcode [variation_classification_lookup] -- braucht die volle Seitenbreite, daher am besten auf einer eigenen Seite ohne Sidebar verwenden.
  * Version: 1.0.0
  * Author: Dr. Tom Deutschle
  * License: proprietary
@@ -17,6 +17,7 @@ define( 'VFC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'VFC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once VFC_PLUGIN_DIR . 'includes/admin.php';
+require_once VFC_PLUGIN_DIR . 'includes/lookup.php';
 
 /**
  * Registers (but does not enqueue) the calculator's assets. Actual
