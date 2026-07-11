@@ -330,7 +330,7 @@ const appState = {
   results: null
 };
 
-// Optional pre-fill from a companion tool (e.g. the Variation Classification Lookup's
+// Optional pre-fill from a companion tool (e.g. the Variations Reference Guide's
 // "Export to Fee Calculator" button) via URL query params ?ia=&ib=&ii= -- only seeds the
 // Variations step's counters; the user still walks through Countries and Country details
 // themselves before reaching them.

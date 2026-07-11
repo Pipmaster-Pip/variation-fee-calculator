@@ -1,5 +1,5 @@
 /* ============================================================================
- * Variation Classification Lookup -- WordPress plugin styles.
+ * Variations Reference Guide -- WordPress plugin styles.
  * Everything is scoped under .vcl-app so it can never leak into the theme,
  * and the theme's CSS can never reach in and override it (no bare `body`,
  * `*`, or unscoped class selectors) -- same discipline as vfc-style.css.
@@ -32,13 +32,44 @@
   --ib-bg: #FBF0E2;
   --ii: #B23A2E;
   --ii-bg: #FBEAE7;
-  --group: #5B4B8A;
-  --group-bg: #EEEAF5;
+  /* Indigo -- also used for the "Grouping of Variations" nav card, so the nav button and the
+     guidance page it leads to share one identity color. */
+  --group: #3B5BA9;
+  --group-bg: #EAEDF7;
+  --group-tint: rgba(59, 91, 169, 0.06);
+  /* Fixed lane colors for the Timetables view: RMS/CMS/MAH always use the same three colors
+     regardless of which variation type (IA/IB/II) is active, so the roles read consistently
+     across the whole view. MAH reuses --ii's red, CMS reuses --ia's teal-green ("zum Design
+     passendes Grün"); --tt-rms is a new dark blue that doesn't exist elsewhere in the palette. */
+  --tt-rms: #2C4A73;
+  --cms: #1F5F5B;
+  --cms-bg: #EBEEF5;
+
+  /* Nav-card family for the four top-level browse buttons (Summary / Classification /
+     Grouping / Timetables) and everything reached through Classification (chapter boxes,
+     entry cards) -- one identity color per top-level destination, distinct from the
+     --ia/--ib/--ii type-badge colors (which label the resulting procedure type, not the
+     nav/box itself). */
+  --classify: #2E6E9E;
+  --classify-bg: #E7F0F5;
+  --classify-tint: rgba(46, 110, 158, 0.06);
+  --slate: #2C6E6E;
+  --slate-bg: #E6F0EF;
+  --slate-tint: rgba(44, 110, 110, 0.06);
+  --plum: #6A4E8C;
+  --plum-bg: #EFE9F5;
+  --plum-tint: rgba(106, 78, 140, 0.06);
+  /* "Changed in a revision" identity color (result-card dot, detail badge/callout) -- warm
+     ochre, deliberately distinct from the cool classify/group/slate/plum family above so it
+     reads as an annotation layered on top, not another nav-level identity color. */
+  --history: #9C6B2E;
+  --history-bg: #F5EEE0;
+  --history-tint: rgba(156, 107, 46, 0.07);
 
   /* Breakout, centered on the true viewport regardless of the theme's own
      container width -- leaves a gutter on each side where the theme's own
      page background shows through, framing this app as a card. Capped at
-     1016px (= the 960px page-shell below plus this card's own 28px+28px
+     1336px (= the 1280px page-shell below plus this card's own 28px+28px
      padding) so the card hugs its now much narrower content on wide
      screens instead of ballooning out to 80vw of the full viewport; still
      shrinks with the viewport below that via width:80vw. margin-left uses
@@ -48,8 +79,8 @@
   position: relative;
   left: 50%;
   width: 80vw;
-  max-width: 1016px;
-  margin-left: max(-40vw, -508px);
+  max-width: 1336px;
+  margin-left: max(-40vw, -668px);
 
   margin-top: 24px;
   margin-bottom: 24px;
@@ -106,7 +137,7 @@
 /* Caps the whole page (header + layout) at roughly the companion Calculator's own
    880px measure, so the two tools feel like one family in width, not just palette. */
 .vcl-app .page-shell {
-  max-width: 960px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -122,7 +153,7 @@
 
 /* --- Browse column: search box + pinned Summary + chapter/section/subsection accordion.
    Nav and results used to be two separate columns (260px + 380px); merging them into one
-   ~300px accordion is what let the whole layout narrow to page-shell's ~960px. --- */
+   ~300px accordion is what let the whole layout narrow to page-shell's 1280px. --- */
 .vcl-app .browse-col {
   margin: 24px 0;
   border: 1px solid var(--border);
@@ -131,36 +162,47 @@
   overflow: hidden;
 }
 
+/* Flat card style for the four top-level browse buttons (Summary / Classification /
+   Grouping / Timetables): plain border instead of a colored left stripe, a subtle tinted
+   hover, and a clearly stronger "selected" state (colored border + tinted bg + bold
+   accent-colored title). --accent/--tint/--bg are set once per button via inline style
+   (e.g. --accent: var(--plum)) rather than hardcoded here, since each button owns a
+   different identity color. */
 .vcl-app .tab {
   --accent: #888;
+  --tint: rgba(0, 0, 0, 0.04);
+  --tab-bg: #F2F2F2;
+  width: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 3px;
   text-align: left;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px 10px 16px;
+  /* Shows its identity color from the resting state (not just once active): tinted
+     background always on, border a muted mix of --accent into that tint so it reads as
+     "this button's own color, quietly" rather than a neutral default. */
+  background: var(--tab-bg);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--tab-bg));
+  border-radius: 10px;
+  padding: 13px 16px;
   cursor: pointer;
   font-family: inherit;
   color: var(--ink);
-  box-shadow: inset 4px 0 0 var(--accent);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: filter 0.15s ease, border-color 0.15s ease;
 }
 
-.vcl-app .tab:hover { transform: translateX(-2px); }
+.vcl-app .tab:hover { filter: brightness(1.035); }
 
 .vcl-app .tab--active {
-  background: var(--paper);
-  box-shadow: inset 6px 0 0 var(--accent);
+  border-color: var(--accent);
+  background: var(--tab-bg);
   font-weight: 600;
 }
 
 .vcl-app .tab__code {
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 13px;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 14px;
   font-weight: 600;
   color: var(--accent);
 }
@@ -168,7 +210,7 @@
 .vcl-app .tab__title {
   font-size: 12.5px;
   color: var(--muted);
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .vcl-app .tab__pill {
@@ -188,12 +230,13 @@
   margin: 12px 14px 10px;
 }
 
-/* Full-width variant under the pinned Summary button: replaces the old inset divider,
-   which sat right above the first chapter's own border-top and read as two clashing
-   lines. margin-left/right:0 makes it flush with the Summary button's edges; the larger
-   top margin matches the visual gap the search box gets from its own padding. */
+/* Full-width variant under the pinned Summary button: flush with the Summary button's
+   edges (no left/right inset). Combined with .browse-tree's own 8px flex gap, an 8px
+   margin on each side gives a 16px visual gap above and below the divider -- matching the
+   16px gap the search box gets from its own .browse-tree padding, and the 16px gap the
+   Classification card gets above it, so the spacing reads as one consistent rhythm. */
 .vcl-app .tabs-divider--flush {
-  margin: 16px 0 10px;
+  margin: 8px 0;
 }
 
 .vcl-app .browse-tree {
@@ -202,39 +245,55 @@
   padding: 16px 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
 }
 
-/* --- Level 1: chapters (E, Q, C, M) ---
-   Border sits between two chapters only (not on .chapter itself + a first-of-type
-   override): :first-of-type counts *any* preceding div sibling of the same tag, so it
-   silently stopped matching once a divider div was placed before the chapter list. */
-.vcl-app .chapter + .chapter { border-top: 1px solid var(--border-soft); }
-
-.vcl-app .chapter__head {
-  --accent: #888;
-  width: 100%;
+/* --- Classification branch: wraps the chapter list (E, Q, C, M) below the "Classification
+   of Variations" nav card. Deliberately no vertical guide line here (removed on user
+   feedback) -- one level further in, the section list nested inside an open chapter still
+   has its own guide line (.chapter__body has none directly, but .subsection-body below it
+   does), so the line only appears once real sub-navigation starts. --- */
+.vcl-app .classification-branch {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  background: none;
-  border: none;
-  border-radius: 6px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* --- Level 1: chapters (E, Q, C, M). Same flat-card language as the top-level .tab cards
+   (plain border, subtle hover tint, stronger active state) and the same Steel Blue
+   ("--classify") identity color throughout, regardless of which chapter this is -- the
+   per-chapter accent that used to color this card now only differentiates the detail panel
+   (see renderDetail()), not the nav boxes. Fixed min-height keeps all four cards the same
+   size even though their titles wrap to a different number of lines. --- */
+.vcl-app .chapter__head {
+  --accent: var(--classify);
+  --tint: var(--classify-tint);
+  --tab-bg: var(--classify-bg);
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Same "colored from the start" treatment as .tab above. */
+  background: var(--tab-bg);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--tab-bg));
+  border-radius: 9px;
   text-align: left;
-  padding: 10px 8px;
+  padding: 9px 13px;
   cursor: pointer;
   font-family: inherit;
   color: var(--ink);
+  transition: filter 0.15s ease, border-color 0.15s ease;
 }
 
-.vcl-app .chapter__head:hover { background: var(--paper); }
-.vcl-app .chapter[data-open="true"] > .chapter__head { background: var(--accent-bg); }
+.vcl-app .chapter__head:hover { filter: brightness(1.035); }
+.vcl-app .chapter[data-open="true"] > .chapter__head { border-color: var(--accent); background: var(--tab-bg); }
 .vcl-app .chapter--pending .chapter__head { cursor: default; opacity: 0.55; }
 
 .vcl-app .chapter__chevron {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--accent);
-  width: 10px;
+  width: 16px;
   flex-shrink: 0;
 }
 
@@ -252,36 +311,43 @@
   line-height: 1.3;
 }
 
+/* No right padding: every nested level (.section-row, .results-list, .subsection-body,
+   .group-cards) stays flush with the chapter box's own right edge, and only ever indents from
+   the left as nesting goes deeper -- reads as more space-efficient than insetting both sides,
+   and (since none of the deeper wrappers below add their own right padding/margin either) this
+   one declaration is enough to keep every level flush-right, all the way down. Left padding
+   is the shared base indent that chapters with a Section level (Q) and chapters without one
+   (E, C, M) both start from, so their respective top level lines up. */
 .vcl-app .chapter__body {
-  padding: 2px 4px 12px 18px;
+  padding: 2px 0 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-/* --- Level 2: sections (Q.I, Q.II, ... -- currently only Q) --- */
+/* --- Level 2: sections (Q.I, Q.II, ... -- currently only Q). Same flat-card language as
+   chapters/entries (border, hover tint, colored-when-open) instead of the previous plain
+   bleeding row -- a bordered card sits naturally inset within .chapter__body's own padding,
+   so it no longer needs to bleed out to read as aligned. */
 .vcl-app .section-row {
-  /* Bleeds out through .chapter__body's own padding (18px left / 4px right) so the
-     hover/active background lines up with the chapter row above it instead of reading
-     as a narrower, indented box; the matching extra padding keeps the text itself at
-     its original indent. */
-  width: calc(100% + 22px);
-  margin-left: -18px;
+  --accent: var(--classify);
+  --tint: var(--classify-tint);
   display: flex;
   align-items: baseline;
   gap: 8px;
-  background: none;
-  border: none;
-  border-radius: 5px;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
   text-align: left;
-  padding: 6px 12px 6px 26px;
+  padding: 7px 10px;
   cursor: pointer;
   font-family: inherit;
   color: var(--ink);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.vcl-app .section-row:hover { background: var(--paper); }
-.vcl-app .section-row--active { background: var(--border-soft); }
+.vcl-app .section-row:hover { background: var(--tint); }
+.vcl-app .section-row--active { border-color: var(--accent); background: var(--tint); }
 .vcl-app .section-row--active .section-row__code { font-weight: 700; }
 .vcl-app .section-row--pending { opacity: 0.55; }
 
@@ -299,11 +365,11 @@
   line-height: 1.3;
 }
 
-/* --- Level 3: subsection groups nest inside an open section via .group-toggle below --- */
+/* --- Level 3: subsection groups nest inside an open section via .group-toggle below --
+   no vertical guide line (removed on feedback): .group-toggle is now its own bordered card
+   (see below), so a light indent alone is enough to read as nested. --- */
 .vcl-app .subsection-body {
-  margin: 2px 0 6px 4px;
-  padding-left: 10px;
-  border-left: 2px solid var(--border);
+  margin: 4px 0 6px 6px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -342,26 +408,35 @@
 .vcl-app .results-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* Same gap as .classification-branch/.chapter__body/.subsection-body above -- was 8px,
+     inconsistent with the 6px used one level up. */
+  gap: 6px;
 }
 
+/* The individual variation entries -- same flat-card language and Steel Blue identity color
+   as the chapter boxes above them (see .chapter__head), since they're reached through the
+   same Classification branch. The small IA/IB/II badges inside keep their own semantic
+   colors (resulting procedure type), independent of the card's own border/hover/active
+   color. */
 .vcl-app .result-card {
-  --accent: #888;
+  --accent: var(--classify);
+  --tint: var(--classify-tint);
+  --tab-bg: var(--classify-bg);
   text-align: left;
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
   cursor: pointer;
   font-family: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.vcl-app .result-card:hover { background: var(--paper); }
+.vcl-app .result-card:hover { background: var(--tint); }
 
 .vcl-app .result-card--active {
-  background: var(--paper);
   border-color: var(--accent);
+  background: var(--tab-bg);
 }
 
 .vcl-app .result-card__badges .badge {
@@ -388,6 +463,46 @@
   color: var(--accent);
 }
 
+/* Small "this code was touched by a logged guideline revision" indicator -- see
+   revisionForCode() in vcl-app.js. Dot in the list card, fuller badge + callout in the detail
+   panel (.changed-badge / .change-callout below) so the signal scales with how much room there
+   is to explain it. */
+.vcl-app .changed-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--history);
+  box-shadow: 0 0 0 2px var(--history-bg);
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.vcl-app .changed-badge {
+  display: inline-block;
+  margin-top: 6px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--history);
+  background: var(--history-bg);
+  border-radius: 999px;
+  padding: 3px 10px 3px 8px;
+}
+
+.vcl-app .change-callout {
+  margin-bottom: 16px;
+  background: var(--history-tint);
+  border-left: 3px solid var(--history);
+  border-radius: 4px;
+  padding: 10px 13px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.vcl-app .change-callout strong { color: var(--history); }
+
 .vcl-app .result-card__badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 
 .vcl-app .result-card__title {
@@ -413,40 +528,46 @@
   margin: 0 4px 10px;
 }
 
+/* Same flat-card language as .section-row above (border, hover tint, colored-when-open) --
+   no chevron (removed on feedback): open/closed reads from the border+background state alone. */
 .vcl-app .group-toggle {
+  --accent: var(--classify);
+  --tint: var(--classify-tint);
   width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--border-soft);
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
   text-align: left;
-  padding: 12px 6px 8px;
-  margin-top: 4px;
+  padding: 8px 10px;
   cursor: pointer;
   font-family: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.vcl-app .results-list > .group-toggle:first-child {
-  border-top: none;
-  margin-top: 0;
-  padding-top: 2px;
-}
+.vcl-app .group-toggle:hover { background: var(--tint); }
 
-.vcl-app .group-toggle:hover .group-toggle__label { color: var(--accent); }
-
-.vcl-app .group-toggle__chevron {
-  font-size: 10px;
-  color: var(--muted);
-  width: 10px;
+/* Chapters without their own Section level (currently only M) pass a plain listGroup string
+   as the heading instead of a "Q.I.a) ..."-style code -- this chip fills that gap so those
+   headings get the same code-plus-title look .section-row already has, instead of reading as
+   title-only. Only rendered when the group actually came from entry.listGroup (see
+   renderEntryGroup() in vcl-app.js). */
+.vcl-app .group-toggle__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
   flex-shrink: 0;
 }
 
 .vcl-app .group-toggle__label {
-  font-size: 12.5px;
+  /* Matches .section-row__title (was 12.5px/600) so a chapter's first submenu level reads the
+     same whether it's a .section-row (Q) or a .group-toggle (M). */
+  font-size: 11.5px;
   letter-spacing: 0.01em;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--muted);
   flex: 1;
 }
@@ -462,6 +583,10 @@
   margin-top: 2px;
 }
 
+.vcl-app .group-toggle--open {
+  border-color: var(--accent);
+  background: var(--tint);
+}
 .vcl-app .group-toggle--open .group-toggle__label { color: var(--ink); }
 
 .vcl-app .group-toggle__count {
@@ -477,8 +602,9 @@
 .vcl-app .group-cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 8px 0 4px;
+  /* Same gap as every other level above -- was 8px. */
+  gap: 6px;
+  margin: 6px 0 4px 8px;
 }
 
 .vcl-app .empty-note {
@@ -500,9 +626,7 @@
 .vcl-app .detail-empty {
   color: var(--muted);
   font-size: 14px;
-  max-width: 420px;
   line-height: 1.6;
-  padding-top: 40px;
 }
 
 .vcl-app .hidden { display: none !important; }
@@ -511,7 +635,11 @@
   --accent: #888;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--accent);
+  /* Fixed Classification blue rather than the per-chapter --accent (still set by
+     renderDetail() and still used by .qty-stepper__value further down) -- this is the
+     Classification section's own header, not a chapter-specific one. Thinner than before
+     (was 2px). */
+  border-bottom: 1px solid var(--classify);
 }
 
 .vcl-app .detail-head__code {
@@ -520,7 +648,7 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--panel);
-  background: var(--accent);
+  background: var(--classify);
   padding: 4px 12px;
   border-radius: 7px;
   margin-bottom: 10px;
@@ -543,29 +671,35 @@
 }
 
 .vcl-app .variant-block__head .badge {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 5px 14px;
-  letter-spacing: 0.03em;
-  border-radius: 8px;
+  padding: 4px 10px;
+  letter-spacing: 0.02em;
+  /* Full pill, matching the type badges already used elsewhere in the browse list/navigation
+     (.result-card__badges) -- rounder, not more rectangular. */
+  border-radius: 999px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .vcl-app .variant-block__head .type-ia { box-shadow: inset 0 0 0 1.5px rgba(47, 125, 91, 0.35); }
 .vcl-app .variant-block__head .type-ib { box-shadow: inset 0 0 0 1.5px rgba(166, 121, 10, 0.35); }
 .vcl-app .variant-block__head .type-ii { box-shadow: inset 0 0 0 1.5px rgba(178, 58, 46, 0.35); }
 
+/* Label runs full width on its own line; badges + stepper sit on a second, right-aligned row
+   underneath (previously shared one row, competing for space against the condition text). */
 .vcl-app .variant-block__head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
 .vcl-app .variant-block__label {
   font-size: 14px;
   font-weight: 500;
+  display: block;
 }
 
 .vcl-app .variant-block__section { margin-top: 12px; }
@@ -654,9 +788,14 @@
   margin: 14px 0;
 }
 
+/* No colored box for chapter/section general notes -- plain text with the bold label doing
+   the work instead (was also a latent color bug: static --accent-bg background combined with
+   the dynamic per-chapter --accent border, e.g. a red border for Chapter C). */
 .vcl-app .note-block--chapter {
-  background: var(--accent-bg);
-  border-left-color: var(--accent);
+  background: none;
+  border-left: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .vcl-app .note-block strong { font-weight: 600; }
@@ -677,6 +816,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--border);
+  /* Full pill, matching the type badges right next to it in .variant-block__head-right. */
   border-radius: 999px;
   overflow: hidden;
   background: var(--panel);
@@ -689,10 +829,10 @@
   justify-content: center;
   border: none;
   background: none;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   color: var(--ink);
@@ -713,10 +853,12 @@
 
 .vcl-app .variant-block__head-right {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  /* stretch (not center): the stepper and badges then share one common row height instead of
+     each sizing to their own content, so their top/bottom edges land flush. */
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
 .vcl-app.has-selection { padding-bottom: 56px; }
@@ -833,23 +975,17 @@
 
 .vcl-app .selection-bar__link:hover { background: var(--paper); }
 
-/* --- Pinned "Summary" tab --- */
 .vcl-app .tab__count {
   font-family: "IBM Plex Mono", monospace;
   font-size: 10.5px;
-  color: var(--muted);
-  background: var(--paper);
-  border: 1px solid var(--border);
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--accent);
   border-radius: 999px;
   padding: 1px 7px;
-  margin-top: 4px;
+  margin-top: 2px;
   display: inline-block;
 }
-
-/* Darker, higher-contrast text for the pinned Summary tab specifically. */
-.vcl-app .tab--summary .tab__code { color: var(--ib); letter-spacing: 0.06em; }
-.vcl-app .tab--summary .tab__title { color: var(--ink); font-weight: 500; letter-spacing: 0.03em; }
-.vcl-app .tab--summary .tab__count { color: var(--ib); border-color: #E4C87A; letter-spacing: 0.04em; }
 
 /* --- Summary column: occupies the same grid cell as .detail-col (only one of the two
    is ever visible at a time), since the browse column now stays on screen throughout. --- */
@@ -927,19 +1063,59 @@
   overflow-y: auto;
 }
 
+/* --- Shared "reference" header: Classification's empty state, Grouping and Timetables all
+   use this same shape (title, one descriptive paragraph with the source woven in, then a
+   small manually-maintained "Last updated" note) -- each section keeps its own *-head class
+   only for the border-bottom identity color and spacing. --- */
+.vcl-app .classification-head {
+  /* Stays visible above both the empty-state hint and a selected entry's own .detail-head
+     (see vcl-detailHead in lookup.php/classification.html), so this margin needs to work as a
+     section divider in both cases -- matches .detail-head's own margin-bottom for a consistent
+     rhythm when both are stacked. */
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--classify);
+}
+
+.vcl-app .classification-head h3 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.vcl-app .classification-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.vcl-app .classification-head p strong { color: var(--ink); }
+
+.vcl-app .classification-empty-hint {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.vcl-app .ref-line {
+  margin-top: 9px !important;
+  font-size: 12px !important;
+  color: var(--muted) !important;
+}
+
+.vcl-app .ref-updated {
+  margin-top: 9px !important;
+  font-size: 11px !important;
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--ink-faint) !important;
+}
+
 .vcl-app .grouping-head {
   margin-bottom: 4px;
   padding-bottom: 16px;
   border-bottom: 2px solid var(--group);
-}
-
-.vcl-app .grouping-head__eyebrow {
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--group);
-  margin: 0 0 8px;
 }
 
 .vcl-app .grouping-head h3 {
@@ -955,6 +1131,8 @@
   color: var(--muted);
   line-height: 1.5;
 }
+
+.vcl-app .grouping-head p strong { color: var(--ink); }
 
 .vcl-app .grouping-notes {
   margin: 16px 0 0;
@@ -987,13 +1165,6 @@
 }
 
 .vcl-app .grouping-section__title:hover { background: var(--paper); }
-
-.vcl-app .grouping-section__chevron {
-  font-size: 10px;
-  color: var(--muted);
-  width: 10px;
-  flex-shrink: 0;
-}
 
 .vcl-app .grouping-section__count {
   font-size: 12px;
@@ -1044,6 +1215,352 @@
   font-size: 12px;
   color: var(--ink-faint);
   line-height: 1.55;
+}
+
+/* --- Timetables view: occupies the same grid cell as .detail-col/.summary-col/
+   .grouping-col (only one of the four is ever visible at a time). Prefixed with
+   .vcl-tt- throughout (rather than reusing .tab etc.) since these are a different
+   kind of control -- an in-panel type/variant switcher, not the browse-column nav. --- */
+.vcl-app .timetables-col {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 28px 6px 40px 0;
+  overflow-y: auto;
+}
+
+.vcl-app .tt-head {
+  margin-bottom: 4px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--slate);
+}
+
+.vcl-app .tt-head h3 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.vcl-app .tt-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.vcl-app .tt-head p strong { color: var(--ink); }
+
+.vcl-app .tt-tabs {
+  display: flex;
+  gap: 18px;
+  margin: 20px 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.vcl-app .tt-tab {
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-faint);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 10px;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.vcl-app .tt-tab .tt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
+.vcl-app .tt-tab:hover { color: var(--ink); }
+.vcl-app .tt-tab--ia.tt-tab--active { color: var(--ia); border-color: var(--ia); }
+.vcl-app .tt-tab--ia.tt-tab--active .tt-dot { background: var(--ia); }
+.vcl-app .tt-tab--ib.tt-tab--active { color: var(--ib); border-color: var(--ib); }
+.vcl-app .tt-tab--ib.tt-tab--active .tt-dot { background: var(--ib); }
+.vcl-app .tt-tab--ii.tt-tab--active { color: var(--ii); border-color: var(--ii); }
+.vcl-app .tt-tab--ii.tt-tab--active .tt-dot { background: var(--ii); }
+
+.vcl-app .tt-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+.vcl-app .tt-sub b { color: var(--ink); font-weight: 600; }
+
+.vcl-app .tt-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.vcl-app .tt-seg {
+  display: inline-flex;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+.vcl-app .tt-seg button {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.vcl-app .tt-seg button.tt-active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(20,30,40,0.08); }
+
+.vcl-app .tt-btn {
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.vcl-app .tt-btn:hover { color: var(--ink); background: var(--paper); }
+.vcl-app .tt-spacer { flex: 1; }
+
+.vcl-app .tt-callouts { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.vcl-app .tt-callout {
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 5px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.vcl-app .tt-callout b { color: var(--ink); }
+
+.vcl-app .tt-stage {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 18px 14px;
+  margin-bottom: 14px;
+  overflow: hidden; /* clips the day-axis guide lines (.tt-tick::after) to this box -- without
+                        this they paint past the stage and inflate .timetables-col's scrollable
+                        area, causing both a visible "bleed" and an unwanted inner scrollbar. */
+}
+
+.vcl-app .tt-ruler {
+  position: relative;
+  height: 20px;
+  margin-left: 42px;
+  margin-bottom: 4px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.vcl-app .tt-lane-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 46px;
+  border-top: 1px solid var(--border-soft);
+}
+.vcl-app .tt-lane-row:first-child { border-top: none; }
+
+.vcl-app .tt-lane-label {
+  flex: 0 0 42px;
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.vcl-app .tt-lane-track { flex: 1; display: flex; position: relative; }
+.vcl-app .tt-track-run { position: relative; flex: 1 1 auto; padding: 8px 0; }
+.vcl-app .tt-track-clockoff { flex: 0 0 auto; position: relative; }
+
+.vcl-app .tt-range-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 9px; border-radius: 5px; }
+.vcl-app .tt-range-bar.tt-active { opacity: 0.9; }
+.vcl-app .tt-range-bar.tt-waiting {
+  background-image: repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 6px);
+  opacity: 0.5;
+  height: 5px;
+}
+/* A sibling of .tt-range-bar (not a child) -- CSS opacity applies to a whole subtree as one
+   compositing group, so a label nested inside the (deliberately faded) "waiting" bar would be
+   faded too and read lighter than the "active" bar's label right above it, even with the same
+   text color. Keeping it a sibling, positioned independently, avoids inheriting that opacity. */
+.vcl-app .tt-range-label {
+  position: absolute;
+  top: calc(50% + 9px);
+  font-size: 9.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.vcl-app .tt-point {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 3;
+  transition: transform 0.15s ease;
+}
+.vcl-app .tt-point:hover, .vcl-app .tt-point.tt-hovered { transform: translate(-50%, -50%) scale(1.25); z-index: 5; }
+.vcl-app .tt-point.tt-stopkind { border-style: dashed; }
+
+.vcl-app .tt-clockoff-lane { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.vcl-app .tt-clockoff-fill {
+  position: absolute;
+  inset: 5px 4px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px dashed var(--border-soft);
+  background-image: repeating-linear-gradient(135deg, var(--border-soft) 0 3px, transparent 3px 9px);
+}
+.vcl-app .tt-clockoff-text {
+  position: relative;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+  padding: 0 5px;
+  line-height: 1.3;
+}
+
+.vcl-app .tt-tick { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.vcl-app .tt-tick::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 1px;
+  height: 400px;
+  background: var(--border-soft);
+  pointer-events: none;
+}
+
+.vcl-app .tt-milestone-list { display: flex; flex-direction: column; gap: 2px; }
+.vcl-app .tt-milestone-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.vcl-app .tt-milestone-item:hover { background: var(--paper); }
+.vcl-app .tt-milestone-item.tt-active { background: var(--paper); border-color: var(--border); }
+.vcl-app .tt-milestone-item .tt-num {
+  flex: 0 0 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.vcl-app .tt-milestone-item .tt-body { flex: 1; }
+.vcl-app .tt-milestone-item .tt-day { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted); }
+.vcl-app .tt-milestone-item .tt-title { font-weight: 600; font-size: 13px; margin: 1px 0 3px; }
+.vcl-app .tt-milestone-item .tt-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.vcl-app .tt-lane-chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 7px;
+}
+
+.vcl-app .tt-compare-row { display: flex; align-items: center; gap: 12px; margin-bottom: 56px; }
+.vcl-app .tt-compare-row:last-child { margin-bottom: 4px; }
+.vcl-app .tt-compare-label { flex: 0 0 68px; font-weight: 600; font-size: 12px; }
+.vcl-app .tt-compare-label small { display: block; font-weight: 400; color: var(--muted); font-size: 10px; margin-top: 2px; }
+.vcl-app .tt-compare-track { flex: 1; position: relative; height: 28px; }
+.vcl-app .tt-compare-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 14px; border-radius: 3px; }
+.vcl-app .tt-compare-point { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 7px; height: 7px; border-radius: 50%; border: 2px solid var(--panel); z-index: 2; }
+.vcl-app .tt-compare-daylabel {
+  position: absolute;
+  top: 100%;
+  margin-top: 4px;
+  transform: translateX(-50%);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  /* Row (0/1/2...) is assigned dynamically by JS per label to avoid collisions -- see
+     ttLayoutRowLabels() -- so no fixed offset is baked in here. */
+}
+/* Its width is drawn to scale against the other two variants' clock-off length (not against
+   the day axis, which can't represent it -- see ttRenderCompare), so a wider box here really
+   does mean "clock-off runs longer" between variants. */
+.vcl-app .tt-compare-clockoff {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 20px;
+  border-radius: 4px;
+  background: var(--paper);
+  border: 1px dashed var(--border-soft);
+  background-image: repeating-linear-gradient(135deg, var(--border-soft) 0 3px, transparent 3px 9px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vcl-app .tt-compare-clockoff span {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.vcl-app .tt-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--muted); margin-bottom: 20px; }
+.vcl-app .tt-legend .tt-item { display: flex; align-items: center; gap: 6px; }
+.vcl-app .tt-legend .tt-swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.vcl-app .tt-legend .tt-swatch.tt-dash {
+  background-image: repeating-linear-gradient(135deg, var(--border-soft) 0 2px, transparent 2px 5px);
+  border: 1px dashed var(--border-soft);
+}
+
+.vcl-app .tt-source {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .vcl-app .tt-lane-label { flex-basis: 36px; font-size: 10px; }
+  .vcl-app .tt-ruler { margin-left: 36px; }
+  .vcl-app .tt-compare-label { flex-basis: 36px; }
 }
 
 .vcl-app .summary-item {

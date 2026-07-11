@@ -24,9 +24,9 @@ ins Seiten-DOM (**kein iframe**) über den Shortcode
 hält einen einzigen globalen JS-Zustand (`appState`); zwei Instanzen auf
 derselben Seite würden sich gegenseitig überschreiben.
 
-## Variation Classification Lookup (zweiter Shortcode)
+## Variations Reference Guide (zweiter Shortcode)
 
-Dasselbe Plugin enthält außerdem das **Variation Classification Lookup**
+Dasselbe Plugin enthält außerdem das **Variations Reference Guide**
 (Nachschlagewerk zur EU Variation Classification Guideline) als eigenen
 Shortcode:
 

@@ -1,7 +1,6 @@
-// Variation Classification Lookup -- data, wrapped for WordPress plugin use.
-// Ported from the standalone classification-data.js; content below this line
-// is otherwise unchanged. Exposes window.VCL_DATA instead of bare globals so
-// it cannot collide with the sibling Fee Calculator plugin's own data/scripts.
+// Variations Reference Guide -- data, wrapped for WordPress plugin use.
+// Exposes window.VCL_DATA instead of bare globals so it cannot collide with
+// the sibling Fee Calculator plugin's own data/scripts.
 (function () {
   "use strict";
 
@@ -22,9 +21,20 @@ const CLASSIFICATION_META = {
   officialJournalDate: "2025-09-22",
   applicableFrom: "2026-01-15",
   sourceUrl: "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:C_202505045",
+  // Manually maintained: update whenever the classification data below is re-checked against
+  // the guideline above (not the same as the guideline's own official/applicable dates).
+  lastUpdated: "2026-07-10",
   ibDefaultRule:
     "Where one or more conditions set out for a minor variation of Type IA are not met, the change may instead be submitted as a minor variation of Type IB (\u2018Type IB by default\u2019) under the same code \u2014 unless the change is specifically classified as a major variation of Type II in the Annex, or the holder considers the change may have a significant impact on quality, safety or efficacy of the medicinal product.",
 };
+
+// Internal changelog of what changed in the classification data below and when -- populated by
+// hand during the same development session that updates ENTRIES for a new guideline revision
+// (see CLASSIFICATION_META.lastUpdated above for when the data was last re-checked in general).
+// Deliberately starts empty: there is no reliable record of what changed between the pre-2026
+// Annex and C/2025/5045 above, and a fabricated changedCodes list would be worse than none.
+// Newest entry first. Each entry: { guidelineRef, date, summary, changedCodes: [...] }.
+const REVISION_HISTORY = [];
 
 // Sub-structure within Chapter Q (Sections I-V, each with lettered subsections).
 // Used for secondary navigation and for grouping the results list. Only Q currently
@@ -6490,13 +6500,16 @@ const ENTRIES = [
 // fixed compatibility table. Classification codes explicitly named in the source text are marked
 // up inline as <span class="code-chip">...</span> so they render as recognisable chips.
 const GROUPING_GUIDANCE = {
-  title: "Grouping of variations",
+  title: "Grouping of Variations",
   subtitle: "Examples for acceptable and not acceptable groupings",
   source: {
     docTitle: "Examples for acceptable and not acceptable groupings for MRP/DCP products",
     docRef: "CMDh/173/2010, Rev. 25",
     docDate: "March 2026",
   },
+  // Manually maintained: update whenever the examples below are re-checked against the
+  // source document above (not the same as the document's own revision date).
+  lastUpdated: "2026-07-03",
   generalNotes: [
     "For future variation applications comparable to those listed below as acceptable groupings, applicants do not have to contact the RMS for acceptance as these grouped applications are already accepted by all EU member states.",
     "As a general rule, type IA or IAIN variations for the implementation of safety-relevant changes may not be grouped together with type IB or type II variations, as this would delay the implementation of this safety-relevant information.",
@@ -6565,8 +6578,8 @@ const GROUPING_GUIDANCE = {
 };
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE };
+  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, REVISION_HISTORY };
 }
 
-  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE };
+  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY };
 })();

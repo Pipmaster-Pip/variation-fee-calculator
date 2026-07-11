@@ -48,6 +48,46 @@ function vfc_extract_last_updated( $file_path ) {
 	return null;
 }
 
+/**
+ * The three "Last updated" dates shown in the Lookup's reference headers (Classification /
+ * Grouping / Timetables) -- manually maintained by whoever last checked that section's content
+ * against its official source, kept as one WordPress option so an admin can update them from
+ * wp-admin instead of needing a code change. Falls back to the dates baked into vcl-data.js/
+ * vcl-app.js (as of the last content update) until the option is first saved.
+ */
+function vcl_get_last_updated() {
+	$defaults = array(
+		'classification' => '2026-07-10',
+		'grouping'       => '2026-07-03',
+		'timetables'     => '2026-07-03',
+	);
+	$saved = get_option( 'vcl_last_updated', array() );
+	if ( ! is_array( $saved ) ) {
+		$saved = array();
+	}
+	return wp_parse_args( $saved, $defaults );
+}
+
+/**
+ * Free-text guideline reference shown next to each "Last updated" date (e.g. "C/2025/5045,
+ * applicable from 2026-01-15"). Kept editable from wp-admin -- unlike the date above, this isn't
+ * a fixed format, since guideline numbers/revisions/titles occasionally change on the official
+ * side and the displayed text should be correctable without a code change. Defaults mirror the
+ * guideline references currently hardcoded in vcl-data.js/vcl-app.js.
+ */
+function vcl_get_reference_text() {
+	$defaults = array(
+		'classification' => 'C/2025/5045, applicable from 2026-01-15',
+		'grouping'       => 'CMDh/173/2010, Rev. 25 (March 2026)',
+		'timetables'     => 'CMDh Best Practice Guide, Chapters 3–5',
+	);
+	$saved = get_option( 'vcl_reference_text', array() );
+	if ( ! is_array( $saved ) ) {
+		$saved = array();
+	}
+	return wp_parse_args( $saved, $defaults );
+}
+
 function vfc_render_admin_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
@@ -55,6 +95,10 @@ function vfc_render_admin_page() {
 
 	$status  = isset( $_GET['vfc_status'] ) ? sanitize_key( $_GET['vfc_status'] ) : '';
 	$message = isset( $_GET['vfc_msg'] ) ? sanitize_text_field( wp_unslash( $_GET['vfc_msg'] ) ) : '';
+
+	$vcl_status = isset( $_GET['vcl_status'] ) ? sanitize_key( $_GET['vcl_status'] ) : '';
+	$vcl_dates  = vcl_get_last_updated();
+	$vcl_refs   = vcl_get_reference_text();
 
 	$last_updated = vfc_extract_last_updated( VFC_DATA_FILE );
 	$file_exists  = file_exists( VFC_DATA_FILE );
@@ -110,6 +154,67 @@ function vfc_render_admin_page() {
 			Vor jedem Hochladen wird automatisch eine Sicherungskopie der bisherigen
 			Datei als <code>vfc-data.js.bak</code> im Plugin-Ordner angelegt.
 		</p>
+
+		<hr>
+
+		<h1 id="vcl-last-updated">Variations Reference Guide — "Zuletzt aktualisiert"-Daten</h1>
+
+		<?php if ( $vcl_status === 'success' ) : ?>
+			<div class="notice notice-success is-dismissible"><p>Daten gespeichert.</p></div>
+		<?php endif; ?>
+
+		<p>
+			Diese Angaben erscheinen im Tool „Variations Reference Guide“ als kleiner Hinweis unter
+			„Classification of Variations“, „Grouping of Variations“ und „Timetables for
+			Variations“: die Guideline-Referenz (Freitext, z. B. Nummer/Revision/Titel der
+			Quelle — da sich diese gelegentlich ändern) sowie das Datum, wann der jeweilige
+			Inhalt zuletzt gegen die offizielle Quelle geprüft wurde (nicht zu verwechseln mit
+			dem Datum der Quelle selbst). Der eigentliche Inhalt (Klassifizierungscodes,
+			Grouping-Beispiele, Verfahrens-Zeitpläne) wird hier nicht bearbeitet — Änderungen
+			daran laufen weiter über eine Entwicklungs-Session, da sie eine sorgfältige
+			Übertragung der jeweiligen Guideline erfordern.
+		</p>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'vcl_save_dates_action', 'vcl_save_dates_nonce' ); ?>
+			<input type="hidden" name="action" value="vcl_save_dates">
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row">Classification of Variations</th>
+					<td>
+						<label for="vcl_reference_classification">Reference</label><br>
+						<input type="text" id="vcl_reference_classification" name="vcl_reference_text[classification]" value="<?php echo esc_attr( $vcl_refs['classification'] ); ?>" class="regular-text">
+						<p class="description" style="margin-top:8px;">
+							<label for="vcl_last_updated_classification">Last updated in Variations Reference Guide</label><br>
+							<input type="date" id="vcl_last_updated_classification" name="vcl_last_updated[classification]" value="<?php echo esc_attr( $vcl_dates['classification'] ); ?>">
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Grouping of Variations</th>
+					<td>
+						<label for="vcl_reference_grouping">Reference</label><br>
+						<input type="text" id="vcl_reference_grouping" name="vcl_reference_text[grouping]" value="<?php echo esc_attr( $vcl_refs['grouping'] ); ?>" class="regular-text">
+						<p class="description" style="margin-top:8px;">
+							<label for="vcl_last_updated_grouping">Last updated in Variations Reference Guide</label><br>
+							<input type="date" id="vcl_last_updated_grouping" name="vcl_last_updated[grouping]" value="<?php echo esc_attr( $vcl_dates['grouping'] ); ?>">
+						</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Timetables for Variations</th>
+					<td>
+						<label for="vcl_reference_timetables">Reference</label><br>
+						<input type="text" id="vcl_reference_timetables" name="vcl_reference_text[timetables]" value="<?php echo esc_attr( $vcl_refs['timetables'] ); ?>" class="regular-text">
+						<p class="description" style="margin-top:8px;">
+							<label for="vcl_last_updated_timetables">Last updated in Variations Reference Guide</label><br>
+							<input type="date" id="vcl_last_updated_timetables" name="vcl_last_updated[timetables]" value="<?php echo esc_attr( $vcl_dates['timetables'] ); ?>">
+						</p>
+					</td>
+				</tr>
+			</table>
+			<?php submit_button( 'Daten speichern' ); ?>
+		</form>
 	</div>
 	<?php
 }
@@ -173,3 +278,40 @@ function vfc_handle_upload() {
 	exit;
 }
 add_action( 'admin_post_vfc_upload_data', 'vfc_handle_upload' );
+
+/**
+ * Saves the three "Last updated" dates (see vcl_get_last_updated()) and the three free-text
+ * guideline references (see vcl_get_reference_text()) as two array options. Dates: silently
+ * drops any field that isn't a plain YYYY-MM-DD string rather than erroring out -- the
+ * <input type="date"> already constrains the format client-side, this is just a server-side
+ * backstop. References: plain sanitize_text_field(), no format constraint since it's free text.
+ */
+function vcl_handle_save_dates() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Keine Berechtigung.' );
+	}
+	check_admin_referer( 'vcl_save_dates_action', 'vcl_save_dates_nonce' );
+
+	$redirect_base = admin_url( 'options-general.php?page=vfc-settings' );
+
+	$date_input = isset( $_POST['vcl_last_updated'] ) && is_array( $_POST['vcl_last_updated'] ) ? wp_unslash( $_POST['vcl_last_updated'] ) : array();
+	$dates      = array();
+	$ref_input  = isset( $_POST['vcl_reference_text'] ) && is_array( $_POST['vcl_reference_text'] ) ? wp_unslash( $_POST['vcl_reference_text'] ) : array();
+	$refs       = array();
+	foreach ( array( 'classification', 'grouping', 'timetables' ) as $key ) {
+		$date_value = isset( $date_input[ $key ] ) ? sanitize_text_field( $date_input[ $key ] ) : '';
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_value ) ) {
+			$dates[ $key ] = $date_value;
+		}
+		if ( isset( $ref_input[ $key ] ) ) {
+			$refs[ $key ] = sanitize_text_field( $ref_input[ $key ] );
+		}
+	}
+
+	update_option( 'vcl_last_updated', $dates );
+	update_option( 'vcl_reference_text', $refs );
+
+	wp_safe_redirect( add_query_arg( array( 'vcl_status' => 'success' ), $redirect_base ) . '#vcl-last-updated' );
+	exit;
+}
+add_action( 'admin_post_vcl_save_dates', 'vcl_handle_save_dates' );

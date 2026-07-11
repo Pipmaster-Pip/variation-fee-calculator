@@ -1,12 +1,12 @@
 <?php
 /**
- * Variation Classification Lookup -- a companion tool to the fee calculator,
+ * Variations Reference Guide -- a companion tool to the fee calculator,
  * bundled into this same plugin so the two can eventually hand data to each
  * other, but rendered on its own dedicated page via a separate shortcode.
  *
  * Registers (but does not enqueue) its assets; enqueuing happens from the
  * shortcode callback below, so the (large) classification data set is only
- * ever loaded on the one page that actually contains the Lookup.
+ * ever loaded on the one page that actually contains the Guide.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,11 +21,18 @@ function vcl_register_assets() {
 		null
 	);
 
+	// Versioned by file modification time (not the static VFC_VERSION) so an update to
+	// either file immediately busts any browser/CDN cache for visitors -- VFC_VERSION never
+	// gets bumped in day-to-day edits, so relying on it here left every vcl-style.css/
+	// vcl-app.js change invisible to anyone with a previously cached copy.
+	$style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-style.css';
+	$style_ver  = file_exists( $style_file ) ? filemtime( $style_file ) : VFC_VERSION;
+
 	wp_register_style(
 		'vcl-style',
 		VFC_PLUGIN_URL . 'assets/css/vcl-style.css',
 		array( 'vcl-fonts' ),
-		VFC_VERSION
+		$style_ver
 	);
 
 	wp_register_script(
@@ -36,8 +43,6 @@ function vcl_register_assets() {
 		true
 	);
 
-	// Version by file modification time so an updated classification data
-	// file immediately busts any browser/CDN cache for visitors.
 	$data_file = VFC_PLUGIN_DIR . 'assets/js/vcl-data.js';
 	$data_ver  = file_exists( $data_file ) ? filemtime( $data_file ) : VFC_VERSION;
 
@@ -49,11 +54,14 @@ function vcl_register_assets() {
 		true
 	);
 
+	$app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-app.js';
+	$app_ver  = file_exists( $app_file ) ? filemtime( $app_file ) : VFC_VERSION;
+
 	wp_register_script(
 		'vcl-app',
 		VFC_PLUGIN_URL . 'assets/js/vcl-app.js',
 		array( 'vcl-data', 'vcl-docx' ),
-		VFC_VERSION,
+		$app_ver,
 		true
 	);
 }
@@ -74,7 +82,16 @@ function vcl_shortcode( $atts ) {
 
 	wp_enqueue_style( 'vcl-style' );
 	wp_enqueue_script( 'vcl-app' );
-	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array( 'calculatorUrl' => $atts['calculator_url'] ) );
+	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
+		'calculatorUrl' => $atts['calculator_url'],
+		// Admin-editable via the "Variations Reference Guide" section on the plugin's settings
+		// page (see vcl_get_last_updated() in includes/admin.php) -- falls back to the dates
+		// baked into vcl-data.js/vcl-app.js if never saved there.
+		'lastUpdated'   => vcl_get_last_updated(),
+		// Same admin-editable/fallback pattern for the free-text guideline reference shown
+		// next to it (see vcl_get_reference_text() in includes/admin.php).
+		'referenceText' => vcl_get_reference_text(),
+	) );
 
 	ob_start();
 	?>
@@ -83,13 +100,11 @@ function vcl_shortcode( $atts ) {
 	<div class="page-shell">
 
 	<header class="app-header">
-	  <p class="app-header__eyebrow">Variation Fee Calculator &mdash; companion tool</p>
-	  <h1>Variation Classification Lookup</h1>
+	  <h1>Variations Reference Guide</h1>
 	  <p class="app-header__copyright">&copy; Dr. Tom Deutschle</p>
 	  <p>
-	    Search or browse variation codes from the EU Variation Classification Guideline. Pick a matching entry to see
-	    the conditions, required documentation and resulting procedure type. Guideline
-	    <strong id="vcl-guidelineRef"></strong>, applicable from <strong id="vcl-applicableFrom"></strong>.
+	    One companion tool for the EU Variation Classification Guideline: look up how a change is classified, check
+	    which changes may be <strong>grouped</strong> together, and see the day-by-day procedure <strong>timetable</strong>.
 	  </p>
 	</header>
 
@@ -102,10 +117,11 @@ function vcl_shortcode( $atts ) {
 	  </div>
 
 	  <div class="detail-col" id="vcl-detailCol">
-	    <div class="detail-empty" id="vcl-detailEmpty">
-	      Select an entry from the list to see its conditions, required documentation and procedure type. Tick off
-	      conditions as you confirm them to see whether the change qualifies for the listed type.
-	    </div>
+	    <!-- Populated by vcl-app.js (needs CLASSIFICATION_META for the reference text).
+	         vcl-detailHead stays visible in both states (nothing selected / entry selected) so
+	         the Reference/Last-updated note doesn't disappear once an entry is opened. -->
+	    <div class="classification-head" id="vcl-detailHead"></div>
+	    <div class="detail-empty" id="vcl-detailEmpty"></div>
 	    <div class="hidden" id="vcl-detailPanel"></div>
 	  </div>
 
@@ -129,6 +145,8 @@ function vcl_shortcode( $atts ) {
 	  </div>
 
 	  <div class="grouping-col hidden" id="vcl-groupingCol"></div>
+
+	  <div class="timetables-col hidden" id="vcl-timetablesCol"></div>
 	</div>
 
 	</div>

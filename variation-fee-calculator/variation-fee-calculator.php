@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Variation Fee Calculator
- * Description: Berechnet amtliche Behördengebühren für Variations (Typ IA/IB/II) in der Pharma-Zulassung für EU-27, EMA, CH, IS, NO, UK und RS. Einbindung per Shortcode [variation_fee_calculator]. Enthält außerdem das Variation Classification Lookup (Nachschlagewerk zur EU Variation Classification Guideline) als eigene Seite via Shortcode [variation_classification_lookup] -- braucht die volle Seitenbreite, daher am besten auf einer eigenen Seite ohne Sidebar verwenden.
+ * Description: Berechnet amtliche Behördengebühren für Variations (Typ IA/IB/II) in der Pharma-Zulassung für EU-27, EMA, CH, IS, NO, UK und RS. Einbindung per Shortcode [variation_fee_calculator]. Enthält außerdem das Variations Reference Guide (Nachschlagewerk zur EU Variation Classification Guideline) als eigene Seite via Shortcode [variation_classification_lookup] -- braucht die volle Seitenbreite, daher am besten auf einer eigenen Seite ohne Sidebar verwenden.
  * Version: 1.0.0
  * Author: Dr. Tom Deutschle
  * License: proprietary
@@ -26,11 +26,18 @@ require_once VFC_PLUGIN_DIR . 'includes/lookup.php';
  * contain the calculator.
  */
 function vfc_register_assets() {
+	// Version CSS/JS by file modification time (not the static plugin
+	// version) so that edits to these files immediately bust any
+	// browser/CDN cache, instead of visitors keeping a stale asset until
+	// the plugin itself is next updated.
+	$style_file = VFC_PLUGIN_DIR . 'assets/css/vfc-style.css';
+	$style_ver  = file_exists( $style_file ) ? filemtime( $style_file ) : VFC_VERSION;
+
 	wp_register_style(
 		'vfc-style',
 		VFC_PLUGIN_URL . 'assets/css/vfc-style.css',
 		array(),
-		VFC_VERSION
+		$style_ver
 	);
 
 	wp_register_script(
@@ -41,10 +48,9 @@ function vfc_register_assets() {
 		true
 	);
 
-	// Version by file modification time (not the static plugin version) so
-	// that an admin-panel data upload immediately busts any browser/CDN
-	// cache, instead of visitors keeping a stale fee table until the plugin
-	// itself is next updated.
+	// Same reasoning as vfc-style above: an admin-panel data upload
+	// immediately busts any browser/CDN cache, instead of visitors keeping
+	// a stale fee table until the plugin itself is next updated.
 	$data_file = VFC_PLUGIN_DIR . 'assets/js/vfc-data.js';
 	$data_ver  = file_exists( $data_file ) ? filemtime( $data_file ) : VFC_VERSION;
 
@@ -56,11 +62,14 @@ function vfc_register_assets() {
 		true
 	);
 
+	$app_file = VFC_PLUGIN_DIR . 'assets/js/vfc-app.js';
+	$app_ver  = file_exists( $app_file ) ? filemtime( $app_file ) : VFC_VERSION;
+
 	wp_register_script(
 		'vfc-app',
 		VFC_PLUGIN_URL . 'assets/js/vfc-app.js',
 		array( 'vfc-data', 'vfc-xlsx' ),
-		VFC_VERSION,
+		$app_ver,
 		true
 	);
 }
