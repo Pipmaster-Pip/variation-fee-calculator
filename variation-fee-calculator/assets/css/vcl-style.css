@@ -319,7 +319,10 @@
    is the shared base indent that chapters with a Section level (Q) and chapters without one
    (E, C, M) both start from, so their respective top level lines up. */
 .vcl-app .chapter__body {
-  padding: 2px 0 12px 10px;
+  /* Top padding matches the 6px gap below (was 2px) so the space between the chapter box and
+     its first child equals the space between children -- previously the chapter's first child
+     sat noticeably closer than its later siblings. */
+  padding: 6px 0 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -535,7 +538,10 @@
   --tint: var(--classify-tint);
   width: 100%;
   display: flex;
-  align-items: center;
+  /* flex-start, not center: .group-toggle__label can wrap to two lines (heading text plus the
+     .group-toggle__range line below it) -- centering against that whole block left the code
+     chip floating in the middle instead of level with the heading's first line. */
+  align-items: flex-start;
   gap: 8px;
   background: var(--panel);
   border: 1.5px solid var(--border);
@@ -563,11 +569,11 @@
 }
 
 .vcl-app .group-toggle__label {
-  /* Matches .section-row__title (was 12.5px/600) so a chapter's first submenu level reads the
-     same whether it's a .section-row (Q) or a .group-toggle (M). */
+  /* Font-size matches .section-row__title (was 12.5px); kept bold on request, so headings like
+     "Q.II.b) Manufacture" read clearly at a glance. */
   font-size: 11.5px;
   letter-spacing: 0.01em;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--muted);
   flex: 1;
 }
