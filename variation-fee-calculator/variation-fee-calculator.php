@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: Variation Fee Calculator
- * Description: Berechnet amtliche Behördengebühren für Variations (Typ IA/IB/II) in der Pharma-Zulassung für EU-27, EMA, CH, IS, NO, UK und RS. Einbindung per Shortcode [variation_fee_calculator]. Enthält außerdem das Variations Reference Guide (Nachschlagewerk zur EU Variation Classification Guideline) als eigene Seite via Shortcode [variation_classification_lookup] -- braucht die volle Seitenbreite, daher am besten auf einer eigenen Seite ohne Sidebar verwenden.
+ * Plugin Name: Variation Toolbox
+ * Description: Werkzeugkasten für Variations in der Pharma-Zulassung: Klassifizierung nach der EU Variation Classification Guideline, Grouping- und Precise-Scope-Guidance, Verfahrens-Timetables, Workload-Planning sowie der eingebettete Variation Fee Calculator (amtliche Behördengebühren für Typ IA/IB/II in EU-27, EMA, CH, IS, NO, UK, RS). Einbindung per Shortcode [variation_classification_lookup] -- braucht die volle Seitenbreite, daher am besten auf einer eigenen Seite ohne Sidebar verwenden.
  * Version: 1.0.0
  * Author: Dr. Tom Deutschle
  * License: proprietary
@@ -19,92 +19,7 @@ define( 'VFC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 require_once VFC_PLUGIN_DIR . 'includes/admin.php';
 require_once VFC_PLUGIN_DIR . 'includes/lookup.php';
 
-/**
- * Registers (but does not enqueue) the calculator's assets. Actual
- * enqueuing happens from the shortcode callback below, so the fee-table
- * data (several hundred KB) is only ever loaded on pages that actually
- * contain the calculator.
- */
-function vfc_register_assets() {
-	// Version CSS/JS by file modification time (not the static plugin
-	// version) so that edits to these files immediately bust any
-	// browser/CDN cache, instead of visitors keeping a stale asset until
-	// the plugin itself is next updated.
-	$style_file = VFC_PLUGIN_DIR . 'assets/css/vfc-style.css';
-	$style_ver  = file_exists( $style_file ) ? filemtime( $style_file ) : VFC_VERSION;
-
-	wp_register_style(
-		'vfc-style',
-		VFC_PLUGIN_URL . 'assets/css/vfc-style.css',
-		array(),
-		$style_ver
-	);
-
-	wp_register_script(
-		'vfc-xlsx',
-		'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-		array(),
-		'0.18.5',
-		true
-	);
-
-	// Same reasoning as vfc-style above: an admin-panel data upload
-	// immediately busts any browser/CDN cache, instead of visitors keeping
-	// a stale fee table until the plugin itself is next updated.
-	$data_file = VFC_PLUGIN_DIR . 'assets/js/vfc-data.js';
-	$data_ver  = file_exists( $data_file ) ? filemtime( $data_file ) : VFC_VERSION;
-
-	wp_register_script(
-		'vfc-data',
-		VFC_PLUGIN_URL . 'assets/js/vfc-data.js',
-		array(),
-		$data_ver,
-		true
-	);
-
-	$app_file = VFC_PLUGIN_DIR . 'assets/js/vfc-app.js';
-	$app_ver  = file_exists( $app_file ) ? filemtime( $app_file ) : VFC_VERSION;
-
-	wp_register_script(
-		'vfc-app',
-		VFC_PLUGIN_URL . 'assets/js/vfc-app.js',
-		array( 'vfc-data', 'vfc-xlsx' ),
-		$app_ver,
-		true
-	);
-}
-add_action( 'wp_enqueue_scripts', 'vfc_register_assets' );
-
-/**
- * Shortcode: [variation_fee_calculator]
- * Renders the calculator markup directly into the page (no iframe) and
- * enqueues its assets. Use this shortcode only once per page — the
- * calculator keeps a single global JS state (appState).
- */
-function vfc_shortcode() {
-	wp_enqueue_style( 'vfc-style' );
-	wp_enqueue_script( 'vfc-app' );
-
-	ob_start();
-	?>
-	<div class="vfc-app" id="vfc-app">
-	  <div class="app-head">
-	    <h1>Variation Fee Calculator</h1>
-	    <span class="tag" id="vfc-headerTag">last updated: –</span>
-	  </div>
-	  <p class="copyright">© Dr. Tom Deutschle</p>
-	  <p class="subhead">Calculates the official regulatory fees for variation applications (Type IA / IB / II) in one or more countries, including EU 27, EMA, CH, IS, NO, UK (national/CMS) and RS.</p>
-
-	  <div class="rail" id="vfc-rail"></div>
-	  <div id="vfc-stepContent"></div>
-
-	  <div class="src">
-	    <div class="fx-status-row">
-	      <span id="vfc-fxStatus" style="font-family:var(--mono); font-size:11px; color:var(--ink-faint);"></span>
-	    </div>
-	  </div>
-	</div>
-	<?php
-	return ob_get_clean();
-}
-add_shortcode( 'variation_fee_calculator', 'vfc_shortcode' );
+// The Variation Fee Calculator is now embedded inside the Variation Toolbox
+// (see includes/lookup.php: the "Variation Fee Calculator" nav hero and the
+// vcl-calc-* assets). The former standalone [variation_fee_calculator]
+// shortcode and its vfc-* assets have been retired.

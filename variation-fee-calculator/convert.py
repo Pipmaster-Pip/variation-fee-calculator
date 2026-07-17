@@ -13,7 +13,7 @@ plugins/the theme on the page. Run it from inside the plugin folder
 
 Usage:
     python3 convert.py path/to/Variation-Fee-Calculator-EU.xlsx
-    python3 convert.py path/to/file.xlsx -o assets/js/vfc-data.js
+    python3 convert.py path/to/file.xlsx -o assets/js/vcl-calc-data.js
 
 Requirement:
     pip install openpyxl
@@ -323,7 +323,7 @@ def load_ha_websites(xlsx_path: Path):
 def main():
     parser = argparse.ArgumentParser(description="Converts the Variation Fee Calculator Excel file into assets/js/vfc-data.js")
     parser.add_argument("xlsx_path", type=str, help="Path to the Excel file (.xlsx)")
-    parser.add_argument("-o", "--output", type=str, default="assets/js/vfc-data.js", help="Output file (default: assets/js/vfc-data.js)")
+    parser.add_argument("-o", "--output", type=str, default="assets/js/vcl-calc-data.js", help="Output file (default: assets/js/vcl-calc-data.js)")
     args = parser.parse_args()
 
     xlsx_path = Path(args.xlsx_path)
@@ -365,11 +365,11 @@ def main():
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    # Wrapped in an IIFE and attached to window.VFC_DATA (instead of bare
+    # Wrapped in an IIFE and attached to window.VCLCALC_DATA (instead of bare
     # top-level consts) so it can never collide with same-named globals from
     # other plugins/the theme on a WordPress page.
     js = "(function(){\n"
-    js += "window.VFC_DATA = {\n"
+    js += "window.VCLCALC_DATA = {\n"
     js += "FEE_ROWS: " + json.dumps(rows, separators=(",", ":")) + ",\n"
     js += "COUNTRY_NAMES: " + json.dumps(country_names, ensure_ascii=False, separators=(",", ":")) + ",\n"
     js += "IMPRINT: " + json.dumps(imprint, ensure_ascii=False, separators=(",", ":")) + ",\n"
@@ -382,9 +382,9 @@ def main():
 
     print(f"Done: wrote {out_path} ({out_path.stat().st_size:,} bytes).")
     print(f"Countries: {len(country_names)}, rows: {len(rows)}")
-    print("\nPlease deploy the new vfc-data.js together with the unchanged")
-    print("variation-fee-calculator.php, vfc-app.js and vfc-style.css,")
-    print("and spot-check 2-3 known fees in the browser.")
+    print("\nPlease deploy the new vcl-calc-data.js (it is loaded by the")
+    print("Variation Fee Calculator embedded in the Reference Guide) and")
+    print("spot-check 2-3 known fees in the browser.")
 
 
 if __name__ == "__main__":

@@ -24,9 +24,9 @@ ins Seiten-DOM (**kein iframe**) über den Shortcode
 hält einen einzigen globalen JS-Zustand (`appState`); zwei Instanzen auf
 derselben Seite würden sich gegenseitig überschreiben.
 
-## Variations Reference Guide (zweiter Shortcode)
+## Variation Toolbox (zweiter Shortcode)
 
-Dasselbe Plugin enthält außerdem das **Variations Reference Guide**
+Dasselbe Plugin enthält außerdem das **Variation Toolbox**
 (Nachschlagewerk zur EU Variation Classification Guideline) als eigenen
 Shortcode:
 

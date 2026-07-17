@@ -1,0 +1,684 @@
+/* ============================================================================
+ * Workload Planning -- styles for the new "Workload Planning" view of the
+ * Variation Toolbox. Kept in its own stylesheet (loaded after
+ * vcl-style.css) so vcl-style.css itself never needs to be opened for
+ * editing -- redeclaring custom properties on the same .vcl-app selector in a
+ * second stylesheet is valid CSS and simply adds to that selector's set.
+ *
+ * Own local class namespace (.vcl-wl-*), following the same precedent as the
+ * Timetables view (.vcl-tt-*) for a view that's structurally its own thing
+ * rather than a variant of the shared .tab/.result-card language -- except
+ * where this view deliberately reuses existing shared classes read-only
+ * (.badge/.type-ia/.type-ib/.type-ii, .search-box input) so its type badges
+ * and search field look identical to the rest of the app.
+ * ============================================================================ */
+
+.vcl-app {
+  /* 5th distinct nav-card identity color, alongside --classify/--slate/--plum/--group --
+     a warm wine/burgundy that doesn't collide with the cool classify/slate/plum/group family,
+     the warm --ib/--history browns, or the --ii red. */
+  --workload: #7A3350;
+  --workload-bg: #F5E9EE;
+  --workload-tint: rgba(122, 51, 80, 0.06);
+}
+
+/* --- Column: occupies the same grid cell as .detail-col/.summary-col/.grouping-col/
+   .timetables-col (only one of the five is ever visible at a time). --- */
+.vcl-app .workload-col {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 28px 6px 40px 0;
+  overflow-y: auto;
+}
+
+.vcl-app .vcl-wl-head {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--workload);
+}
+
+.vcl-app .vcl-wl-head h3 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.vcl-app .vcl-wl-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.vcl-app .vcl-wl-disclaimer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--workload-bg);
+  border: 1px solid color-mix(in srgb, var(--workload) 30%, var(--workload-bg));
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.vcl-app .vcl-wl-disclaimer strong { color: var(--workload); }
+
+.vcl-app .vcl-wl-section {
+  margin-bottom: 26px;
+}
+
+.vcl-app .vcl-wl-section h4 {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--workload);
+  margin: 0 0 10px;
+}
+
+/* Classification picker: reuses .search-box's own input styling verbatim (same visual
+   language as the Classification browse search) rather than redefining it. */
+.vcl-app .vcl-wl-search { margin-bottom: 8px; }
+
+.vcl-app .vcl-wl-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.vcl-app .vcl-wl-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.vcl-app .vcl-wl-result:hover { background: var(--workload-tint); border-color: var(--workload); }
+
+.vcl-app .vcl-wl-result__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--workload);
+  white-space: nowrap;
+}
+
+.vcl-app .vcl-wl-result__title {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vcl-app .vcl-wl-picked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--workload-bg);
+  border: 1.5px solid var(--workload);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+}
+
+.vcl-app .vcl-wl-picked__code {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  color: var(--workload);
+}
+
+.vcl-app .vcl-wl-picked button {
+  background: none;
+  border: 1px solid var(--workload);
+  color: var(--workload);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.vcl-app .vcl-wl-variants {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.vcl-app .vcl-wl-variant {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.vcl-app .vcl-wl-variant:hover { background: var(--workload-tint); }
+
+.vcl-app .vcl-wl-variant--active {
+  border-color: var(--workload);
+  background: var(--workload-tint);
+}
+
+.vcl-app .vcl-wl-variant__label { flex: 1; font-size: 13px; }
+
+/* --- Case parameter form controls --- */
+.vcl-app .vcl-wl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.vcl-app .vcl-wl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vcl-app .vcl-wl-field label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.vcl-app .vcl-wl-field input[type="number"],
+.vcl-app .vcl-wl-field input[type="date"] {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--paper);
+  color: var(--ink);
+  width: 140px;
+}
+
+.vcl-app .vcl-wl-radios {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.vcl-app .vcl-wl-radios label,
+.vcl-app .vcl-wl-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.vcl-app .vcl-wl-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.vcl-app .vcl-wl-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+/* --- Results --- */
+.vcl-app .vcl-wl-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vcl-app .vcl-wl-bar-row {
+  display: grid;
+  /* minmax(0, ...) rather than a fixed px floor so these columns can shrink on a narrower
+     .workload-col instead of forcing the whole panel to scroll horizontally. */
+  grid-template-columns: minmax(90px, 170px) minmax(40px, 1fr) minmax(60px, 90px);
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.vcl-app .vcl-wl-bar-track {
+  position: relative;
+  height: 18px;
+  background: var(--border-soft);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.vcl-app .vcl-wl-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--workload);
+  border-radius: 4px;
+  opacity: 0.75;
+}
+
+.vcl-app .vcl-wl-bar-days { text-align: right; color: var(--muted); white-space: nowrap; }
+
+.vcl-app .vcl-wl-summary {
+  margin-top: 20px;
+  padding: 16px 18px;
+  background: var(--workload-bg);
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--workload) 30%, var(--workload-bg));
+}
+
+.vcl-app .vcl-wl-summary p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.vcl-app .vcl-wl-summary p:last-child { margin-bottom: 0; }
+
+.vcl-app .vcl-wl-summary strong { color: var(--workload); }
+
+.vcl-app .vcl-wl-empty {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ============================================================================
+   Workload-Planning form controls, variation timeline, and RA-hours result box.
+   ============================================================================ */
+
+.vcl-app .vcl-wl-select {
+  padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 13px; font-family: inherit; background: var(--paper); color: var(--ink); width: 110px;
+}
+/* RMS dropdown + sub-question number fields kept to one shared, shorter width. */
+.vcl-app .vcl-wl-field input[type="number"] { width: 110px; }
+.vcl-app .vcl-wl-checks label.is-disabled { opacity: .38; cursor: not-allowed; }
+
+/* Search results: show all (capped) matches without an inner scrollbar. */
+.vcl-app .vcl-wl-results { max-height: none; overflow-y: visible; }
+
+/* Country / CMS: small field-style label (matches "RMS (Reference Member State)") ... */
+.vcl-app .vcl-wl-flabel {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--muted); display: block; margin: 0 0 6px;
+}
+/* ... and a symmetric grid so the country codes line up in tidy columns. */
+.vcl-app .vcl-wl-cgrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 8px 6px; margin-bottom: 4px;
+}
+.vcl-app .vcl-wl-cgrid label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.vcl-app .vcl-wl-cgrid label.is-disabled { opacity: .38; cursor: not-allowed; }
+.vcl-app .vcl-wl-ptype { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 2px 0 10px; }
+
+/* Variation timeline. The outer wrap clips horizontal overflow so long Type II
+   procedures never add a page scrollbar; the inner track is inset on both sides
+   so edge markers/date labels have room to sit without being cut off. */
+.vcl-app .vcl-wl-tl-wrap { position: relative; margin-top: 12px; overflow: hidden; }
+.vcl-app .vcl-wl-tl-inner { position: relative; margin: 0 38px; padding-top: 56px; }
+/* Main markers: optional day-number, label, then the arrow centred on the line. */
+.vcl-app .vcl-wl-tl-mlabel { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; line-height: 1.08; white-space: nowrap; }
+.vcl-app .vcl-wl-tl-mlabel .dn { font-size: 9px; font-weight: 700; color: #666; letter-spacing: .02em; }
+.vcl-app .vcl-wl-tl-mlabel .t { font-size: 11px; font-weight: 600; color: #222; }
+.vcl-app .vcl-wl-tl-mlabel .a { font-size: 9px; color: #555; margin-top: 1px; }
+.vcl-app .vcl-wl-tl-mlabel.mid .t, .vcl-app .vcl-wl-tl-mlabel.mid .a { color: #2b6cb0; }
+.vcl-app .vcl-wl-tl-mlabel.eop .dn { color: #333; }
+.vcl-app .vcl-wl-tl-mlabel.eop .t { color: #111; font-weight: 700; }
+/* Procedure sub-milestones (second row, lighter) with their day-number on top. */
+.vcl-app .vcl-wl-tl-pms { position: absolute; top: 30px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; line-height: 1.05; white-space: nowrap; }
+.vcl-app .vcl-wl-tl-pms .dn { font-size: 8.5px; font-weight: 700; color: #9a8a90; }
+.vcl-app .vcl-wl-tl-pms .t { font-size: 9.5px; color: #8a7d82; }
+.vcl-app .vcl-wl-tl-pms .a { font-size: 8px; color: #b09aa2; }
+.vcl-app .vcl-wl-tl-track { position: relative; height: 32px; border-radius: 6px; overflow: hidden; background: var(--border-soft); }
+.vcl-app .vcl-wl-tl-seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.22); overflow: hidden; white-space: nowrap; }
+.vcl-app .vcl-wl-tl-seg span { padding: 0 6px; }
+.vcl-app .vcl-wl-tl-seg.prep { background: #AEB4BC; }
+.vcl-app .vcl-wl-tl-seg.validation { background: #D2B583; }
+.vcl-app .vcl-wl-tl-seg.assessment { background: #A97A8E; }
+.vcl-app .vcl-wl-tl-seg.assessment.hatch { background: repeating-linear-gradient(45deg, #A97A8E, #A97A8E 5px, #cdaebb 5px, #cdaebb 10px); }
+.vcl-app .vcl-wl-tl-seg.closure { background: #86A895; }
+.vcl-app .vcl-wl-tl-marker { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid #555; }
+.vcl-app .vcl-wl-tl-marker.mid { border-left-color: #2b6cb0; }
+.vcl-app .vcl-wl-tl-marker.eop { border-left-color: #333; }
+.vcl-app .vcl-wl-tl-pline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed #8a7d82; }
+.vcl-app .vcl-wl-tl-grid { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid rgba(255,255,255,.35); pointer-events: none; }
+
+/* Dual scales: calendar dates above the bar, procedure days below. */
+.vcl-app .vcl-wl-tl-scale { position: relative; height: 16px; }
+.vcl-app .vcl-wl-tl-scale--top { margin-bottom: 2px; }
+.vcl-app .vcl-wl-tl-scale--bottom { margin-top: 3px; }
+.vcl-app .vcl-wl-tl-tick { position: absolute; transform: translateX(-50%); font-size: 10px; color: var(--muted); white-space: nowrap; }
+.vcl-app .vcl-wl-tl-scale--top .vcl-wl-tl-tick { bottom: 0; }
+.vcl-app .vcl-wl-tl-scale--top .vcl-wl-tl-tick::after { content: ""; display: block; width: 1px; height: 4px; background: var(--border); margin: 1px auto 0; }
+.vcl-app .vcl-wl-tl-scale--bottom .vcl-wl-tl-tick { top: 0; }
+.vcl-app .vcl-wl-tl-scale--bottom .vcl-wl-tl-tick::before { content: ""; display: block; width: 1px; height: 4px; background: var(--border); margin: 0 auto 1px; }
+/* Duration arrows below the bar (one per phase, labelled with its length). */
+.vcl-app .vcl-wl-tl-durrow { position: relative; height: 22px; margin-top: 7px; }
+.vcl-app .vcl-wl-tl-dur { position: absolute; top: 9px; height: 0; border-top: 1px solid #9a9a9a; }
+.vcl-app .vcl-wl-tl-dur::before, .vcl-app .vcl-wl-tl-dur::after { content: ""; position: absolute; top: -3px; width: 0; height: 0; border-top: 3px solid transparent; border-bottom: 3px solid transparent; }
+.vcl-app .vcl-wl-tl-dur::before { left: 0; border-right: 5px solid #9a9a9a; }
+.vcl-app .vcl-wl-tl-dur::after { right: 0; border-left: 5px solid #9a9a9a; }
+.vcl-app .vcl-wl-tl-dur span { position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%); font-size: 10px; color: #555; background: var(--paper); padding: 0 4px; white-space: nowrap; }
+
+/* Clock-stop slider. */
+.vcl-app .vcl-wl-tl-slider { margin-top: 16px; display: flex; flex-direction: column; gap: 5px; }
+.vcl-app .vcl-wl-tl-slider label { font-size: 12px; color: var(--ink); }
+.vcl-app .vcl-wl-tl-slider label strong { color: var(--workload); }
+.vcl-app .vcl-wl-tl-slider label .rng { color: var(--muted); font-size: 11px; }
+.vcl-app .vcl-wl-tl-slider input[type="range"] { width: 320px; max-width: 100%; accent-color: var(--workload); }
+
+.vcl-app .vcl-wl-tl-legend { margin-top: 16px; display: flex; flex-direction: column; gap: 5px; }
+.vcl-app .vcl-wl-tl-row { display: grid; grid-template-columns: minmax(120px,190px) minmax(120px,1fr) minmax(70px,140px); gap: 10px; font-size: 12.5px; }
+.vcl-app .vcl-wl-tl-row .n { color: var(--ink); align-self: center; }
+.vcl-app .vcl-wl-tl-row .d { font-weight: 600; color: var(--workload); align-self: center; }
+/* Right-hand notes shown as uniform, right-aligned chips. */
+.vcl-app .vcl-wl-tl-row .u {
+  justify-self: end; align-self: center; color: var(--muted); font-size: 11px;
+  background: rgba(0, 0, 0, .05); border-radius: 20px; padding: 2px 10px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* EOP is the key regulatory date -- give its legend row a highlighted band.
+   No left accent bar and no horizontal padding, so the date stays flush with
+   the rows above and below it. */
+.vcl-app .vcl-wl-tl-row.is-eop {
+  background: rgba(169, 122, 142, .14);
+  border-radius: 6px; padding: 6px 0; margin: 2px 0;
+}
+.vcl-app .vcl-wl-tl-row.is-eop .n { font-weight: 700; color: var(--workload); }
+.vcl-app .vcl-wl-tl-row.is-eop .d { font-weight: 700; }
+.vcl-app .vcl-wl-tl-row.is-eop .u { background: rgba(169, 122, 142, .2); color: var(--workload); }
+/* Total procedure length, Submission -> EOP, in days and months. */
+.vcl-app .vcl-wl-tl-total {
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+.vcl-app .vcl-wl-tl-total .n { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.vcl-app .vcl-wl-tl-total .v { font-size: 15px; font-weight: 700; color: var(--workload); }
+.vcl-app .vcl-wl-tl-total .v .mo { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+/* Prominent RA-hours result box at the bottom: hero number + plain-language
+   summary on top, an itemised factor/hours breakdown below for transparency. */
+.vcl-app .vcl-wl-ra-hero {
+  margin-top: 24px; padding: 20px 24px; border-radius: 14px;
+  background: linear-gradient(135deg, var(--workload), #7a4a5c);
+  color: #fff; box-shadow: 0 4px 18px rgba(122, 74, 92, .25);
+}
+.vcl-app .vcl-wl-ra-top { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.vcl-app .vcl-wl-ra-num { display: flex; align-items: baseline; gap: 4px; }
+.vcl-app .vcl-wl-ra-num .val { font-family: "IBM Plex Serif", serif; font-size: 46px; font-weight: 700; line-height: 1; }
+.vcl-app .vcl-wl-ra-num .unit { font-size: 22px; font-weight: 600; opacity: .9; }
+.vcl-app .vcl-wl-ra-headtext { display: flex; flex-direction: column; gap: 3px; flex: 1 1 220px; }
+.vcl-app .vcl-wl-ra-headtext .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .82; }
+.vcl-app .vcl-wl-ra-headtext .sum { font-size: 13.5px; line-height: 1.45; }
+.vcl-app .vcl-wl-ra-break {
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.22);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.vcl-app .vcl-wl-ra-brow { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 3px 0; }
+.vcl-app .vcl-wl-ra-brow .l { opacity: .92; }
+.vcl-app .vcl-wl-ra-brow .v { font-variant-numeric: tabular-nums; white-space: nowrap; opacity: .95; }
+.vcl-app .vcl-wl-ra-brow.is-subtotal { border-top: 1px dotted rgba(255,255,255,.28); margin-top: 4px; padding-top: 6px; font-weight: 600; }
+.vcl-app .vcl-wl-ra-brow.is-add .v { color: #ffe1b0; }
+.vcl-app .vcl-wl-ra-brow.is-grandtotal {
+  border-top: 1px solid rgba(255,255,255,.4); margin-top: 6px; padding-top: 8px;
+  font-size: 14px; font-weight: 700;
+}
+.vcl-app .vcl-wl-ra-note { font-size: 11.5px; opacity: .85; margin: 12px 0 0; line-height: 1.5; }
+
+/* ============================================================================
+   Fee Calculator -- pinned gold "hero" nav button (Variant B) + embedded view.
+   ============================================================================ */
+
+/* Variant B: same nav-card language as the other tabs (tinted bg + accent border
+   via the base .tab custom props), but emphasised with a fuller gold border, a
+   euro glyph and a small "Fees" chip so it reads as first-among-equals. */
+.vcl-app .tab--calc {
+  --accent: #8F6E2E;
+  --tab-bg: #F5EEDD;
+  --tint: rgba(143, 110, 46, .06);
+  border-color: #C7A653;
+  padding: 14px 16px;
+}
+.vcl-app .tab--calc.tab--active { border-color: #8F6E2E; }
+.vcl-app .tab--calc__row { display: flex; align-items: center; gap: 9px; width: 100%; }
+.vcl-app .tab--calc__euro { font-size: 17px; font-weight: 600; color: #7A5E23; line-height: 1; }
+.vcl-app .tab--calc .tab__code { color: #5F4A1E; }
+.vcl-app .tab--calc .tab__title { color: #6E5A2E; }
+.vcl-app .tab--calc__chip {
+  margin-left: auto; font-size: 9.5px; font-weight: 600; letter-spacing: .04em;
+  color: #7A5E23; background: #EAD9A6; border-radius: 20px; padding: 2px 9px; white-space: nowrap;
+}
+
+/* The calculator view heading reuses .classification-head; recolour its divider
+   line to the calculator's gold identity (Classification keeps its blue line). */
+.vcl-app #vcl-calcHead { border-bottom-color: #C7A653; }
+.vcl-app #vcl-calcHead .ref-line span { color: #8F6E2E; }
+
+/* Calculator column: occupies the same grid cell as the other views, with the
+   same top padding so its heading lines up exactly with the Classification /
+   Timetables / Workload headings instead of hugging the top of the card. */
+.vcl-app .calculator-col {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 28px 6px 40px 0;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* ============================================================================
+   First-load overview cards + live-search count in the Guide detail area.
+   ============================================================================ */
+.vcl-app .guide-overview { padding: 2px 0 8px; }
+.vcl-app .guide-overview__heading { font-family: "IBM Plex Serif", serif; font-weight: 600; font-size: 20px; color: var(--ink); margin: 0 0 6px; }
+/* Runs the full width of the detail area (no max-width) so it lines up with the
+   card grid's right edge below it. */
+.vcl-app .guide-overview__intro { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0 0 18px; }
+.vcl-app .guide-overview__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.vcl-app .guide-overview__card {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%;
+  background: var(--panel); border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 13px 15px; cursor: pointer; font-family: inherit;
+  transition: border-color .12s ease, background .12s ease;
+}
+.vcl-app .guide-overview__card:hover { border-color: var(--card-accent); background: color-mix(in srgb, var(--card-accent) 5%, var(--panel)); }
+.vcl-app .guide-overview__title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--card-accent); }
+.vcl-app .guide-overview__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--card-accent); flex-shrink: 0; }
+.vcl-app .guide-overview__desc { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* Search-match count, moved to the top of the detail area. */
+.vcl-app .results-meta--detail { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; font-weight: 500; }
+
+/* Excel-download link in the calculator heading. */
+.vcl-app #vcl-calcHead .calc-excel-dl { margin: 8px 0 0; font-size: 12.5px; }
+.vcl-app #vcl-calcHead .calc-excel-dl a { color: #8f6e2e; text-decoration: none; font-weight: 500; }
+.vcl-app #vcl-calcHead .calc-excel-dl a:hover { text-decoration: underline; }
+
+/* Sub-lines read as normal body text, not bold: the nav card's subtitle only turns
+   bold once its tab is active (.tab--active sets font-weight on the whole button),
+   and the overview cards' descriptions stay normal throughout. */
+.vcl-app .tab__title { font-weight: 400; }
+.vcl-app .tab--active .tab__title { font-weight: 600; }
+.vcl-app .guide-overview__desc { font-weight: 400; }
+
+/* ============================================================================
+ * "How this estimate is built" -- the methodology / transparency panel.
+ * Collapsed by default: it is reference material, not part of the answer, and
+ * expanded-by-default would push the RA figure the user came for off-screen.
+ * ========================================================================== */
+.vcl-app .vcl-wl-method { margin-top: 18px; }
+
+.vcl-app .vcl-wl-method-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.vcl-app .vcl-wl-method-toggle:hover { background: var(--paper); }
+.vcl-app .vcl-wl-method-toggle.is-open { border-radius: 8px 8px 0 0; border-bottom-color: transparent; }
+.vcl-app .vcl-wl-method-toggle .t { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.vcl-app .vcl-wl-method-toggle .s { flex: 1; font-size: 12px; color: var(--muted); font-weight: 400; }
+.vcl-app .vcl-wl-method-toggle .c { color: var(--workload); font-size: 11px; }
+
+.vcl-app .vcl-wl-method-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 16px 14px 14px;
+  background: var(--panel);
+}
+.vcl-app .vcl-wl-method-intro { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.vcl-app .vcl-wl-method-intro strong { color: var(--ink); font-weight: 600; }
+
+/* The formula, stated once in full -- the single thing most likely to answer
+   "where does this number come from" before anyone reads a table. */
+.vcl-app .vcl-wl-method-formula {
+  background: var(--workload-tint);
+  border-radius: 6px;
+  padding: 11px 13px;
+  margin-bottom: 18px;
+}
+.vcl-app .vcl-wl-method-formula .lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--workload);
+  margin-bottom: 5px;
+}
+.vcl-app .vcl-wl-method-formula .fx {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--ink);
+}
+.vcl-app .vcl-wl-method-formula .fx .b { font-weight: 600; }
+.vcl-app .vcl-wl-method-formula .fx .m { color: #6B4A58; }
+.vcl-app .vcl-wl-method-formula .fx .a { color: #4A5568; }
+.vcl-app .vcl-wl-method-formula .fx .op { color: var(--workload); font-weight: 700; }
+.vcl-app .vcl-wl-method-formula .hint { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+
+.vcl-app .vcl-wl-method-h {
+  margin: 0 0 10px;
+  font-family: "IBM Plex Serif", serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border-soft);
+}
+/* auto-fit rather than a fixed column count: the detail column is ~950px here but
+   the same panel has to survive the narrow-screen breakpoint further down. */
+.vcl-app .vcl-wl-method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px 18px;
+  margin-bottom: 20px;
+}
+
+/* Tables whose values are sentences, not numbers -- given the full grid width so the
+   value can't run into its own label. */
+.vcl-app .vcl-wl-mt.is-wide { grid-column: 1 / -1; }
+
+.vcl-app .vcl-wl-mt-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 5px;
+}
+.vcl-app .vcl-wl-mt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* The rows that actually produced the number on screen. Everything else stays
+   visible on purpose -- seeing what you did *not* pick is the point. */
+.vcl-app .vcl-wl-mt-row.is-active {
+  background: var(--workload-bg);
+  color: var(--ink);
+  font-weight: 500;
+}
+.vcl-app .vcl-wl-mt-row .l { flex: 1; }
+.vcl-app .vcl-wl-mt-row .v { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; white-space: nowrap; }
+.vcl-app .vcl-wl-mt-row.is-active .v { color: var(--workload); font-weight: 600; }
+.vcl-app .vcl-wl-mt-row .prov {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--ib-bg);
+  color: var(--ib);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.vcl-app .vcl-wl-mt-note { margin: 5px 0 0; font-size: 11px; color: var(--ink-faint); line-height: 1.5; }
+
+.vcl-app .vcl-wl-method-src {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+.vcl-app .vcl-wl-method-src p { margin: 0 0 6px; font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+.vcl-app .vcl-wl-method-src strong { color: var(--ink); }
+.vcl-app .vcl-wl-method-dl {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--workload);
+  border-radius: 6px;
+  background: var(--workload-tint);
+  color: var(--workload);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.vcl-app .vcl-wl-method-dl:hover { background: var(--workload-bg); }
+
+/* The methodology panel's own feedback line -- takes the Workload identity colour
+   on hover rather than the app's default accent, since it sits inside that tool. */
+.vcl-app .vcl-wl-method-ask {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.vcl-app .vcl-wl-method-ask .vcl-contact-link { font-weight: 600; }
+.vcl-app .vcl-wl-method-ask .vcl-contact-link:hover {
+  color: var(--workload);
+  border-bottom-color: var(--workload);
+}

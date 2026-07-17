@@ -1,9 +1,14 @@
 # Build artifact — regenerated from variation-fee-calculator/ via the zip script
 variation-fee-calculator.zip
 
-# Excel example/source files (not part of the tool itself)
+# Source documents the generators read (not part of the tool itself) -- the fee-calculator
+# workbook, the CMDh Q&A PDF (extract_qa.py), the Art. 5 tracking table .xls (extract_art5.py).
+# The scripts carry the download URLs; the data files they produce are committed, the sources
+# are not.
 *.xlsx
 ~$*.xlsx
+*.xls
+*.pdf
 
 # Other non-project files in this folder
 *.docx

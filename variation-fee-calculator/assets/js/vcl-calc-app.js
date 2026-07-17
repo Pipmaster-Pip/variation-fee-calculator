@@ -1,16 +1,16 @@
 // ============================================================================
 // Variation Fee Calculator — WordPress plugin build.
-// Wrapped in an IIFE and reading data from window.VFC_DATA so nothing here
+// Wrapped in an IIFE and reading data from window.VCLCALC_DATA so nothing here
 // (FEE_ROWS, appState, STEPS, ...) leaks into the shared global script scope
 // of the WordPress page — avoids collisions with other plugins/the theme.
-// All DOM ids are prefixed with "vfc-" for the same reason.
+// All DOM ids are prefixed with "vclcalc-" for the same reason.
 // Formula interpreter — evaluates the original Excel cell formulas exactly,
 // resolving cross-row references (e.g. a IB-row referencing the "G" of the
 // preceding IA-row), so behaviour matches the source workbook 1:1.
 // ============================================================================
 (function(){
 
-const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES } = window.VFC_DATA;
+const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES } = window.VCLCALC_DATA;
 
 const ROWS_BY_ROW = {};
 FEE_ROWS.forEach(r => { ROWS_BY_ROW[r.row] = r; });
@@ -28,7 +28,7 @@ FEE_ROWS.forEach(r => { ROWS_BY_ROW[r.row] = r; });
 let LIVE_FX = null;          // null = not yet loaded
 let fxStatusEl = null;       // DOM element for status display, set later
 
-const FX_CACHE_KEY = 'vfc_fx_rates';
+const FX_CACHE_KEY = 'vclcalc_fx_rates';
 const FX_FRANKFURTER_CURRENCIES = ['CZK','DKK','HUF','ISK','NOK','PLN','SEK','GBP','CHF'];
 
 function todayISO() {
@@ -327,10 +327,14 @@ const appState = {
   // global variations: how many of each type are being filed, applied to
   // every selected country (mirrors M2/N2/O2 in the original sheet)
   globalCounts: { IA: 0, IB: 0, II: 0 },
+  // Set when the Guide's Summary hands counts over, and shown on the Countries step -- without
+  // it the hand-off is invisible until the user has walked two steps to the Variations counters,
+  // which is indistinguishable from the button not having worked.
+  prefillNote: null,
   results: null
 };
 
-// Optional pre-fill from a companion tool (e.g. the Variations Reference Guide's
+// Optional pre-fill from a companion tool (e.g. the Variation Toolbox's
 // "Export to Fee Calculator" button) via URL query params ?ia=&ib=&ii= -- only seeds the
 // Variations step's counters; the user still walks through Countries and Country details
 // themselves before reaching them.
@@ -342,6 +346,26 @@ const appState = {
     if (Number.isInteger(val) && val >= 0) appState.globalCounts[type] = val;
   });
 })();
+
+// Same hand-off, in memory, for the Guide that this calculator is embedded in: its Summary's
+// "Export to Variation Fee Calculator" button calls this before switching to the calculator
+// view. Deliberately does NOT jump to the Variations step -- the counts apply to every selected
+// country, so Countries and Country details still have to be answered first; the user walks the
+// same path and simply finds step 3 already filled in.
+window.VCLCALC = {
+  setGlobalCounts(counts) {
+    const parts = [];
+    ['IA', 'IB', 'II'].forEach((type) => {
+      const n = Math.max(0, parseInt(counts && counts[type], 10) || 0);
+      appState.globalCounts[type] = n;
+      if (n > 0) parts.push(`${n} × Type ${type}`);
+    });
+    appState.prefillNote = parts.length ? parts.join(' · ') : null;
+    appState.step = 0;
+    appState.results = null;
+    render();
+  }
+};
 
 function ensureCountryConfig(cc) {
   if (!appState.countryConfig[cc]) {
@@ -357,9 +381,9 @@ function ensureCountryConfig(cc) {
   return appState.countryConfig[cc];
 }
 
-const railEl = document.getElementById('vfc-rail');
-const contentEl = document.getElementById('vfc-stepContent');
-fxStatusEl = document.getElementById('vfc-fxStatus'); // set the module-level variable
+const railEl = document.getElementById('vclcalc-rail');
+const contentEl = document.getElementById('vclcalc-stepContent');
+fxStatusEl = document.getElementById('vclcalc-fxStatus'); // set the module-level variable
 
 // Kick off the rate fetch now that fxStatusEl is bound (non-blocking). Doing
 // this any earlier means a same-day cache hit — which updates the status
@@ -368,12 +392,15 @@ fxStatusEl = document.getElementById('vfc-fxStatus'); // set the module-level va
 // load happens to be a cache miss.
 loadLiveRates();
 
-// Populate the "last updated" date in the header tag from the Imprint sheet
+// Populate the "last updated" date from the Imprint sheet. When embedded in the
+// Variation Toolbox the calculator's own header is dropped, so also expose the date
+// on window.VCLCALC_META for the guide-rendered view heading to use as a fallback.
 (function() {
-  const tagEl = document.getElementById('vfc-headerTag');
-  if (tagEl && typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) {
+  if (typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) {
     const dateStr = formatImprintDate(IMPRINT[0].date);
-    tagEl.textContent = `last updated: ${dateStr}`;
+    window.VCLCALC_META = { lastUpdated: dateStr };
+    const tagEl = document.getElementById('vclcalc-headerTag');
+    if (tagEl) tagEl.textContent = `last updated: ${dateStr}`;
   }
 })();
 
@@ -381,7 +408,7 @@ function setStep(n) {
   appState.step = n;
   render();
   // Scroll to the calculator container
-  const appEl = document.getElementById('vfc-app');
+  const appEl = document.getElementById('vclcalc-app');
   if (appEl) {
     const top = appEl.getBoundingClientRect().top + window.pageYOffset - 20;
     window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
@@ -418,12 +445,13 @@ function renderStepCountries() {
     <div class="panel">
       <h2>Which countries is the variation being submitted in?</h2>
       <p class="hint">Select one or more markets. You'll set the procedure role and number of strengths for each country next, then choose the variations once — they'll apply to every selected country.</p>
+      ${appState.prefillNote ? `<div class="prefill-note"><strong>Taken over from your summary:</strong> ${appState.prefillNote}. You can still adjust the numbers at the Variations step.</div>` : ''}
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap;">
-        <input type="text" class="country-search" id="vfc-countrySearch" placeholder="Search for a country…" value="${appState.countrySearch}" style="flex:1; min-width:180px; margin-bottom:0;">
-        <button class="btn ghost" id="vfc-selectAll" style="white-space:nowrap;">Select all</button>
-        <button class="btn ghost" id="vfc-resetSelection" ${n===0?'disabled':''} style="white-space:nowrap;">Reset</button>
+        <input type="text" class="country-search" id="vclcalc-countrySearch" placeholder="Search for a country…" value="${appState.countrySearch}" style="flex:1; min-width:180px; margin-bottom:0;">
+        <button class="btn ghost" id="vclcalc-selectAll" style="white-space:nowrap;">Select all</button>
+        <button class="btn ghost" id="vclcalc-resetSelection" ${n===0?'disabled':''} style="white-space:nowrap;">Reset</button>
       </div>
-      <div class="country-grid" id="vfc-countryGrid">
+      <div class="country-grid" id="vclcalc-countryGrid">
         ${filtered.map(c => `
           <button class="country-tile ${appState.selectedCountries.includes(c)?'selected':''}" data-cc="${c}">
             <span class="cc">${c}</span>
@@ -434,16 +462,16 @@ function renderStepCountries() {
     </div>
     <div class="nav-row">
       <span class="hint" style="margin:0;">${n} countr${n===1?'y':'ies'} selected</span>
-      <button class="btn primary" id="vfc-toStep2" ${n===0?'disabled':''}>Continue</button>
+      <button class="btn primary" id="vclcalc-toStep2" ${n===0?'disabled':''}>Continue</button>
     </div>
   `;
 
-  document.getElementById('vfc-countrySearch').addEventListener('input', (e) => {
+  document.getElementById('vclcalc-countrySearch').addEventListener('input', (e) => {
     appState.countrySearch = e.target.value;
     renderStepCountries();
   });
 
-  document.getElementById('vfc-selectAll').addEventListener('click', () => {
+  document.getElementById('vclcalc-selectAll').addEventListener('click', () => {
     codes.forEach(c => {
       if (!appState.selectedCountries.includes(c)) {
         appState.selectedCountries.push(c);
@@ -453,7 +481,7 @@ function renderStepCountries() {
     renderStepCountries();
   });
 
-  document.getElementById('vfc-resetSelection').addEventListener('click', () => {
+  document.getElementById('vclcalc-resetSelection').addEventListener('click', () => {
     appState.selectedCountries = [];
     appState.countryConfig = {};
     renderStepCountries();
@@ -473,7 +501,7 @@ function renderStepCountries() {
       renderStepCountries();
     });
   });
-  document.getElementById('vfc-toStep2').addEventListener('click', () => setStep(1));
+  document.getElementById('vclcalc-toStep2').addEventListener('click', () => setStep(1));
 }
 
 // ---- Step 1: per-country role + strengths ----
@@ -482,15 +510,15 @@ function renderStepCountryDetails() {
     <div class="panel">
       <h2>Procedure role &amp; strengths per country</h2>
       <p class="hint">Choose the applicable procedure role and the number of authorised strengths for each country — these can differ from country to country (e.g. one country may have 2 authorised strengths where another only has 1).</p>
-      <div id="vfc-countryDetailList"></div>
+      <div id="vclcalc-countryDetailList"></div>
     </div>
     <div class="nav-row">
-      <button class="btn ghost" id="vfc-back1">← Back</button>
-      <button class="btn primary" id="vfc-toStep3">Continue</button>
+      <button class="btn ghost" id="vclcalc-back1">← Back</button>
+      <button class="btn primary" id="vclcalc-toStep3">Continue</button>
     </div>
   `;
 
-  const list = document.getElementById('vfc-countryDetailList');
+  const list = document.getElementById('vclcalc-countryDetailList');
   const sortedCCs = [...appState.selectedCountries]
     .sort((a, b) => COUNTRY_NAMES[a].localeCompare(COUNTRY_NAMES[b], 'en'));
   list.innerHTML = sortedCCs.map(cc => {
@@ -530,8 +558,8 @@ function renderStepCountryDetails() {
     ensureCountryConfig(cc).strengths = value;
   });
 
-  document.getElementById('vfc-back1').addEventListener('click', () => setStep(0));
-  document.getElementById('vfc-toStep3').addEventListener('click', () => setStep(2));
+  document.getElementById('vclcalc-back1').addEventListener('click', () => setStep(0));
+  document.getElementById('vclcalc-toStep3').addEventListener('click', () => setStep(2));
 }
 
 // ---- Step 2: global variations (type + count), with optional per-country special override ----
@@ -540,20 +568,20 @@ function renderStepVariations() {
     <div class="panel">
       <h2>Which variations are being filed?</h2>
       <p class="hint">Set how many variations of each type are part of this submission. This applies the same way to every selected country.</p>
-      <div id="vfc-typeCounters"></div>
+      <div id="vclcalc-typeCounters"></div>
     </div>
-    <div class="panel" id="vfc-specialPanel" style="display:none;">
+    <div class="panel" id="vclcalc-specialPanel" style="display:none;">
       <h2 style="margin-bottom:4px;">Special cases</h2>
       <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per country below — countries without that distinction automatically use their standard fee.</p>
-      <div id="vfc-specialBlocks"></div>
+      <div id="vclcalc-specialBlocks"></div>
     </div>
     <div class="nav-row">
-      <button class="btn ghost" id="vfc-back2">← Back</button>
-      <button class="btn primary" id="vfc-toResult" ${totalVariationCount()===0?'disabled':''}>Calculate fees</button>
+      <button class="btn ghost" id="vclcalc-back2">← Back</button>
+      <button class="btn primary" id="vclcalc-toResult" ${totalVariationCount()===0?'disabled':''}>Calculate fees</button>
     </div>
   `;
 
-  const counters = document.getElementById('vfc-typeCounters');
+  const counters = document.getElementById('vclcalc-typeCounters');
   counters.innerHTML = ['IA','IB','II'].map(type => `
     <div class="field-group">
       <div class="num-row">
@@ -570,8 +598,8 @@ function renderStepVariations() {
   });
 
   renderSpecialPanel();
-  document.getElementById('vfc-back2').addEventListener('click', () => setStep(1));
-  document.getElementById('vfc-toResult').addEventListener('click', () => {
+  document.getElementById('vclcalc-back2').addEventListener('click', () => setStep(1));
+  document.getElementById('vclcalc-toResult').addEventListener('click', () => {
     computeResult();
     setStep(3);
   });
@@ -582,7 +610,7 @@ function totalVariationCount() {
 }
 
 function updateResultButtonState() {
-  const btn = document.getElementById('vfc-toResult');
+  const btn = document.getElementById('vclcalc-toResult');
   if (btn) btn.disabled = totalVariationCount() === 0;
 }
 
@@ -602,8 +630,8 @@ function specialChoicesForType(type) {
 }
 
 function renderSpecialPanel() {
-  const panel = document.getElementById('vfc-specialPanel');
-  const blocks = document.getElementById('vfc-specialBlocks');
+  const panel = document.getElementById('vclcalc-specialPanel');
+  const blocks = document.getElementById('vclcalc-specialBlocks');
   if (!panel || !blocks) return;
 
   const activeTypes = ['IA','IB','II'].filter(t => appState.globalCounts[t] > 0);
@@ -1086,11 +1114,11 @@ function renderStepResult() {
     </div>
 
     <div class="export-buttons">
-      <button class="btn-export" id="vfc-btnPrint">
+      <button class="btn-export" id="vclcalc-btnPrint">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
         Print
       </button>
-      <button class="btn-export" id="vfc-btnExcel">
+      <button class="btn-export" id="vclcalc-btnExcel">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
         Export Excel
       </button>
@@ -1098,38 +1126,38 @@ function renderStepResult() {
 
     ${(typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) ? `
     <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vfc-toggleChangelog" style="padding-left:0;">📋 View change history (${IMPRINT.length} entries)</button>
-      <div id="vfc-changelogPanel" style="display:none; margin-top:14px;"></div>
+      <button class="btn ghost" id="vclcalc-toggleChangelog" style="padding-left:0;">📋 View change history (${IMPRINT.length} entries)</button>
+      <div id="vclcalc-changelogPanel" style="display:none; margin-top:14px;"></div>
     </div>
     ` : ''}
 
     ${(typeof HA_WEBSITES !== 'undefined' && HA_WEBSITES.length > 0) ? `
     <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vfc-toggleHaWebsites" style="padding-left:0;">🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)</button>
-      <div id="vfc-haWebsitesPanel" style="display:none; margin-top:14px;"></div>
+      <button class="btn ghost" id="vclcalc-toggleHaWebsites" style="padding-left:0;">🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)</button>
+      <div id="vclcalc-haWebsitesPanel" style="display:none; margin-top:14px;"></div>
     </div>
     ` : ''}
 
     ${anyNoData ? `<div class="note-box">One or more countries did not return a fee for the selected combination. Please double-check the role/variation selection for the affected country.</div>` : ''}
 
     <div class="nav-row">
-      <button class="btn ghost" id="vfc-back3">← Edit selection</button>
-      <button class="btn" id="vfc-restart">New calculation</button>
+      <button class="btn ghost" id="vclcalc-back3">← Edit selection</button>
+      <button class="btn" id="vclcalc-restart">New calculation</button>
     </div>
   `;
 
-  document.getElementById('vfc-back3').addEventListener('click', () => setStep(2));
+  document.getElementById('vclcalc-back3').addEventListener('click', () => setStep(2));
 
   // ── Print ──
-  document.getElementById('vfc-btnPrint').addEventListener('click', () => window.print());
+  document.getElementById('vclcalc-btnPrint').addEventListener('click', () => window.print());
 
   // ── Export Excel ──
-  document.getElementById('vfc-btnExcel').addEventListener('click', () => exportExcel(res));
+  document.getElementById('vclcalc-btnExcel').addEventListener('click', () => exportExcel(res));
 
-  const changelogBtn = document.getElementById('vfc-toggleChangelog');
+  const changelogBtn = document.getElementById('vclcalc-toggleChangelog');
   if (changelogBtn) {
     changelogBtn.addEventListener('click', () => {
-      const panel = document.getElementById('vfc-changelogPanel');
+      const panel = document.getElementById('vclcalc-changelogPanel');
       const isOpen = panel.style.display !== 'none';
       if (isOpen) {
         panel.style.display = 'none';
@@ -1142,10 +1170,10 @@ function renderStepResult() {
     });
   }
 
-  const haWebsitesBtn = document.getElementById('vfc-toggleHaWebsites');
+  const haWebsitesBtn = document.getElementById('vclcalc-toggleHaWebsites');
   if (haWebsitesBtn) {
     haWebsitesBtn.addEventListener('click', () => {
-      const panel = document.getElementById('vfc-haWebsitesPanel');
+      const panel = document.getElementById('vclcalc-haWebsitesPanel');
       const isOpen = panel.style.display !== 'none';
       if (isOpen) {
         panel.style.display = 'none';
@@ -1158,10 +1186,11 @@ function renderStepResult() {
     });
   }
 
-  document.getElementById('vfc-restart').addEventListener('click', () => {
+  document.getElementById('vclcalc-restart').addEventListener('click', () => {
     appState.selectedCountries = [];
     appState.countryConfig = {};
     appState.globalCounts = { IA: 0, IB: 0, II: 0 };
+    appState.prefillNote = null; // the counts it described are gone -- it would now be a lie
     appState.results = null;
     setStep(0);
   });
