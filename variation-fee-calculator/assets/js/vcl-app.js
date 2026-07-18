@@ -134,6 +134,7 @@
     art5Col: document.getElementById("vcl-art5Col"),
     timetablesCol: document.getElementById("vcl-timetablesCol"),
     workloadCol: document.getElementById("vcl-workloadCol"),
+    workflowCol: document.getElementById("vcl-workflowCol"),
     calculatorCol: document.getElementById("vcl-calculatorCol"),
     calcHead: document.getElementById("vcl-calcHead"),
   };
@@ -192,8 +193,9 @@
     const isArt5 = state.view === "art5";
     const isTimetables = state.view === "timetables";
     const isWorkload = state.view === "workload";
+    const isWorkflow = state.view === "workflow";
     const isCalculator = state.view === "calculator";
-    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkload || isCalculator);
+    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkload || isWorkflow || isCalculator);
     el.summaryCol.classList.toggle("hidden", !isSummary);
     el.groupingCol.classList.toggle("hidden", !isGrouping);
     el.preciseScopeCol.classList.toggle("hidden", !isPreciseScope);
@@ -201,6 +203,7 @@
     if (el.art5Col) el.art5Col.classList.toggle("hidden", !isArt5);
     el.timetablesCol.classList.toggle("hidden", !isTimetables);
     el.workloadCol.classList.toggle("hidden", !isWorkload);
+    if (el.workflowCol) el.workflowCol.classList.toggle("hidden", !isWorkflow);
     if (el.calculatorCol) el.calculatorCol.classList.toggle("hidden", !isCalculator);
   }
 
@@ -2207,6 +2210,29 @@
       jumpToTop();
     });
     el.browseTree.appendChild(workloadBtn);
+
+    // Guided Workflow: the 8th tool. Same self-contained wiring as the workload block --
+    // rendering lives entirely in assets/js/vcl-workflow.js (window.VCL_WORKFLOW).
+    const workflowBtn = document.createElement("button");
+    workflowBtn.type = "button";
+    workflowBtn.className = "tab" + (state.view === "workflow" ? " tab--active" : "");
+    workflowBtn.style.setProperty("--accent", "var(--workflow)");
+    workflowBtn.style.setProperty("--tint", "var(--workflow-tint)");
+    workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
+    workflowBtn.innerHTML = `
+      <span class="tab__code">Guided Workflow</span>
+      <span class="tab__title">One variation, step by step &mdash; classification to fees, with a live preview</span>
+    `;
+    workflowBtn.addEventListener("click", () => {
+      state.view = "workflow";
+      state.classifyOpen = false;
+      state.guidanceOpen = false;
+      renderBrowse();
+      switchViewVisibility();
+      if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol);
+      jumpToTop();
+    });
+    el.browseTree.appendChild(workflowBtn);
   }
 
   function conditionKey(entryCode, variantId) {
@@ -3162,12 +3188,14 @@
     else if (dest === "qa") { state.view = "qa"; state.guidanceOpen = true; }
     else if (dest === "timetables") state.view = "timetables";
     else if (dest === "workload") state.view = "workload";
+    else if (dest === "workflow") state.view = "workflow";
     else state.view = "browse";
     renderBrowse();
     switchViewVisibility();
     if (dest === "timetables") renderTimetables();
     else if (dest === "qa") renderQA();
     else if (dest === "workload") { if (window.VCL_WORKLOAD) window.VCL_WORKLOAD.render(el.workloadCol); }
+    else if (dest === "workflow") { if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol); }
     else if (dest === "calculator") fillCalcHead();
     else renderDetail();
     jumpToTop();

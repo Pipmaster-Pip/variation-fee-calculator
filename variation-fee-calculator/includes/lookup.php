@@ -128,6 +128,30 @@ function vcl_register_assets() {
 		true
 	);
 
+	// Guided Workflow -- the 8th tool. Self-contained (window.VCL_WORKFLOW), reuses the
+	// shared classification data and, once loaded, the fee engine (vcl-calc-app) and workload
+	// factors. Loaded after them so those globals exist by the time it renders.
+	$workflow_style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-workflow-style.css';
+	$workflow_style_ver  = file_exists( $workflow_style_file ) ? filemtime( $workflow_style_file ) : VFC_VERSION;
+
+	wp_register_style(
+		'vcl-workflow-style',
+		VFC_PLUGIN_URL . 'assets/css/vcl-workflow-style.css',
+		array( 'vcl-style' ),
+		$workflow_style_ver
+	);
+
+	$workflow_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workflow.js';
+	$workflow_app_ver  = file_exists( $workflow_app_file ) ? filemtime( $workflow_app_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-workflow',
+		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
+		array( 'vcl-data', 'vcl-workload', 'vcl-calc-app' ),
+		$workflow_app_ver,
+		true
+	);
+
 	// Fee Calculator embedded into the Guide -- self-contained vcl-calc-* assets
 	// (originally copied from the retired standalone calculator; prefixes renamed
 	// vfc- -> vclcalc-, own header dropped). The fee data (vcl-calc-data.js) is
@@ -189,9 +213,11 @@ function vcl_shortcode( $atts ) {
 
 	wp_enqueue_style( 'vcl-style' );
 	wp_enqueue_style( 'vcl-workload-style' );
+	wp_enqueue_style( 'vcl-workflow-style' );
 	wp_enqueue_style( 'vcl-calc-style' );
 	wp_enqueue_script( 'vcl-app' );
 	wp_enqueue_script( 'vcl-workload' );
+	wp_enqueue_script( 'vcl-workflow' );
 	wp_enqueue_script( 'vcl-calc-app' );
 	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
 		'calculatorUrl' => $atts['calculator_url'],
@@ -288,6 +314,8 @@ function vcl_shortcode( $atts ) {
 	  <div class="timetables-col hidden" id="vcl-timetablesCol"></div>
 
 	  <div class="workload-col hidden" id="vcl-workloadCol"></div>
+
+	  <div class="workload-col hidden" id="vcl-workflowCol"></div>
 
 	  <!-- Fee Calculator (embedded copy). The guide-style heading is rendered into
 	       vcl-calcHead by vcl-app.js; the .vclcalc-app block below is the copied

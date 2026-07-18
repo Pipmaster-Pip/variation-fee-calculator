@@ -238,6 +238,46 @@
   gap: 10px 20px;
 }
 
+/* Inline hint pills next to each control -- one uniform filled-pink combination
+   for factor / added hours / base hours alike (the --add/--factor/--base
+   modifiers are kept in the markup for semantics but share this one look). */
+.vcl-app .vcl-wl-hint {
+  display: inline-block;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 0 7px;
+  vertical-align: baseline;
+  color: var(--workload);
+  background: var(--workload-bg);
+  border: 1px solid color-mix(in srgb, var(--workload) 25%, var(--workload-bg));
+}
+/* Reserved-but-unpainted pill: keeps its layout box so labels never shift when a
+   pill pops in or out on selection. */
+.vcl-app .vcl-wl-hint.is-ghost { visibility: hidden; }
+
+/* Base-hours line under the picked classification, above Active Substance */
+.vcl-app .vcl-wl-baseline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #222);
+  margin: 0 0 14px;
+}
+.vcl-app .vcl-wl-baseline__note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .vcl-app .vcl-wl-note {
   font-size: 12px;
   color: var(--muted);

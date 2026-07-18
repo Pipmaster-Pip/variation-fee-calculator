@@ -42,7 +42,7 @@
   // TIMING or ASSESS is touched, or whenever a new workbook is linked on the settings page --
   // the panel prints it right next to the download link, so a stale date is visible to users.
   const F_META = {
-    lastChecked: "2026-07-16",
+    lastChecked: "2026-07-18",
     workbook: "Workload_RA_Stunden_Faktoren.xlsx",
   };
 
@@ -58,7 +58,14 @@
       annualUpdate: { factor: 1.2, perIA: 5 },
       superGrouping: { factor: 1.3 },
     },
-    productInfo: { smpc: 2, leaflet: 2, labelling: 2, mockups: 2 }, // hours per ticked element (summed when PI-in-RA)
+    // Product Information (⑥): hours per ticked deliverable depend on the variation type (IA/IB/II);
+    // only counted when "PI management in RA" gates them on. Source: workbook "Faktoren" H63:J66.
+    productInfo: {
+      smpc:      { IA: 1, IB: 2, II: 4 },
+      leaflet:   { IA: 1, IB: 2, II: 4 },
+      labelling: { IA: 1, IB: 2, II: 4 },
+      mockups:   { IA: 1, IB: 2, II: 4 },
+    },
   };
 
   // Departments -- Translations removed (part of PV), Pharmacovigilance shown as "PV".
@@ -232,17 +239,27 @@
     if (state.procOptions.superGrouping && s.superGrouping.factor == null) return true;
     return false;
   }
+  // The workbook gives PI hours per Type IA/IB/II. IAIN counts as IA, "IB (unforeseen)" as IB.
+  function piTypeBucket(type) {
+    if (type === "II") return "II";
+    if (type === "IA" || type === "IAIN") return "IA";
+    return "IB"; // IB, IB (unforeseen)
+  }
+  function piElementHours(key, type) {
+    const m = F.productInfo[key];
+    return (m && m[piTypeBucket(type)]) || 0;
+  }
   // Product-information text editing only burdens RA if it is managed in RA ("PI management in RA").
-  function productInfoAddHours() {
+  function productInfoAddHours(type) {
     if (!state.piManagementInRA) return 0;
     let h = 0;
-    PRODUCT_INFO.forEach((it) => { if (state.productInfo[it.key]) h += (F.productInfo[it.key] || 0); });
+    PRODUCT_INFO.forEach((it) => { if (state.productInfo[it.key]) h += piElementHours(it.key, type); });
     return h;
   }
   function computeRaHours(type) {
     const base = F.baseHours[type] || 0;
     const mult = procedureFactor(state.cmsCountries.length) * activeSubstanceFactor() * submissionFactorProduct();
-    return { total: base * mult + cmsAddHours() + submissionAddHours() + productInfoAddHours(), base: base, mult: mult };
+    return { total: base * mult + cmsAddHours() + submissionAddHours() + productInfoAddHours(type), base: base, mult: mult };
   }
   function raBreakdown(type) {
     const base = F.baseHours[type] || 0;
@@ -257,7 +274,7 @@
     if (cms > 0) parts.push("+ CMS " + state.cmsCountries.length + "×" + F.cmsHoursPer + " h");
     const sub = submissionAddHours();
     if (sub > 0) parts.push("+ groupings " + fmtNum(sub) + " h");
-    const pi = productInfoAddHours();
+    const pi = productInfoAddHours(type);
     if (pi > 0) parts.push("+ PI in RA " + fmtNum(pi) + " h");
     return parts.join("  ");
   }
@@ -290,7 +307,7 @@
     const subtotal = base * mult;
     const cms = cmsAddHours();
     const sub = submissionAddHours();
-    const pi = productInfoAddHours();
+    const pi = productInfoAddHours(type);
     if (mult !== 1) rows.push({ label: "Subtotal (base × factors)", val: fmtNum(subtotal) + " h", kind: "subtotal" });
     if (cms > 0) rows.push({ label: "+ CMS scaling · " + state.cmsCountries.length + " × " + F.cmsHoursPer + " h", val: "+ " + fmtNum(cms) + " h", kind: "add" });
     if (sub > 0) rows.push({ label: "+ Grouped / shared items", val: "+ " + fmtNum(sub) + " h", kind: "add" });
@@ -448,9 +465,30 @@
     container.appendChild(section);
   }
 
-  function numberField(id, labelText, value, onInput) {
+  // --- Inline hint pills: show the workload weight of each control right next to it. ---
+  // Three visual kinds so users can tell a multiplier from added hours at a glance:
+  //   factor "×1.1" (outline) · add "+5 h" (filled) · base "15 h" (solid).
+  function hintPill(text, variant) {
+    const s = document.createElement("span");
+    s.className = "vcl-wl-hint" + (variant ? " vcl-wl-hint--" + variant : "");
+    s.textContent = text;
+    return s;
+  }
+  // Always show one decimal so a neutral 1.0 reads clearly next to a 1.1 (used inline and in the panel).
+  function fmtFactor(f) { return Number.isInteger(f) ? f.toFixed(1) : fmtNum(f); }
+  function factorPill(f) { return hintPill("×" + fmtFactor(f), "factor"); }
+  function hoursPill(h) { return hintPill("+" + fmtNum(h) + " h", "add"); }
+  // Append a pill that is always laid out (reserving its width) but only painted when `visible`.
+  // Keeping the ghost in the flow stops the label text from jumping as pills pop in and out.
+  function appendPill(label, pill, visible) {
+    if (!visible) pill.classList.add("is-ghost");
+    label.appendChild(pill);
+  }
+
+  function numberField(id, labelText, value, onInput, hint) {
     const field = document.createElement("div"); field.className = "vcl-wl-field";
     const label = document.createElement("label"); label.setAttribute("for", id); label.textContent = labelText;
+    if (hint) { label.appendChild(document.createTextNode(" ")); label.appendChild(hint); }
     field.appendChild(label);
     const input = document.createElement("input"); input.type = "number"; input.id = id; input.min = "0"; input.value = String(value);
     input.addEventListener("input", () => { onInput(Math.max(0, parseInt(input.value, 10) || 0)); rerender(); });
@@ -464,7 +502,10 @@
       const label = document.createElement("label");
       const check = document.createElement("input"); check.type = "checkbox"; check.checked = current === opt.key;
       check.addEventListener("change", () => { onPick(check.checked ? opt.key : null); rerender(); });
+      // The weight pill is painted only once this option is the selected one, but its
+      // space is always reserved (ghost) so the label does not shift on selection.
       label.appendChild(check); label.appendChild(document.createTextNode(" " + opt.label));
+      if (opt.hint) appendPill(label, opt.hint, current === opt.key);
       row.appendChild(label);
     });
     section.appendChild(row);
@@ -524,6 +565,13 @@
     const note = document.createElement("p"); note.className = "vcl-wl-note";
     note.textContent = "CMS may be several, all, or none. The RMS cannot also be a CMS; the UK cannot be the RMS.";
     section.appendChild(note);
+    const cmsHint = document.createElement("p"); cmsHint.className = "vcl-wl-note";
+    cmsHint.appendChild(document.createTextNode("Each selected CMS adds "));
+    cmsHint.appendChild(hoursPill(F.cmsHoursPer));
+    const n = state.cmsCountries.length;
+    if (n) cmsHint.appendChild(document.createTextNode(" — currently " + n + " × " + fmtNum(F.cmsHoursPer) + " h = +" + fmtNum(n * F.cmsHoursPer) + " h."));
+    cmsHint.appendChild(document.createTextNode(" More than " + F.procedure.cmsThreshold + " CMS also raises the procedure factor to ×" + fmtNum(F.procedure.mrpdcpLarge) + "."));
+    section.appendChild(cmsHint);
   }
 
   function allowedClusterForType(type) {
@@ -543,10 +591,10 @@
     const heading = document.createElement("h4"); heading.textContent = "Submission type"; heading.style.marginTop = "18px";
     section.appendChild(heading);
     const OPTIONS = [
-      { key: "worksharing", label: "Worksharing" },
-      { key: "grouping", label: "Grouping" },
-      { key: "annualUpdate", label: "Annual Update" },
-      { key: "superGrouping", label: "Super-Grouping" },
+      { key: "worksharing", label: "Worksharing", factor: F.submission.worksharing.factor },
+      { key: "grouping", label: "Grouping", factor: F.submission.grouping.factor },
+      { key: "annualUpdate", label: "Annual Update", factor: F.submission.annualUpdate.factor },
+      { key: "superGrouping", label: "Super-Grouping", factor: F.submission.superGrouping.factor },
     ];
     const row = document.createElement("div"); row.className = "vcl-wl-checks";
     OPTIONS.forEach((opt) => {
@@ -555,6 +603,8 @@
       const check = document.createElement("input"); check.type = "checkbox"; check.checked = !!state.procOptions[opt.key]; check.disabled = disabled;
       check.addEventListener("change", () => { state.procOptions[opt.key] = check.checked; rerender(); });
       label.appendChild(check); label.appendChild(document.createTextNode(" " + opt.label));
+      // Factor pill painted only once this submission type is ticked; space reserved otherwise.
+      if (opt.factor) appendPill(label, factorPill(opt.factor), state.procOptions[opt.key]);
       row.appendChild(label);
     });
     section.appendChild(row);
@@ -570,17 +620,18 @@
     section.appendChild(note);
 
     const subRow = document.createElement("div"); subRow.className = "vcl-wl-row"; subRow.style.marginTop = "12px";
+    const ws = F.submission.worksharing, grp = F.submission.grouping, au = F.submission.annualUpdate;
     if (state.procOptions.worksharing) {
-      subRow.appendChild(numberField("vcl-wl-ws-nat", "Other procedures — national", state.worksharingNational, (v) => { state.worksharingNational = v; }));
-      subRow.appendChild(numberField("vcl-wl-ws-mrp", "Other procedures — MRP/DCP", state.worksharingMrpdcp, (v) => { state.worksharingMrpdcp = v; }));
+      subRow.appendChild(numberField("vcl-wl-ws-nat", "Other procedures — national", state.worksharingNational, (v) => { state.worksharingNational = v; }, hoursPill(ws.perNational)));
+      subRow.appendChild(numberField("vcl-wl-ws-mrp", "Other procedures — MRP/DCP", state.worksharingMrpdcp, (v) => { state.worksharingMrpdcp = v; }, hoursPill(ws.perMrpdcp)));
     }
     if (state.procOptions.grouping) {
       const allowed = allowedGroupingTypes(type);
-      if (allowed.indexOf("IA") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ia", "Other variations — Type IA", state.groupingIA, (v) => { state.groupingIA = v; })); else state.groupingIA = 0;
-      if (allowed.indexOf("IB") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ib", "Other variations — Type IB", state.groupingIB, (v) => { state.groupingIB = v; })); else state.groupingIB = 0;
-      if (allowed.indexOf("II") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ii", "Other variations — Type II", state.groupingII, (v) => { state.groupingII = v; })); else state.groupingII = 0;
+      if (allowed.indexOf("IA") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ia", "Other variations — Type IA", state.groupingIA, (v) => { state.groupingIA = v; }, hoursPill(grp.perIA))); else state.groupingIA = 0;
+      if (allowed.indexOf("IB") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ib", "Other variations — Type IB", state.groupingIB, (v) => { state.groupingIB = v; }, hoursPill(grp.perIB))); else state.groupingIB = 0;
+      if (allowed.indexOf("II") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ii", "Other variations — Type II", state.groupingII, (v) => { state.groupingII = v; }, hoursPill(grp.perII))); else state.groupingII = 0;
     }
-    if (state.procOptions.annualUpdate) subRow.appendChild(numberField("vcl-wl-au-count", "No. of Type IA", state.annualUpdateIaCount, (v) => { state.annualUpdateIaCount = v; }));
+    if (state.procOptions.annualUpdate) subRow.appendChild(numberField("vcl-wl-au-count", "No. of Type IA", state.annualUpdateIaCount, (v) => { state.annualUpdateIaCount = v; }, hoursPill(au.perIA)));
     if (subRow.children.length) section.appendChild(subRow);
   }
 
@@ -588,22 +639,37 @@
     const type = variant.type;
     const section = document.createElement("div"); section.className = "vcl-wl-section";
 
+    // Base hours for the picked classification -- the starting point every factor multiplies.
+    const baseLine = document.createElement("p"); baseLine.className = "vcl-wl-baseline";
+    baseLine.appendChild(document.createTextNode("Base workload · " + methodTypeLabel(type) + " "));
+    baseLine.appendChild(hintPill(F.baseHours[type] + " h", "base"));
+    baseLine.appendChild(document.createTextNode(" "));
+    const baseHint = document.createElement("span"); baseHint.className = "vcl-wl-baseline__note"; baseHint.textContent = "starting point, before the factors below";
+    baseLine.appendChild(baseHint);
+    section.appendChild(baseLine);
+
     const asHeading = document.createElement("h4"); asHeading.textContent = "Active Substance";
     section.appendChild(asHeading);
     singleSelectRow(section, [
-      { key: "biologic", label: "Biologic" },
-      { key: "chemical", label: "Chemically-synthesized API" },
+      { key: "biologic", label: "Biologic", hint: factorPill(F.activeSubstance.biologic) },
+      { key: "chemical", label: "Chemically-synthesized API", hint: factorPill(F.activeSubstance.chemical) },
     ], state.activeSubstance, (k) => { state.activeSubstance = k; });
 
     const procHeading = document.createElement("h4"); procHeading.textContent = "Procedure"; procHeading.style.marginTop = "18px";
     section.appendChild(procHeading);
     const procRow = document.createElement("div"); procRow.className = "vcl-wl-row";
     const procRadios = document.createElement("div"); procRadios.className = "vcl-wl-radios";
-    [{ key: "national", label: "National" }, { key: "mrpdcp", label: "MRP / DCP" }, { key: "cp", label: "CP" }].forEach((opt) => {
+    [
+      { key: "national", label: "National", hint: factorPill(F.procedure.national) },
+      { key: "mrpdcp", label: "MRP / DCP", hint: hintPill("×" + fmtNum(F.procedure.mrpdcpSmall) + "–" + fmtNum(F.procedure.mrpdcpLarge), "factor") },
+      { key: "cp", label: "CP", hint: factorPill(F.procedure.cp) },
+    ].forEach((opt) => {
       const label = document.createElement("label");
       const radio = document.createElement("input"); radio.type = "radio"; radio.name = "vcl-wl-procedure"; radio.checked = state.procedure === opt.key;
       radio.addEventListener("change", () => { state.procedure = opt.key; rerender(); });
       label.appendChild(radio); label.appendChild(document.createTextNode(" " + opt.label));
+      // Factor pill painted only for the chosen procedure; space reserved for the rest.
+      appendPill(label, opt.hint, state.procedure === opt.key);
       procRadios.appendChild(label);
     });
     procRow.appendChild(procRadios);
@@ -629,6 +695,9 @@
         subRadios.appendChild(label);
       });
       subRow.appendChild(subRadios); section.appendChild(subRow);
+      const ptNote = document.createElement("p"); ptNote.className = "vcl-wl-note";
+      ptNote.textContent = "Sets the assessment clock (timeline below) — it does not change the RA hours.";
+      section.appendChild(ptNote);
     }
 
     if (type === "IA") {
@@ -648,17 +717,9 @@
 
     const piHeading = document.createElement("h4"); piHeading.textContent = "Product Information"; piHeading.style.marginTop = "18px";
     section.appendChild(piHeading);
-    const piChecks = document.createElement("div"); piChecks.className = "vcl-wl-checks";
-    PRODUCT_INFO.forEach((item) => {
-      const label = document.createElement("label");
-      const check = document.createElement("input"); check.type = "checkbox"; check.checked = !!state.productInfo[item.key];
-      check.addEventListener("change", () => { state.productInfo[item.key] = check.checked; rerender(); });
-      label.appendChild(check); label.appendChild(document.createTextNode(" " + item.label));
-      piChecks.appendChild(label);
-    });
-    section.appendChild(piChecks);
 
-    const piMgmtRow = document.createElement("div"); piMgmtRow.className = "vcl-wl-checks"; piMgmtRow.style.marginTop = "8px";
+    // Gate first: only when the PI text editing is managed in RA are the deliverables shown at all.
+    const piMgmtRow = document.createElement("div"); piMgmtRow.className = "vcl-wl-checks";
     const pmLabel = document.createElement("label");
     const pmCheck = document.createElement("input"); pmCheck.type = "checkbox"; pmCheck.checked = state.piManagementInRA;
     pmCheck.addEventListener("change", () => { state.piManagementInRA = pmCheck.checked; rerender(); });
@@ -666,8 +727,23 @@
     piMgmtRow.appendChild(pmLabel);
     section.appendChild(piMgmtRow);
     const pmNote = document.createElement("p"); pmNote.className = "vcl-wl-note";
-    pmNote.textContent = "Tick if the product-information text editing happens within RA (time-intensive). Only then do the ticked deliverables' hours count towards RA.";
+    pmNote.textContent = "Tick if the product-information text editing happens within RA (time-intensive). Only then do the deliverables below count towards RA.";
     section.appendChild(pmNote);
+
+    // Deliverables revealed only when the gate is on; hours per element depend on the variation type.
+    if (state.piManagementInRA) {
+      const piChecks = document.createElement("div"); piChecks.className = "vcl-wl-checks"; piChecks.style.marginTop = "8px";
+      PRODUCT_INFO.forEach((item) => {
+        const label = document.createElement("label");
+        const check = document.createElement("input"); check.type = "checkbox"; check.checked = !!state.productInfo[item.key];
+        check.addEventListener("change", () => { state.productInfo[item.key] = check.checked; rerender(); });
+        // Hours painted only once this deliverable is ticked; space reserved so nothing shifts.
+        label.appendChild(check); label.appendChild(document.createTextNode(" " + item.label));
+        appendPill(label, hoursPill(piElementHours(item.key, type)), state.productInfo[item.key]);
+        piChecks.appendChild(label);
+      });
+      section.appendChild(piChecks);
+    }
 
     // "Departments involved" input and its "Estimated workload" output (department timelines)
     // are temporarily removed -- to be reinstated once the departmental timing model is
@@ -962,7 +1038,10 @@
     rows.forEach((r) => {
       const row = document.createElement("div");
       row.className = "vcl-wl-mt-row" + (r.active ? " is-active" : "") + (r.provisional ? " is-prov" : "");
-      const val = escapeHtml(String(r.val)) + (r.provisional ? '<span class="prov">provisional</span>' : "");
+      // Numeric values render as the same pink pill used inline in the form; the wide
+      // tables carry sentence-length values, so those stay as plain text.
+      const inner = wide ? escapeHtml(String(r.val)) : '<span class="vcl-wl-hint">' + escapeHtml(String(r.val)) + "</span>";
+      const val = inner + (r.provisional ? '<span class="prov">provisional</span>' : "");
       row.innerHTML = '<span class="l">' + escapeHtml(r.label) + '</span><span class="v">' + val + "</span>";
       wrap.appendChild(row);
     });
@@ -994,23 +1073,23 @@
     })), "The starting point, before any factor is applied."));
 
     out.push(methodTable("× Procedure", [
-      { label: "National", val: "× " + fmtNum(F.procedure.national), active: state.procedure === "national" },
-      { label: "Centralised (CP)", val: "× " + fmtNum(F.procedure.cp), active: state.procedure === "cp" },
-      { label: "MRP/DCP, ≤ " + F.procedure.cmsThreshold + " CMS", val: "× " + fmtNum(F.procedure.mrpdcpSmall), active: isMrp && !large },
-      { label: "MRP/DCP, > " + F.procedure.cmsThreshold + " CMS", val: "× " + fmtNum(F.procedure.mrpdcpLarge), active: isMrp && large },
+      { label: "National", val: "× " + fmtFactor(F.procedure.national), active: state.procedure === "national" },
+      { label: "Centralised (CP)", val: "× " + fmtFactor(F.procedure.cp), active: state.procedure === "cp" },
+      { label: "MRP/DCP, ≤ " + F.procedure.cmsThreshold + " CMS", val: "× " + fmtFactor(F.procedure.mrpdcpSmall), active: isMrp && !large },
+      { label: "MRP/DCP, > " + F.procedure.cmsThreshold + " CMS", val: "× " + fmtFactor(F.procedure.mrpdcpLarge), active: isMrp && large },
     ], "MRP/DCP also adds hours per CMS on top — see the add-ons below."));
 
     out.push(methodTable("× Active substance", [
-      { label: "Biologic", val: "× " + fmtNum(F.activeSubstance.biologic), active: state.activeSubstance === "biologic" },
-      { label: "Chemically-synthesized API", val: "× " + fmtNum(F.activeSubstance.chemical), active: state.activeSubstance === "chemical" },
+      { label: "Biologic", val: "× " + fmtFactor(F.activeSubstance.biologic), active: state.activeSubstance === "biologic" },
+      { label: "Chemically-synthesized API", val: "× " + fmtFactor(F.activeSubstance.chemical), active: state.activeSubstance === "chemical" },
     ]));
 
     const s = F.submission;
     out.push(methodTable("× Submission type", [
-      { label: "Worksharing", val: "× " + fmtNum(s.worksharing.factor), active: state.procOptions.worksharing },
-      { label: "Grouping", val: "× " + fmtNum(s.grouping.factor), active: state.procOptions.grouping },
-      { label: "Annual Update", val: "× " + fmtNum(s.annualUpdate.factor), active: state.procOptions.annualUpdate },
-      { label: "Super-Grouping", val: "× " + fmtNum(s.superGrouping.factor), active: state.procOptions.superGrouping },
+      { label: "Worksharing", val: "× " + fmtFactor(s.worksharing.factor), active: state.procOptions.worksharing },
+      { label: "Grouping", val: "× " + fmtFactor(s.grouping.factor), active: state.procOptions.grouping },
+      { label: "Annual Update", val: "× " + fmtFactor(s.annualUpdate.factor), active: state.procOptions.annualUpdate },
+      { label: "Super-Grouping", val: "× " + fmtFactor(s.superGrouping.factor), active: state.procOptions.superGrouping },
     ], "These multiply together when several apply at once."));
 
     out.push(methodTable("+ Add-ons (hours, added after the factors)", [
@@ -1023,9 +1102,9 @@
       { label: "Annual Update · per Type IA", val: "+ " + s.annualUpdate.perIA + " h", active: state.procOptions.annualUpdate && state.annualUpdateIaCount > 0 },
     ]));
 
-    out.push(methodTable("+ Product information (hours per element)", PRODUCT_INFO.map((it) => ({
-      label: it.label, val: "+ " + F.productInfo[it.key] + " h", active: state.piManagementInRA && state.productInfo[it.key]
-    })), "Only counted when “PI management in RA” is ticked — otherwise another department carries it."));
+    out.push(methodTable("+ Product information · " + methodTypeLabel(type) + " (hours per element)", PRODUCT_INFO.map((it) => ({
+      label: it.label, val: "+ " + fmtNum(piElementHours(it.key, type)) + " h", active: state.piManagementInRA && state.productInfo[it.key]
+    })), "Only counted when “PI management in RA” is ticked — otherwise another department carries it. Hours scale with the variation type (IA/IB/II)."));
 
     return out;
   }
@@ -1156,5 +1235,65 @@
     container.appendChild(sec);
   }
 
-  window.VCL_WORKLOAD = { render: function (container) { if (!container) return; mountedContainer = container; rerender(); } };
+  // ---- Pure helpers shared with the Guided Workflow (window.VCL_WORKFLOW) --------------------
+  // Both reuse this tool's factor/timing tables (F / TIMING / ASSESS) but take explicit inputs
+  // instead of this tool's own state, so the workflow reuses the same numbers -- one source.
+
+  // Timeline schedule in calendar days from the submission (day 0 of the drawing = preparation
+  // start). opts: { type, iiSub, procedure, cmsCount, shared, clockStopFraction }.
+  function computeSchedule(opts) {
+    const o = opts || {};
+    const src = o.type === "II" ? ASSESS.II[o.iiSub || "60"] : ASSESS[o.type];
+    if (!src) return null; // Type IA -> Annual Update window, no individual clock
+    const range = src.stopMax - src.stopMin;
+    const frac = (o.clockStopFraction == null) ? 1 : o.clockStopFraction;
+    const stop = src.stopMax > 0 ? Math.round(src.stopMin + frac * range) : 0;
+    const prep = (o.type === "II") ? TIMING.prep.II : (TIMING.prep[o.type] != null ? TIMING.prep[o.type] : 7);
+    let validation;
+    if (o.shared) validation = TIMING.validation.worksharingGrouping;
+    else if (o.procedure === "mrpdcp") validation = (o.cmsCount || 0) > 10 ? TIMING.validation.mrpdcpLarge : TIMING.validation.mrpdcpSmall;
+    else if (o.procedure === "cp") validation = TIMING.validation.cp;
+    else validation = TIMING.validation.national;
+    const showA2 = src.a2 > 0 && stop > 0;
+    const dSub = prep;
+    const dDay0 = prep + validation;
+    const dA1End = dDay0 + src.a1;
+    const dStopEnd = dA1End + stop;
+    const dEop = dStopEnd + (showA2 ? src.a2 : 0);
+    const dClose = dEop + TIMING.closureDays;
+    return {
+      prepDays: prep, validationDays: validation, a1: src.a1, a2: src.a2, stop: stop, showA2: showA2,
+      pvar: src.pvar || 0, closureDays: TIMING.closureDays, stopMin: src.stopMin, stopMax: src.stopMax,
+      dPrepStart: 0, dSub: dSub, dDay0: dDay0, dA1End: dA1End, dStopEnd: dStopEnd, dEop: dEop, dClose: dClose,
+      subToEop: dEop - dSub, totalDays: dClose,
+    };
+  }
+
+  // RA preparation hours for one (primary) procedure, mirroring computeRaHours() but from
+  // explicit inputs. opts: { type, substance, procedure, cmsCount, grouping, worksharing,
+  // groupingCounts:{IA,IB,II}, worksharingProcs:{national,mrpdcp} }.
+  function raHoursFor(opts) {
+    const o = opts || {};
+    const base = F.baseHours[o.type] || 0;
+    let pf = F.procedure.national;
+    if (o.procedure === "mrpdcp") pf = (o.cmsCount || 0) > F.procedure.cmsThreshold ? F.procedure.mrpdcpLarge : F.procedure.mrpdcpSmall;
+    else if (o.procedure === "cp") pf = F.procedure.cp;
+    const af = o.substance === "biologic" ? F.activeSubstance.biologic : (o.substance === "chemical" ? F.activeSubstance.chemical : 1);
+    let sf = 1;
+    if (o.grouping) sf *= F.submission.grouping.factor;
+    if (o.worksharing) sf *= F.submission.worksharing.factor;
+    let add = 0;
+    if (o.procedure === "mrpdcp") add += (F.cmsHoursPer || 0) * (o.cmsCount || 0);
+    const gc = o.groupingCounts || {};
+    if (o.grouping) add += (F.submission.grouping.perIA || 0) * (gc.IA || 0) + (F.submission.grouping.perIB || 0) * (gc.IB || 0) + (F.submission.grouping.perII || 0) * (gc.II || 0);
+    const wp = o.worksharingProcs || {};
+    if (o.worksharing) add += (F.submission.worksharing.perNational || 0) * (wp.national || 0) + (F.submission.worksharing.perMrpdcp || 0) * (wp.mrpdcp || 0);
+    return base * (pf * af * sf) + add;
+  }
+
+  window.VCL_WORKLOAD = {
+    render: function (container) { if (!container) return; mountedContainer = container; rerender(); },
+    schedule: computeSchedule,
+    raHours: raHoursFor,
+  };
 })();

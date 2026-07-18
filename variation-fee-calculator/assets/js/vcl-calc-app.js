@@ -353,6 +353,32 @@ const appState = {
 // country, so Countries and Country details still have to be answered first; the user walks the
 // same path and simply finds step 3 already filled in.
 window.VCLCALC = {
+  // Country universe + the fee roles each country supports, for tools that need to build a
+  // procedure at country level (e.g. the Guided Workflow). Derived from the same fee data the
+  // calculator itself uses, so it stays in sync. Shape: [{ cc, name, roles:['RMS','CMS',...] }].
+  countries() {
+    return Object.keys(COUNTRY_NAMES)
+      .map((cc) => ({ cc, name: COUNTRY_NAMES[cc], roles: rolesForCountry(cc) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'en'));
+  },
+  // Pure fee computation for an explicit set of countries + type counts, without touching the
+  // wizard's own state. Used by the Guided Workflow to price one procedure at country level.
+  // input: { countries: [{ cc, role, strengths?, special? }], counts: {IA,IB,II} }.
+  // Returns { countries: [countryResult...], grandTotal } in EUR (each countryResult also
+  // carries currency/fxRate/totalLocal). Goes through computeCountryResult -- the same code the
+  // calculator uses -- so results match the standalone tool exactly.
+  computeFees(input) {
+    const counts = { IA: 0, IB: 0, II: 0 };
+    if (input && input.counts) ['IA', 'IB', 'II'].forEach((t) => { counts[t] = Math.max(0, parseInt(input.counts[t], 10) || 0); });
+    const list = (input && input.countries) || [];
+    const results = list.map((c) => computeCountryResult(
+      c.cc,
+      { role: c.role, strengths: Math.max(1, parseInt(c.strengths, 10) || 1), specialByType: c.special || { IA: null, IB: null, II: null } },
+      counts
+    ));
+    const grandTotal = results.reduce((acc, cr) => acc + (cr.total || 0), 0);
+    return { countries: results, grandTotal };
+  },
   setGlobalCounts(counts) {
     const parts = [];
     ['IA', 'IB', 'II'].forEach((type) => {
@@ -792,14 +818,17 @@ function escapeHtml(s) {
 // Each country is evaluated independently (its own role, strengths, and
 // special-case choices), since fee tables and grouping rules in the source
 // data are scoped to a single country + procedure role.
-function computeResult() {
-  const countryResults = appState.selectedCountries.map(cc => {
-    const cfg = ensureCountryConfig(cc);
+// Per-country fee computation, factored out so it can be driven either by the wizard's own
+// appState (computeResult below) or by an explicit input (window.VCLCALC.computeFees, used by
+// the Guided Workflow to price each procedure at country level). `counts` is {IA,IB,II};
+// `cfg` is {role, strengths, specialByType}. This is the single source of truth for a country's
+// fee -- both callers go through it, so there is no second copy of the grouping/cap/FX logic.
+function computeCountryResult(cc, cfg, counts) {
     const rows = rowsForCountry(cc);
 
     const selectedRows = [];
     ['IA','IB','II'].forEach(type => {
-      if (appState.globalCounts[type] <= 0) return;
+      if (counts[type] <= 0) return;
       const row = resolveRow(cc, cfg.role, type, cfg.specialByType[type]);
       if (row) selectedRows.push(row);
     });
@@ -809,7 +838,7 @@ function computeResult() {
     }
 
     // ── Combined run (actual total, respects grouping/subsumption rules) ──
-    const globalCounts = { M: appState.globalCounts.IA, N: appState.globalCounts.IB, O: appState.globalCounts.II };
+    const globalCounts = { M: counts.IA, N: counts.IB, O: counts.II };
     const strengthsByRow = {};
     selectedRows.forEach(r => { strengthsByRow[r.row] = cfg.strengths; });
     const stateCombined = buildState(globalCounts, strengthsByRow);
@@ -822,9 +851,9 @@ function computeResult() {
     const singleFeeByRow = {};
     const rawSumByRow = {};
     selectedRows.forEach(r => {
-      const singleCounts = { M: r.type==='IA' ? appState.globalCounts.IA : 0,
-                             N: r.type==='IB' ? appState.globalCounts.IB : 0,
-                             O: r.type==='II' ? appState.globalCounts.II : 0 };
+      const singleCounts = { M: r.type==='IA' ? counts.IA : 0,
+                             N: r.type==='IB' ? counts.IB : 0,
+                             O: r.type==='II' ? counts.II : 0 };
       const stateSingle = buildState(singleCounts, { [r.row]: cfg.strengths });
       rows.forEach(row => evalRow(row.row, stateSingle));
       const s = stateSingle.computed[r.row];
@@ -906,7 +935,7 @@ function computeResult() {
       // exactly the count the Excel formula itself tests, for both the
       // "K != F, per-type count" style (UK/DK) and the "K == F, total across
       // all grouped types" style (BE), without needing to special-case them.
-      const count = appState.globalCounts[r.type];
+      const count = counts[r.type];
       const kVal = (r.K !== null && r.K !== undefined) ? r.K : null;
       const formulaText = [r.Pf, r.Qf, r.Rf, r.Sf].filter(Boolean).join(' ');
       const hasGroupingBranch = kVal !== null && /[MNO]\d+/.test(formulaText) && />1/.test(formulaText) && /\bK\d+\b/.test(formulaText);
@@ -965,7 +994,11 @@ function computeResult() {
     const totalLocal = (fxRate !== null && total !== null) ? total * fxRate : null;
 
     return { cc, role: cfg.role, strengths: cfg.strengths, items, total, hasData: true, currency, fxRate, totalLocal, groupCapValue, sumOfSingles };
-  });
+}
+
+// ---- Compute results across all selected countries (wizard) ----
+function computeResult() {
+  const countryResults = appState.selectedCountries.map(cc => computeCountryResult(cc, ensureCountryConfig(cc), appState.globalCounts));
 
   // Sort: RMS entries first, then all others alphabetically by country name
   countryResults.sort((a, b) => {
