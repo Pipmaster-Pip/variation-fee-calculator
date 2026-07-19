@@ -8,7 +8,9 @@
 }
 
 .vcl-app .vcl-wf {
-  max-width: 760px;
+  /* Fill the whole detail column (like the Workload tool) rather than capping at 760px --
+     the extra width goes to the timeline in Station C. */
+  max-width: none;
 }
 
 /* Head styled like the other tools (serif title + description + a coloured divider). */
@@ -332,7 +334,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
   gap: 5px;
-  max-width: 520px;
 }
 .vcl-app .vcl-wf-cc {
   font-size: 12px;
@@ -518,7 +519,7 @@
   border-radius: 5px;
   overflow: hidden;
   background: #f0efe9;
-  margin: 14px 0 10px;
+  margin: 2px 0 10px; /* small top gap: the milestone markers' arrows sit directly above */
 }
 .vcl-app .vcl-wf-tl--mini { height: 9px; margin: 0; border-radius: 3px; }
 .vcl-app .vcl-wf-tl-seg { position: absolute; top: 0; bottom: 0; }
@@ -529,6 +530,56 @@
   background-image: repeating-linear-gradient(45deg, color-mix(in srgb, var(--workflow) 45%, #fff) 0 4px, #fff 4px 8px);
 }
 .vcl-app .vcl-wf-tl-seg.closure { background: var(--workflow); }
+
+/* Milestone markers above the bar: a stacked label (role + day-number) with a short connector
+   line and a ▼ arrow pointing down at the timeline. Adjacent close markers (Submission / Day 0)
+   ride at different heights via an inline connector height so their labels never collide. */
+.vcl-app .vcl-wf-tl-marks { position: relative; height: 56px; margin: 8px 0 0; }
+.vcl-app .vcl-wf-tl-mark {
+  position: absolute; bottom: 0; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; line-height: 1.15;
+}
+.vcl-app .vcl-wf-tl-mark .s { font-size: 9px; color: var(--muted); white-space: nowrap; }
+.vcl-app .vcl-wf-tl-mark .t { font-size: 11.5px; font-weight: 600; color: var(--ink, #222); white-space: nowrap; }
+.vcl-app .vcl-wf-tl-mark .conn { width: 1px; background: color-mix(in srgb, var(--workflow) 45%, transparent); }
+.vcl-app .vcl-wf-tl-mark .a { font-size: 8px; line-height: 1; color: var(--workflow); }
+
+/* Phase labels under the arrows: one per assessment phase, centred under its segment. Sits
+   right beneath the duration arrows (small negative pull) so each name reads with its arrow. */
+.vcl-app .vcl-wf-tl-phases { position: relative; height: 15px; margin-top: -4px; }
+.vcl-app .vcl-wf-tl-phase { position: absolute; text-align: center; }
+.vcl-app .vcl-wf-tl-phase span { font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+/* Small legend for the RA-owned segments + a gloss for the marker abbreviations. */
+.vcl-app .vcl-wf-tl-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px;
+  margin-top: 10px; padding-top: 9px;
+  border-top: 0.5px solid var(--line, #eee);
+}
+.vcl-app .vcl-wf-tl-legend .k { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); }
+.vcl-app .vcl-wf-tl-legend .sw { width: 12px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.vcl-app .vcl-wf-tl-legend .sw.prep { background: #cfd8c8; }
+.vcl-app .vcl-wf-tl-legend .sw.closure { background: var(--workflow); }
+.vcl-app .vcl-wf-tl-legend .note { flex-basis: 100%; font-size: 10px; color: var(--ink-faint, #8a8a83); line-height: 1.5; }
+
+/* Duration arrows under the mini bar (Timetables-style): a horizontal line with an arrowhead
+   at each end and the span's length in days floating over its middle. */
+.vcl-app .vcl-wf-tl-durrow { position: relative; height: 20px; margin: 0 0 2px; }
+.vcl-app .vcl-wf-tl-dur {
+  position: absolute; top: 9px; height: 0;
+  border-top: 1px solid color-mix(in srgb, var(--workflow) 50%, transparent);
+}
+.vcl-app .vcl-wf-tl-dur::before, .vcl-app .vcl-wf-tl-dur::after {
+  content: ""; position: absolute; top: -3px; width: 0; height: 0;
+  border-top: 3px solid transparent; border-bottom: 3px solid transparent;
+}
+.vcl-app .vcl-wf-tl-dur::before { left: 0; border-right: 5px solid color-mix(in srgb, var(--workflow) 50%, transparent); }
+.vcl-app .vcl-wf-tl-dur::after { right: 0; border-left: 5px solid color-mix(in srgb, var(--workflow) 50%, transparent); }
+.vcl-app .vcl-wf-tl-dur span {
+  position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px; color: var(--muted); background: #fff; padding: 0 4px; white-space: nowrap;
+}
 
 .vcl-app .vcl-wf-tl-list {
   border: 0.5px solid var(--line, #e4e4de);

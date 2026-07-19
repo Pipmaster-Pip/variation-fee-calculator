@@ -671,6 +671,32 @@
     const sd = state.submissionDate;
     const dateAt = (dayOffset) => sd ? fmtDate(addDays(sd, dayOffset - sch.dSub)) : null;
 
+    const isII = primaryType() === "II";
+    const hasStop = sch.stop > 0;
+    // Guideline day-number of the outcome (excludes the clock-stop, exactly like the Workload
+    // tool's nominalEop): II with questions runs to a1+a2 (e.g. day 90), II without ends at the
+    // FVAR (a1+1, e.g. day 60), IB ends at its decision day (a1).
+    const nominalEop = isII ? (sch.showA2 ? sch.a1 + sch.a2 : sch.a1 + 1) : sch.a1;
+
+    // ---- Milestone markers pointing down at the bar: Submission -> Day 0 -> (RSI) -> EOP.
+    // The close Submission/Day-0 pair is staggered vertically (lift) so the labels never collide.
+    const marks = el("div", "vcl-wf-tl-marks");
+    function mark(pos, main, sub, lift) {
+      const m = el("div", "vcl-wf-tl-mark");
+      m.style.left = pct(pos) + "%";
+      m.innerHTML = (sub ? '<span class="s">' + escapeHtml(sub) + "</span>" : "")
+        + '<span class="t">' + escapeHtml(main) + "</span>"
+        + '<span class="conn" style="height:' + (lift ? 18 : 2) + 'px;"></span>'
+        + '<span class="a" aria-hidden="true">&#9660;</span>';
+      marks.appendChild(m);
+    }
+    // Short labels only -- the long glosses live in the legend below, so nothing collides.
+    mark(sch.dSub, "Submission", "", true);
+    mark(sch.dDay0, "Day 0", "", false);
+    if (hasStop) mark(sch.dA1End, "Day " + sch.a1, "RSI", true);
+    mark(sch.dEop, "Day " + nominalEop, "EOP", false);
+    body.appendChild(marks);
+
     // Mini bar.
     const bar = el("div", "vcl-wf-tl");
     function seg(cls, start, len) { if (len <= 0) return; const s = el("div", "vcl-wf-tl-seg " + cls); s.style.left = pct(start) + "%"; s.style.width = pct(len) + "%"; bar.appendChild(s); }
@@ -681,6 +707,50 @@
     if (sch.showA2) seg("assess", sch.dStopEnd, sch.a2);
     seg("closure", sch.dEop, sch.closureDays);
     body.appendChild(bar);
+
+    // Duration arrows under the bar (like the Timetables view): the key spans from Submission
+    // through Day 0 to the EOP, each labelled with its length in calendar days. Same 0..dClose
+    // scale as the bar above, so every arrow sits directly under its segment.
+    const durRow = el("div", "vcl-wf-tl-durrow");
+    function durArrow(fromDay, toDay, label) {
+      if (toDay - fromDay <= 0) return;
+      const d = el("div", "vcl-wf-tl-dur");
+      d.style.left = pct(fromDay) + "%";
+      d.style.width = (pct(toDay) - pct(fromDay)) + "%";
+      d.innerHTML = "<span>" + escapeHtml(label) + "</span>";
+      durRow.appendChild(d);
+    }
+    durArrow(sch.dSub, sch.dDay0, sch.validationDays + " d");   // Submission -> Day 0 (validation)
+    durArrow(sch.dDay0, sch.dA1End, sch.a1 + " d");             // assessment (to RSI / clock-stop)
+    if (sch.stop > 0) durArrow(sch.dA1End, sch.dStopEnd, sch.stop + " d"); // clock-stop
+    if (sch.showA2) durArrow(sch.dStopEnd, sch.dEop, sch.a2 + " d");       // assessment 2 -> EOP
+    body.appendChild(durRow);
+
+    // Phase labels under the arrows -- names the assessment phases the arrows measure.
+    const phases = el("div", "vcl-wf-tl-phases");
+    function phase(start, len, label) {
+      if (len <= 0) return;
+      const p = el("div", "vcl-wf-tl-phase");
+      p.style.left = pct(start) + "%";
+      p.style.width = pct(len) + "%";
+      p.innerHTML = "<span>" + escapeHtml(label) + "</span>";
+      phases.appendChild(p);
+    }
+    phase(sch.dSub, sch.validationDays, "Validation");
+    phase(sch.dDay0, sch.a1, sch.showA2 ? "Assessment 1" : "Assessment");
+    if (hasStop) phase(sch.dA1End, sch.stop, "Clock-stop");
+    if (sch.showA2) phase(sch.dStopEnd, sch.a2, "Assessment 2");
+    body.appendChild(phases);
+
+    // Small legend: the two RA-owned segments that book-end the clock (shown as colour swatches
+    // keyed to the bar), plus a gloss for the marker abbreviations.
+    const legend = el("div", "vcl-wf-tl-legend");
+    legend.innerHTML =
+      '<span class="k"><i class="sw prep"></i>Preparation (RA)</span>'
+      + '<span class="k"><i class="sw closure"></i>Closure by RA</span>'
+      + '<span class="note">Day 0 = start of assessment · EOP = end of procedure'
+      + (hasStop ? " · RSI = authority's questions (clock-stop)" : "") + "</span>";
+    body.appendChild(legend);
 
     // Milestones.
     const rows = [
@@ -701,6 +771,7 @@
     body.appendChild(list);
 
     const dur = el("p", "vcl-wf-hint", "Submission → EOP: <strong>" + sch.subToEop + " calendar days</strong> (~" + Math.round(sch.subToEop / 30.4 * 10) / 10 + " months). Preparation → closure: " + sch.totalDays + " days."
+      + (hasStop ? " The day-numbers above (EOP = day " + nominalEop + ") follow the guideline clock and exclude the clock-stop." : "")
       + (sd ? "" : " Enter a date above to see calendar dates."));
     body.appendChild(dur);
   }
@@ -966,8 +1037,14 @@
     container.innerHTML = "";
     const root = el("div", "vcl-wf");
     const head = el("div", "vcl-wf-head");
+    // Reference / "Last updated" note mirrors the Fee Calculator's (this tool carries the same
+    // official fees), using the same admin-editable VCL_CONFIG keys with the calculator's
+    // fee-data date as the fallback -- see fillCalcHead() in vcl-app.js.
+    const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     head.innerHTML = "<h3>Guided Workflow</h3>"
-      + "<p>A guided path through one or more variations &mdash; from classification through procedure and timeline to the fees. The live preview below updates as you go.</p>";
+      + "<p>A guided path through one or more variations &mdash; from classification through procedure and timeline to the fees. The live preview below updates as you go.</p>"
+      + '<p class="ref-line">Reference: ' + cfgReferenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).") + "</p>"
+      + '<p class="ref-updated">Last updated in Variation Toolbox: ' + cfgLastUpdated("calculator", calcUpdated) + "</p>";
     root.appendChild(head);
     root.appendChild(buildStations());
     root.appendChild(buildBody());
@@ -983,6 +1060,15 @@
     const fresh = buildLive();
     liveHost.parentNode.replaceChild(fresh, liveHost);
     liveHost = fresh;
+  }
+
+  // Admin-editable "Last updated"/"Reference" values, same lookup as vcl-app.js's helpers --
+  // this IIFE can't reach those, so it reads window.VCL_CONFIG directly, with a fallback.
+  function cfgLastUpdated(key, fallback) {
+    return (window.VCL_CONFIG && window.VCL_CONFIG.lastUpdated && window.VCL_CONFIG.lastUpdated[key]) || fallback;
+  }
+  function cfgReferenceText(key, fallback) {
+    return (window.VCL_CONFIG && window.VCL_CONFIG.referenceText && window.VCL_CONFIG.referenceText[key]) || fallback;
   }
 
   function escapeHtml(s) {
