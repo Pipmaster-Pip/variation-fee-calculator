@@ -835,6 +835,17 @@
     }
 
     buildSummaryCard(body, grand, anyCountries);
+
+    // Hand-off to the Fee Calculator: the faster route when someone only wants a fee across many
+    // markets at once. Switches the Toolbox view in place via vcl-app's additive VCL_APP.goTo.
+    if (window.VCL_APP && window.VCL_APP.goTo) {
+      const xl = el("div", "vcl-wf-xlink");
+      const btn = el("button", "vcl-wf-xlink__btn", "Just need a quick fee across several markets? Open the Variation Fee Calculator →");
+      btn.type = "button";
+      btn.addEventListener("click", () => window.VCL_APP.goTo("calculator"));
+      xl.appendChild(btn);
+      body.appendChild(xl);
+    }
   }
 
   // Closing recap of the whole path -- the "you are here, and this is the plan" card.
@@ -1042,7 +1053,7 @@
     // fee-data date as the fallback -- see fillCalcHead() in vcl-app.js.
     const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     head.innerHTML = "<h3>Guided Workflow</h3>"
-      + "<p>A guided path through one or more variations &mdash; from classification through procedure and timeline to the fees. The live preview below updates as you go.</p>"
+      + "<p><strong>Best for planning one variation end to end</strong> &mdash; or a grouped set &mdash; from classification through procedure and timeline to the fees. The live preview below updates as you go.</p>"
       + '<p class="ref-line">Reference: ' + cfgReferenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).") + "</p>"
       + '<p class="ref-updated">Last updated in Variation Toolbox: ' + cfgLastUpdated("calculator", calcUpdated) + "</p>";
     root.appendChild(head);

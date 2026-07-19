@@ -600,6 +600,19 @@
 .vcl-app .vcl-wf-tl-row.is-strong { color: var(--ink, #222); font-weight: 600; background: var(--workflow-tint); }
 .vcl-app .vcl-wf-tl-row__d { font-family: "IBM Plex Mono", monospace; font-size: 12px; white-space: nowrap; }
 
+/* --- Station D: hand-off link to the Fee Calculator --- */
+.vcl-app .vcl-wf-xlink { margin-top: 14px; text-align: center; }
+.vcl-app .vcl-wf-xlink__btn {
+  font-size: 12px;
+  color: var(--workflow);
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--workflow) 40%, transparent);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.vcl-app .vcl-wf-xlink__btn:hover { background: var(--workflow-tint); border-style: solid; }
+
 /* --- Station D: closing summary --- */
 .vcl-app .vcl-wf-sum {
   margin-top: 16px;

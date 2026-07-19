@@ -3201,10 +3201,15 @@
     jumpToTop();
   }
 
+  // Minimal additive hook so the self-contained tools (e.g. the Guided Workflow) can hand the
+  // user over to another view -- used for the Workflow -> Fee Calculator cross-link. Purely
+  // additive; nothing existing depends on it.
+  window.VCL_APP = { goTo: goToDestination };
+
   // First-load overview: the main destinations as cards in the detail area (each shares its
   // nav identity color).
   const OVERVIEW_DESTINATIONS = [
-    { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "Official regulatory fees across EU-27, EMA, CH, UK and more." },
+    { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "Best for a quick fee across many markets at once — set the counts, export to Excel." },
     { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse or search the EU classification codes E · Q · C · M." },
     { dest: "grouping", label: "Grouping of Variations", color: "var(--group)", desc: "Which changes may be grouped into one submission." },
     { dest: "precisescope", label: "Precise Scope Wording", color: "var(--plum)", desc: "Example wordings for the application form's scope field." },
@@ -3214,7 +3219,7 @@
     { dest: "qa", label: "Q&A on Variations", color: "var(--group)", desc: "The CMDh questions and answers on submitting variations." },
     { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "Day-by-day procedure timetables for Type IA / IB / II." },
     { dest: "workload", label: "Workload Planning", color: "var(--workload)", desc: "Estimate RA effort and the variation timeline." },
-    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Step through one or more variations — classification to fees." },
+    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Best for planning one variation end to end — classification, procedure, timeline and fees." },
   ];
   function overviewHtml() {
     const cards = OVERVIEW_DESTINATIONS.map((d) => `
