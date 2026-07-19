@@ -11,16 +11,23 @@
   max-width: 760px;
 }
 
-.vcl-app .vcl-wf h3 {
-  margin: 0 0 4px;
-  color: var(--workflow);
+/* Head styled like the other tools (serif title + description + a coloured divider). */
+.vcl-app .vcl-wf-head {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--workflow);
 }
-
-.vcl-app .vcl-wf__intro {
+.vcl-app .vcl-wf-head h3 {
+  font-family: "IBM Plex Serif", serif;
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+.vcl-app .vcl-wf-head p {
+  margin: 0;
   font-size: 13px;
   color: var(--muted);
-  line-height: 1.6;
-  margin: 0 0 18px;
+  line-height: 1.5;
 }
 
 /* --- Station indicator (A B C D) --- */
@@ -298,6 +305,15 @@
 }
 .vcl-app .vcl-wf-opt--sm { font-size: 12px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 5px; }
 
+/* Direct type pick (no classification) under the search */
+.vcl-app .vcl-wf-quicktype {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--line, #e4e4de);
+}
+.vcl-app .vcl-wf-quicktype__label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.vcl-app .vcl-wf-brow__quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+
 /* --- Station B: procedure editor (country level) --- */
 .vcl-app .vcl-wf-field { margin-top: 4px; }
 .vcl-app .vcl-wf-select {
@@ -559,3 +575,46 @@
 .vcl-app .vcl-wf-sum__l { flex: 0 0 120px; color: var(--muted); }
 .vcl-app .vcl-wf-sum__v { flex: 1; color: var(--ink, #222); }
 .vcl-app .vcl-wf-sum__muted { color: var(--muted); font-size: 11.5px; }
+
+/* --- Station D: strengths (default + overrides) --- */
+.vcl-app .vcl-wf-strength {
+  border: 0.5px solid var(--line, #e4e4de);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 14px;
+  margin: 4px 0 12px;
+}
+.vcl-app .vcl-wf-strength__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+.vcl-app .vcl-wf-strength__l { color: var(--ink, #222); }
+.vcl-app .vcl-wf-strength__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink, #222);
+  cursor: pointer;
+  margin-top: 8px;
+}
+.vcl-app .vcl-wf-strength__list {
+  margin-top: 8px;
+  border-top: 0.5px solid var(--line, #eee);
+  padding-top: 4px;
+}
+.vcl-app .vcl-wf-num {
+  width: 62px;
+  box-sizing: border-box;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--line, #d8d8d2);
+  border-radius: 6px;
+  background: #fff;
+  text-align: center;
+}
+.vcl-app .vcl-wf-num:focus { outline: none; border-color: var(--workflow); }

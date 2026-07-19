@@ -34,6 +34,7 @@
     pickedCode: null,
     pickedVariantId: undefined,
     query: "",
+    typeOnly: null,        // 'IA' | 'IB' | 'II' when the user skips the classification and just picks a type
     activeSubstance: null, // 'biologic' | 'chemical'
     // Station B
     procedure: newProcedure(),        // the primary procedure ("procedure 1")
@@ -44,6 +45,10 @@
     submissionDate: "",
     iiSub: "60",                       // Type II sub-procedure: 30 | 60 | 90 (days)
     clockStopFraction: 1,              // 0..1 across the clock-stop min..max
+    // Strengths (Station D): a global default, with per-country overrides only where it matters.
+    strengthsDefault: 1,
+    strengthsVary: false,
+    strengthsOverrides: {},            // cc -> number of strengths
   };
 
   let container = null;
@@ -69,15 +74,22 @@
     return COUNTRIES;
   }
 
-  // Flatten a procedure to the (cc, role) pairs the fee engine consumes.
+  // Number of strengths registered for a country: the global default unless overridden.
+  function strengthsFor(cc) {
+    const o = state.strengthsOverrides[cc];
+    const n = (state.strengthsVary && o != null) ? o : state.strengthsDefault;
+    return Math.max(1, parseInt(n, 10) || 1);
+  }
+
+  // Flatten a procedure to the (cc, role, strengths) triples the fee engine consumes.
   function procCountries(p) {
     if (!p) return [];
-    if (p.kind === "national") return p.nat ? [{ cc: p.nat, role: "national" }] : [];
-    if (p.kind === "cp") { const e = countryData().ema; return e ? [{ cc: e, role: "EMA" }] : []; }
+    if (p.kind === "national") return p.nat ? [{ cc: p.nat, role: "national", strengths: strengthsFor(p.nat) }] : [];
+    if (p.kind === "cp") { const e = countryData().ema; return e ? [{ cc: e, role: "EMA", strengths: strengthsFor(e) }] : []; }
     if (p.kind === "mrpdcp") {
       const out = [];
-      if (p.rms) out.push({ cc: p.rms, role: "RMS" });
-      p.cms.forEach((cc) => out.push({ cc: cc, role: "CMS" }));
+      if (p.rms) out.push({ cc: p.rms, role: "RMS", strengths: strengthsFor(p.rms) });
+      p.cms.forEach((cc) => out.push({ cc: cc, role: "CMS", strengths: strengthsFor(cc) }));
       return out;
     }
     return [];
@@ -109,8 +121,8 @@
   // Every procedure carries the same variation content: the base variation plus any grouped ones.
   function feeCounts() {
     const c = { IA: 0, IB: 0, II: 0 };
-    const base = pickedVariant();
-    if (base) { const b = feeBucket(base.type); if (b) c[b]++; }
+    const bt = currentType();
+    if (bt) { const b = feeBucket(bt); if (b) c[b]++; }
     if (state.submission.grouping) state.grouping.forEach((g) => { if (g.type) { const b = feeBucket(g.type); if (b) c[b]++; } });
     return c;
   }
@@ -140,8 +152,24 @@
     return any ? total : null;
   }
 
+  // Unique selected countries across all procedures (keyed by cc, strengths is per product/cc).
+  function selectedCcs() {
+    const seen = {}; const out = [];
+    allProcedures().forEach((p) => procCountries(p).forEach((x) => { if (!seen[x.cc]) { seen[x.cc] = 1; out.push({ cc: x.cc, role: x.role }); } }));
+    return out;
+  }
+  // Does the fee for this country actually change with the number of strengths? (Many don't.)
+  function strengthsMatters(cc, role) {
+    const counts = feeCounts();
+    if (feeCountsTotal(counts) === 0 || !window.VCLCALC || !window.VCLCALC.computeFees) return false;
+    const a = window.VCLCALC.computeFees({ countries: [{ cc: cc, role: role, strengths: 1 }], counts: counts });
+    const b = window.VCLCALC.computeFees({ countries: [{ cc: cc, role: role, strengths: 2 }], counts: counts });
+    return Math.abs((a.grandTotal || 0) - (b.grandTotal || 0)) > 0.01;
+  }
+  function strengthsSensitiveList() { return selectedCcs().filter((x) => strengthsMatters(x.cc, x.role)); }
+
   // ---- timeline + RA effort (reuse the workload tool's shared helpers) ----
-  function primaryType() { const v = pickedVariant(); return v ? v.type : null; }
+  function primaryType() { return currentType(); }
   function groupingBuckets() {
     const c = { IA: 0, IB: 0, II: 0 };
     if (state.submission.grouping) state.grouping.forEach((g) => { if (g.type) { const b = feeBucket(g.type); if (b) c[b]++; } });
@@ -192,11 +220,15 @@
   }
   function pickedEntry() { return state.pickedCode ? findEntry(state.pickedCode) : null; }
   function pickedVariant() { const e = pickedEntry(); return e ? findVariant(e, state.pickedVariantId) : null; }
+  // The variation type in play -- from the picked classification variant, or a type picked
+  // directly without a classification (state.typeOnly).
+  function currentType() { if (state.typeOnly) return state.typeOnly; const v = pickedVariant(); return v ? v.type : null; }
+  function hasVariation() { return !!currentType(); }
 
   // ---- station gating ----
   function stationIndex(key) { return STATIONS.findIndex((s) => s.key === key); }
   function stationComplete(key) {
-    if (key === "A") return !!pickedVariant() && !!state.activeSubstance;
+    if (key === "A") return hasVariation() && !!state.activeSubstance;
     if (key === "B") return procComplete(state.procedure);
     return true; // C/D are placeholders for now
   }
@@ -212,10 +244,11 @@
   function resetAll() {
     state.station = "A";
     state.reached = { A: true, B: false, C: false, D: false };
-    state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.activeSubstance = null;
+    state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
     state.procedure = newProcedure(); state.submission = { grouping: false, worksharing: false };
     state.grouping = []; state.worksharing = [];
     state.submissionDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
+    state.strengthsDefault = 1; state.strengthsVary = false; state.strengthsOverrides = {};
     rerender();
   }
 
@@ -250,10 +283,16 @@
     body.appendChild(el("div", "vcl-wf-body__title", "Identify"));
     body.appendChild(el("div", "vcl-wf-body__sub", "Which variation, and which active substance?"));
 
+    if (state.typeOnly) {
+      buildTypeOnlyHeader(body);
+      buildSubstance(body);
+      return;
+    }
+
     const entry = pickedEntry();
     const variant = pickedVariant();
 
-    if (!entry) { buildSearch(body); return; }
+    if (!entry) { buildSearch(body); buildTypeQuickPick(body); return; }
 
     if (!variant) {
       buildPickedHeader(body, entry, null);
@@ -269,8 +308,10 @@
     }
 
     buildPickedHeader(body, entry, variant);
+    buildSubstance(body);
+  }
 
-    // Active substance
+  function buildSubstance(body) {
     const asHead = el("div", "vcl-wf-flabel", "Active substance");
     asHead.style.marginTop = "16px";
     body.appendChild(asHead);
@@ -282,6 +323,31 @@
       opts.appendChild(chip);
     });
     body.appendChild(opts);
+  }
+
+  // Direct type pick when there is no classification code to choose.
+  function buildTypeQuickPick(body) {
+    const wrap = el("div", "vcl-wf-quicktype");
+    wrap.appendChild(el("div", "vcl-wf-quicktype__label", "No classification code? Set the type directly:"));
+    const opts = el("div", "vcl-wf-opts");
+    ["IA", "IB", "II"].forEach((t) => {
+      const chip = el("button", "vcl-wf-opt vcl-wf-opt--sm", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`);
+      chip.type = "button";
+      chip.addEventListener("click", () => { state.typeOnly = t; state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); });
+      opts.appendChild(chip);
+    });
+    wrap.appendChild(opts);
+    body.appendChild(wrap);
+  }
+
+  function buildTypeOnlyHeader(body) {
+    const picked = el("div", "vcl-wf-picked");
+    picked.innerHTML = `<span>Variation type <span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span> <span class="vcl-wf-sum__muted">&mdash; no classification code</span></span>`;
+    const change = el("button", "vcl-wf-change", "Change");
+    change.type = "button";
+    change.addEventListener("click", () => { state.typeOnly = null; rerender(); });
+    picked.appendChild(change);
+    body.appendChild(picked);
   }
 
   function buildSearch(body) {
@@ -432,17 +498,48 @@
 
   function buildGroupingRow(g, idx) {
     const row = el("div", "vcl-wf-brow");
-    if (g.type && g.code) {
+    if (g.type) {
+      // Resolved -- either a classification code or a bare type.
+      if (g.code) {
+        const e = findEntry(g.code);
+        row.innerHTML = `<span class="vcl-wf-brow__main"><span class="vcl-wf-picked__code">${escapeHtml(g.code)}</span> ${escapeHtml(e ? e.title : "")} <span class="${typeBadgeClass(g.type)}">${escapeHtml(g.type)}</span></span>`;
+      } else {
+        row.innerHTML = `<span class="vcl-wf-brow__main">Type <span class="${typeBadgeClass(g.type)}">${escapeHtml(g.type)}</span> <span class="vcl-wf-sum__muted">&mdash; no classification code</span></span>`;
+      }
+    } else if (g.code) {
+      // Code picked, but it has several variants -- pick the type.
       const e = findEntry(g.code);
-      row.innerHTML = `<span class="vcl-wf-brow__main"><span class="vcl-wf-picked__code">${escapeHtml(g.code)}</span> ${escapeHtml(e ? e.title : "")} <span class="${typeBadgeClass(g.type)}">${escapeHtml(g.type)}</span></span>`;
+      const main = el("div", "vcl-wf-brow__main");
+      main.innerHTML = `<span><span class="vcl-wf-picked__code">${escapeHtml(g.code)}</span> ${escapeHtml(e ? e.title : "")}</span>`;
+      const chooser = el("div", "vcl-wf-brow__variants");
+      chooser.innerHTML = `<span class="vcl-wf-hint" style="margin:6px 6px 0 0;">pick the type:</span>`;
+      (e && e.variants ? e.variants : []).forEach((v) => {
+        const b = el("button", "vcl-wf-opt vcl-wf-opt--sm", `${escapeHtml(variantLabel(v) || v.type)} <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`);
+        b.type = "button";
+        b.addEventListener("click", () => { g.variantId = v.id; g.type = v.type; rerender(); });
+        chooser.appendChild(b);
+      });
+      main.appendChild(chooser);
+      row.appendChild(main);
     } else {
+      // Search by code/title, or set the type directly (no classification).
       const main = el("div", "vcl-wf-brow__main");
       const inp = document.createElement("input"); inp.type = "text"; inp.className = "vcl-wf-brow__input"; inp.placeholder = "Search code or title…"; inp.value = g.query || "";
       inp.addEventListener("input", () => { g.query = inp.value; renderMatches(); });
       main.appendChild(inp);
       const matches = el("div", "vcl-wf-brow__matches");
       main.appendChild(matches);
+      const quick = el("div", "vcl-wf-brow__variants");
+      quick.innerHTML = '<span class="vcl-wf-hint" style="margin:6px 6px 0 0;">or set the type directly:</span>';
+      ["IA", "IB", "II"].forEach((t) => {
+        const b = el("button", "vcl-wf-opt vcl-wf-opt--sm", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`);
+        b.type = "button";
+        b.addEventListener("click", () => { g.type = t; g.code = null; g.variantId = undefined; rerender(); });
+        quick.appendChild(b);
+      });
+      main.appendChild(quick);
       row.appendChild(main);
+      renderMatches();
       function renderMatches() {
         matches.innerHTML = "";
         const q = (g.query || "").trim().toLowerCase();
@@ -461,20 +558,6 @@
           matches.appendChild(m);
         });
       }
-      renderMatches();
-    }
-    // Variant/type chooser when the picked code has several variants.
-    if (g.code && !g.type) {
-      const e = findEntry(g.code);
-      const chooser = el("div", "vcl-wf-brow__variants");
-      chooser.innerHTML = `<span class="vcl-wf-hint" style="margin:0 6px 0 0;">${escapeHtml(e ? e.code : "")} — pick the type:</span>`;
-      (e && e.variants ? e.variants : []).forEach((v) => {
-        const b = el("button", "vcl-wf-opt vcl-wf-opt--sm", `${escapeHtml(variantLabel(v) || v.type)} <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`);
-        b.type = "button";
-        b.addEventListener("click", () => { g.variantId = v.id; g.type = v.type; rerender(); });
-        chooser.appendChild(b);
-      });
-      row.appendChild(chooser);
     }
     const rm = el("button", "vcl-wf-rm", "✕");
     rm.type = "button"; rm.setAttribute("aria-label", "Remove");
@@ -550,20 +633,36 @@
       return;
     }
 
-    // Clock-stop slider (where the procedure can pause for questions).
+    // Timeline lives in its own host so the clock-stop slider can repaint just this part
+    // (and the live preview) without rebuilding the slider under the cursor -- which is what
+    // made the old version stutter.
+    const tlHost = el("div", "vcl-wf-tlhost");
+
     if (sch.stopMax > 0) {
       const sl = el("div", "vcl-wf-slider");
-      sl.appendChild(el("label", null, "Clock-stop: <strong>" + sch.stop + " d</strong> <span class=\"vcl-wf-hint\" style=\"display:inline;\">(range " + sch.stopMin + "–" + sch.stopMax + " d)</span>"));
+      const lab = document.createElement("label");
+      lab.innerHTML = "Clock-stop: <strong class=\"csv\">" + sch.stop + " d</strong> <span class=\"vcl-wf-hint\" style=\"display:inline;\">(range " + sch.stopMin + "–" + sch.stopMax + " d)</span>";
+      sl.appendChild(lab);
       const range = document.createElement("input"); range.type = "range"; range.min = String(sch.stopMin); range.max = String(sch.stopMax); range.step = "1"; range.value = String(sch.stop);
+      let raf = 0;
       range.addEventListener("input", () => {
         const v = parseInt(range.value, 10); const rg = sch.stopMax - sch.stopMin;
-        state.clockStopFraction = rg > 0 ? (v - sch.stopMin) / rg : 0; rerender();
+        state.clockStopFraction = rg > 0 ? (v - sch.stopMin) / rg : 0;
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          const s2 = workflowSchedule();
+          const cs = lab.querySelector(".csv"); if (cs) cs.textContent = s2.stop + " d";
+          tlHost.innerHTML = ""; buildTimelineView(tlHost, s2);
+          repaintLive();
+        });
       });
       sl.appendChild(range);
       body.appendChild(sl);
     }
 
-    buildTimelineView(body, sch);
+    body.appendChild(tlHost);
+    buildTimelineView(tlHost, sch);
   }
 
   function buildTimelineView(body, sch) {
@@ -621,6 +720,8 @@
     const tally = ["IA", "IB", "II"].filter((t) => counts[t] > 0).map((t) => counts[t] + " × Type " + t).join(" · ");
     body.appendChild(el("p", "vcl-wf-hint", "Priced for: " + tally + " in every procedure."));
 
+    buildStrengths(body);
+
     const procs = allProcedures();
     let grand = 0;
     let anyCountries = false;
@@ -647,7 +748,8 @@
         const line = el("div", "vcl-wf-fee-line");
         const name = (cd.nameOf[cr.cc] || cr.cc);
         const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[cr.role] || cr.role;
-        line.innerHTML = `<span class="vcl-wf-fee-line__c">${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cr.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span></span>`
+        const strengthsNote = (cr.strengths > 1) ? ` <span class="vcl-wf-fee-line__role">×${cr.strengths} strengths</span>` : "";
+        line.innerHTML = `<span class="vcl-wf-fee-line__c">${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cr.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span>${strengthsNote}</span>`
           + `<span class="vcl-wf-fee-line__amt">${cr.hasData ? fmtEUR(cr.total) : "no fee data"}</span>`;
         card.appendChild(line);
       });
@@ -679,6 +781,8 @@
 
     if (variant) {
       line("Variation", `${escapeHtml(entry.code)} — ${escapeHtml(entry.title)} <span class="${typeBadgeClass(variant.type)}">${escapeHtml(variant.type)}</span>`);
+    } else if (state.typeOnly) {
+      line("Variation", `Type <span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span> <span class="vcl-wf-sum__muted">(no classification code)</span>`);
     }
     if (state.activeSubstance) line("Active substance", state.activeSubstance === "biologic" ? "Biologic" : "Chemically-synthesized API");
 
@@ -707,6 +811,58 @@
   }
 
   function groupingResolvedCount() { return state.grouping.filter((g) => g.type).length; }
+
+  // Strengths (Proposal 3): one default for all countries, with per-country overrides shown
+  // only for countries whose fee actually changes with the number of strengths.
+  function buildStrengths(host) {
+    const wrap = el("div", "vcl-wf-strength");
+    const row = el("div", "vcl-wf-strength__row");
+    row.appendChild(el("span", "vcl-wf-strength__l", "Strengths (default for all countries)"));
+    const def = numInput(state.strengthsDefault, (v) => { state.strengthsDefault = v; });
+    row.appendChild(def);
+    wrap.appendChild(row);
+
+    const sens = strengthsSensitiveList();
+    if (!sens.length) {
+      wrap.appendChild(el("p", "vcl-wf-hint", "None of the selected countries charge per strength — this default is all that is needed."));
+      host.appendChild(wrap);
+      return;
+    }
+
+    const cd = countryData();
+    const tog = el("label", "vcl-wf-strength__toggle");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = state.strengthsVary;
+    cb.addEventListener("change", () => { state.strengthsVary = cb.checked; rerender(); });
+    tog.appendChild(cb); tog.appendChild(document.createTextNode(" Different in some countries"));
+    wrap.appendChild(tog);
+
+    if (state.strengthsVary) {
+      const list = el("div", "vcl-wf-strength__list");
+      sens.forEach((x) => {
+        const r = el("div", "vcl-wf-strength__row");
+        r.appendChild(el("span", "vcl-wf-strength__l", `${escapeHtml(cd.nameOf[x.cc] || x.cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span>`));
+        const cur = strengthsFor(x.cc);
+        const inp = numInput(cur, (v) => { state.strengthsOverrides[x.cc] = v; });
+        r.appendChild(inp);
+        list.appendChild(r);
+      });
+      wrap.appendChild(list);
+    } else {
+      wrap.appendChild(el("p", "vcl-wf-hint", strengthsHintFor(sens, cd)));
+    }
+    host.appendChild(wrap);
+  }
+  function strengthsHintFor(sens, cd) {
+    const names = sens.slice(0, 4).map((x) => x.cc).join(", ") + (sens.length > 4 ? " …" : "");
+    return "Charges per strength: " + names + ". Tick above to set a different number for these.";
+  }
+  function numInput(value, onInput) {
+    const inp = document.createElement("input");
+    inp.type = "number"; inp.min = "1"; inp.className = "vcl-wf-num"; inp.value = String(value);
+    inp.addEventListener("input", () => { onInput(Math.max(1, parseInt(inp.value, 10) || 1)); });
+    inp.addEventListener("change", () => rerender());
+    return inp;
+  }
 
   // ---- placeholder stations ----
   function buildPlaceholder(body, key) {
@@ -758,6 +914,8 @@
     if (variant) {
       const e = pickedEntry();
       chips.appendChild(el("span", "vcl-wf-chip", `${escapeHtml(e.code)} <span class="${typeBadgeClass(variant.type)}">${escapeHtml(variant.type)}</span>`));
+    } else if (state.typeOnly) {
+      chips.appendChild(el("span", "vcl-wf-chip", `<span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span>`));
     }
     if (state.activeSubstance) {
       chips.appendChild(el("span", "vcl-wf-chip", state.activeSubstance === "biologic" ? "Biologic" : "Chemical API"));
@@ -801,17 +959,30 @@
     return live;
   }
 
+  let liveHost = null;
+
   function rerender() {
     if (!container) return;
     container.innerHTML = "";
     const root = el("div", "vcl-wf");
-    root.appendChild(el("h3", null, "Guided Workflow"));
-    root.appendChild(el("p", "vcl-wf__intro",
-      "A guided path through one variation — from classification through procedure and timeline to the fees. The live preview below updates as you go."));
+    const head = el("div", "vcl-wf-head");
+    head.innerHTML = "<h3>Guided Workflow</h3>"
+      + "<p>A guided path through one or more variations &mdash; from classification through procedure and timeline to the fees. The live preview below updates as you go.</p>";
+    root.appendChild(head);
     root.appendChild(buildStations());
     root.appendChild(buildBody());
-    root.appendChild(buildLive());
+    const live = buildLive();
+    liveHost = live;
+    root.appendChild(live);
     container.appendChild(root);
+  }
+
+  // Repaint just the live-preview card (used by the clock-stop slider so it stays smooth).
+  function repaintLive() {
+    if (!liveHost || !liveHost.parentNode) return;
+    const fresh = buildLive();
+    liveHost.parentNode.replaceChild(fresh, liveHost);
+    liveHost = fresh;
   }
 
   function escapeHtml(s) {

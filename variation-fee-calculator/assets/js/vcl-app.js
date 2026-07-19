@@ -2221,7 +2221,7 @@
     workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
     workflowBtn.innerHTML = `
       <span class="tab__code">Guided Workflow</span>
-      <span class="tab__title">One variation, step by step &mdash; classification to fees, with a live preview</span>
+      <span class="tab__title">One or more variations, step by step &mdash; classification to fees, with a live preview</span>
     `;
     workflowBtn.addEventListener("click", () => {
       state.view = "workflow";
@@ -3214,6 +3214,7 @@
     { dest: "qa", label: "Q&A on Variations", color: "var(--group)", desc: "The CMDh questions and answers on submitting variations." },
     { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "Day-by-day procedure timetables for Type IA / IB / II." },
     { dest: "workload", label: "Workload Planning", color: "var(--workload)", desc: "Estimate RA effort and the variation timeline." },
+    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Step through one or more variations — classification to fees." },
   ];
   function overviewHtml() {
     const cards = OVERVIEW_DESTINATIONS.map((d) => `
