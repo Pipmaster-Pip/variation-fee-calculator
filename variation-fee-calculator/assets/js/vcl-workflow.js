@@ -47,8 +47,9 @@
     clockStopFraction: 1,              // 0..1 across the clock-stop min..max
     // Strengths (Station D): a global default, with per-country overrides only where it matters.
     strengthsDefault: 1,
-    strengthsVary: false,
-    strengthsOverrides: {},            // cc -> number of strengths
+    strengthsOverrides: {},            // cc -> number of strengths (shown for strength-sensitive countries)
+    // Summary (Station D): reveal the grouped variations' codes & descriptions on demand.
+    summaryShowVariations: false,
   };
 
   let container = null;
@@ -77,7 +78,7 @@
   // Number of strengths registered for a country: the global default unless overridden.
   function strengthsFor(cc) {
     const o = state.strengthsOverrides[cc];
-    const n = (state.strengthsVary && o != null) ? o : state.strengthsDefault;
+    const n = (o != null) ? o : state.strengthsDefault;
     return Math.max(1, parseInt(n, 10) || 1);
   }
 
@@ -169,7 +170,17 @@
   function strengthsSensitiveList() { return selectedCcs().filter((x) => strengthsMatters(x.cc, x.role)); }
 
   // ---- timeline + RA effort (reuse the workload tool's shared helpers) ----
-  function primaryType() { return currentType(); }
+  // A group runs as its HIGHEST type -- a Type II anywhere makes it a Type II grouping, which
+  // drives the procedure, timeline, II sub-procedure and RA effort. (Fees stay per-variation via
+  // feeCounts, so each variation is still charged at its own type.)
+  function typeRankOf(type) { const b = feeBucket(type); return b === "II" ? 3 : b === "IB" ? 2 : b === "IA" ? 1 : 0; }
+  function primaryType() {
+    let best = currentType();
+    if (state.submission.grouping) {
+      state.grouping.forEach((g) => { if (g.type && typeRankOf(g.type) > typeRankOf(best)) best = g.type; });
+    }
+    return best;
+  }
   function groupingBuckets() {
     const c = { IA: 0, IB: 0, II: 0 };
     if (state.submission.grouping) state.grouping.forEach((g) => { if (g.type) { const b = feeBucket(g.type); if (b) c[b]++; } });
@@ -248,7 +259,8 @@
     state.procedure = newProcedure(); state.submission = { grouping: false, worksharing: false };
     state.grouping = []; state.worksharing = [];
     state.submissionDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
-    state.strengthsDefault = 1; state.strengthsVary = false; state.strengthsOverrides = {};
+    state.strengthsDefault = 1; state.strengthsOverrides = {};
+    state.summaryShowVariations = false;
     rerender();
   }
 
@@ -511,13 +523,15 @@
       const e = findEntry(g.code);
       const main = el("div", "vcl-wf-brow__main");
       main.innerHTML = `<span><span class="vcl-wf-picked__code">${escapeHtml(g.code)}</span> ${escapeHtml(e ? e.title : "")}</span>`;
-      const chooser = el("div", "vcl-wf-brow__variants");
-      chooser.innerHTML = `<span class="vcl-wf-hint" style="margin:6px 6px 0 0;">pick the type:</span>`;
+      // Full-width variant rows (label left, badge right) rather than mixed-width chips, so the
+      // options line up cleanly down the whole width.
+      const chooser = el("div", "vcl-wf-brow__pick");
+      chooser.appendChild(el("div", "vcl-wf-hint", "pick the type:"));
       (e && e.variants ? e.variants : []).forEach((v) => {
-        const b = el("button", "vcl-wf-opt vcl-wf-opt--sm", `${escapeHtml(variantLabel(v) || v.type)} <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`);
-        b.type = "button";
-        b.addEventListener("click", () => { g.variantId = v.id; g.type = v.type; rerender(); });
-        chooser.appendChild(b);
+        const opt = el("div", "vcl-wf-variant");
+        opt.innerHTML = `<span class="vcl-wf-variant__label">${escapeHtml(variantLabel(v) || v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
+        opt.addEventListener("click", () => { g.variantId = v.id; g.type = v.type; rerender(); });
+        chooser.appendChild(opt);
       });
       main.appendChild(chooser);
       row.appendChild(main);
@@ -848,10 +862,37 @@
     }
   }
 
+  // Every variation in play (base + resolved grouping) -- for the summary's Variation(s) row.
+  function summaryVariations() {
+    const out = [];
+    const e = pickedEntry(); const v = pickedVariant();
+    if (v) out.push({ code: e.code, title: e.title, type: v.type });
+    else if (state.typeOnly) out.push({ code: null, title: null, type: state.typeOnly });
+    if (state.submission.grouping) {
+      state.grouping.forEach((g) => {
+        if (!g.type) return; // still unresolved -- not a real variation yet
+        const ge = g.code ? findEntry(g.code) : null;
+        out.push({ code: g.code || null, title: ge ? ge.title : null, type: g.type });
+      });
+    }
+    return out;
+  }
+
+  // One procedure spelled out for the summary: "National: DE", "RMS: DE · CMS: BG, FR", or "CP".
+  function procDetail(p) {
+    if (!p) return "—";
+    if (p.kind === "national") return "National: " + (p.nat || "?");
+    if (p.kind === "cp") return "CP";
+    if (p.kind === "mrpdcp") {
+      let s = "RMS: " + (p.rms || "?");
+      if (p.cms && p.cms.length) s += " · CMS: " + p.cms.join(", ");
+      return s;
+    }
+    return "";
+  }
+
   // Closing recap of the whole path -- the "you are here, and this is the plan" card.
   function buildSummaryCard(body, grand, anyCountries) {
-    const entry = pickedEntry();
-    const variant = pickedVariant();
     const card = el("div", "vcl-wf-sum");
     card.appendChild(el("div", "vcl-wf-sum__title", "Summary"));
 
@@ -859,23 +900,59 @@
       const r = el("div", "vcl-wf-sum__row");
       r.innerHTML = `<span class="vcl-wf-sum__l">${escapeHtml(label)}</span><span class="vcl-wf-sum__v">${valueHtml}</span>`;
       card.appendChild(r);
+      return r;
     }
 
-    if (variant) {
-      line("Variation", `${escapeHtml(entry.code)} — ${escapeHtml(entry.title)} <span class="${typeBadgeClass(variant.type)}">${escapeHtml(variant.type)}</span>`);
-    } else if (state.typeOnly) {
-      line("Variation", `Type <span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span> <span class="vcl-wf-sum__muted">(no classification code)</span>`);
-    }
+    // 1) Active substance -- first.
     if (state.activeSubstance) line("Active substance", state.activeSubstance === "biologic" ? "Biologic" : "Chemically-synthesized API");
 
-    const subBits = [];
-    if (state.submission.grouping) subBits.push((groupingResolvedCount() + 1) + " variations grouped");
-    if (state.submission.worksharing) subBits.push((state.worksharing.length + 1) + " procedures shared");
-    line("Submission", escapeHtml(subBits.length ? subBits.join(" · ") : "Single variation, one procedure"));
+    // 2) Variation (single) / Variations (grouped). The old separate Grouping row is folded in here.
+    const vars = summaryVariations();
+    if (vars.length <= 1) {
+      const v = vars[0];
+      if (v && v.code) line("Variation", `${escapeHtml(v.code)} — ${escapeHtml(v.title || "")} <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`);
+      else if (v) line("Variation", `Type <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__muted">(no classification code)</span>`);
+    } else {
+      const counts = { IA: 0, IB: 0, II: 0 };
+      vars.forEach((v) => { const b = feeBucket(v.type); if (b) counts[b]++; });
+      const bits = ["IA", "IB", "II"].filter((t) => counts[t] > 0).map((t) => counts[t] + " × " + t);
+      const row = line("Variations",
+        `<span class="vcl-wf-sum__tag">Grouping</span> ${vars.length} variations <span class="vcl-wf-sum__muted">(${escapeHtml(bits.join(" · "))})</span>`
+        + ` <button type="button" class="vcl-wf-sum__toggle" data-sum-toggle>${state.summaryShowVariations ? "Hide" : "Show"} codes &amp; descriptions</button>`);
+      const tg = row.querySelector("[data-sum-toggle]");
+      if (tg) tg.addEventListener("click", () => { state.summaryShowVariations = !state.summaryShowVariations; rerender(); });
+      if (state.summaryShowVariations) {
+        const vlist = el("div", "vcl-wf-sum__vlist");
+        ["IA", "IB", "II"].forEach((t) => {
+          vars.filter((v) => feeBucket(v.type) === t).forEach((v) => {
+            const it = el("div", "vcl-wf-sum__vitem");
+            it.innerHTML = v.code
+              ? `<span class="vcl-wf-sum__vcode">${escapeHtml(v.code)}</span> <span class="vcl-wf-sum__vtitle">${escapeHtml(v.title || "")}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`
+              : `<span class="vcl-wf-sum__vtitle">Type ${escapeHtml(v.type)} <span class="vcl-wf-sum__muted">(no code)</span></span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
+            vlist.appendChild(it);
+          });
+        });
+        card.appendChild(vlist);
+      }
+    }
 
-    const procNames = allProcedures().map((p) => escapeHtml(procLabel(p))).join(" · ");
-    line("Procedure(s)", procNames);
+    // 3) Procedure (single) / Procedures (worksharing). The old separate Worksharing row is folded in.
+    const procs = allProcedures();
+    if (procs.length <= 1) {
+      line("Procedure", escapeHtml(procDetail(procs[0])));
+    } else {
+      // [Proposal B, shown live] Worksharing header + each procedure on its own line.
+      line("Procedures", `<span class="vcl-wf-sum__tag">Worksharing</span> ${procs.length} procedures`);
+      const plist = el("div", "vcl-wf-sum__plist");
+      procs.forEach((p, i) => {
+        const it = el("div", "vcl-wf-sum__pitem");
+        it.innerHTML = `<span class="vcl-wf-sum__pn">${i + 1}</span> ${escapeHtml(procDetail(p))}`;
+        plist.appendChild(it);
+      });
+      card.appendChild(plist);
+    }
 
+    // 4) Timeline / RA effort / fees.
     const sch = workflowSchedule();
     if (sch) {
       const sd = state.submissionDate;
@@ -892,7 +969,6 @@
     body.appendChild(card);
   }
 
-  function groupingResolvedCount() { return state.grouping.filter((g) => g.type).length; }
 
   // Strengths (Proposal 3): one default for all countries, with per-country overrides shown
   // only for countries whose fee actually changes with the number of strengths.
@@ -911,32 +987,23 @@
       return;
     }
 
+    // Show the strength-sensitive countries straight away: users can't be expected to know which
+    // markets charge per strength, so we list them here (rather than hiding them behind a toggle)
+    // each with its own input, pre-filled from the default. Changing one makes it a per-country
+    // value; the rest keep following the default.
     const cd = countryData();
-    const tog = el("label", "vcl-wf-strength__toggle");
-    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = state.strengthsVary;
-    cb.addEventListener("change", () => { state.strengthsVary = cb.checked; rerender(); });
-    tog.appendChild(cb); tog.appendChild(document.createTextNode(" Different in some countries"));
-    wrap.appendChild(tog);
-
-    if (state.strengthsVary) {
-      const list = el("div", "vcl-wf-strength__list");
-      sens.forEach((x) => {
-        const r = el("div", "vcl-wf-strength__row");
-        r.appendChild(el("span", "vcl-wf-strength__l", `${escapeHtml(cd.nameOf[x.cc] || x.cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span>`));
-        const cur = strengthsFor(x.cc);
-        const inp = numInput(cur, (v) => { state.strengthsOverrides[x.cc] = v; });
-        r.appendChild(inp);
-        list.appendChild(r);
-      });
-      wrap.appendChild(list);
-    } else {
-      wrap.appendChild(el("p", "vcl-wf-hint", strengthsHintFor(sens, cd)));
-    }
+    wrap.appendChild(el("p", "vcl-wf-hint", "These countries charge per strength — set a different number for any that differ from the default:"));
+    const list = el("div", "vcl-wf-strength__list");
+    sens.forEach((x) => {
+      const r = el("div", "vcl-wf-strength__row");
+      r.appendChild(el("span", "vcl-wf-strength__l", `${escapeHtml(cd.nameOf[x.cc] || x.cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span>`));
+      const cur = strengthsFor(x.cc);
+      const inp = numInput(cur, (v) => { state.strengthsOverrides[x.cc] = v; });
+      r.appendChild(inp);
+      list.appendChild(r);
+    });
+    wrap.appendChild(list);
     host.appendChild(wrap);
-  }
-  function strengthsHintFor(sens, cd) {
-    const names = sens.slice(0, 4).map((x) => x.cc).join(", ") + (sens.length > 4 ? " …" : "");
-    return "Charges per strength: " + names + ". Tick above to set a different number for these.";
   }
   function numInput(value, onInput) {
     const inp = document.createElement("input");
@@ -1097,10 +1164,34 @@
     return '<div class="vcl-wf-tl-seg ' + cls + '" style="left:' + p(start) + '%;width:' + p(len) + '%;"></div>';
   }
 
+  // Hand-off from the Reference Guide's Summary: seed Station A with the first variation and,
+  // when there is more than one, tick Grouping and drop the rest into the grouping list (each
+  // carrying its classification code). The user can still add more variations. A single variation
+  // leaves Grouping off. vcl-app.js calls this right before switching to the workflow view.
+  function prefillFromVariations(vars) {
+    resetAll();
+    if (!vars || !vars.length) return;
+    // The base shown in Identify is the HIGHEST-type variation, since that one drives the group's
+    // flow (a Type II grouping runs as a Type II). The rest go into the grouping list.
+    const sorted = vars.slice().sort((a, b) => typeRankOf(b.type) - typeRankOf(a.type));
+    const first = sorted[0];
+    state.pickedCode = first.code || null;
+    state.pickedVariantId = first.variantId;
+    const rest = sorted.slice(1);
+    if (rest.length) {
+      state.submission.grouping = true;
+      state.grouping = rest.map((v) => ({ code: v.code || null, variantId: v.variantId, type: v.type || null, query: "" }));
+    }
+    rerender();
+  }
+
   window.VCL_WORKFLOW = {
     render(col) {
       container = col;
       rerender();
+    },
+    prefill(payload) {
+      prefillFromVariations((payload && payload.variations) || []);
     },
   };
 })();

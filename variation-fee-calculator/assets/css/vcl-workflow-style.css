@@ -389,7 +389,10 @@
   padding: 7px 10px;
   margin-bottom: 6px;
 }
-.vcl-app .vcl-wf-brow__main { flex: 1; min-width: 0; }
+.vcl-app .vcl-wf-brow__main { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; }
+/* Variant chooser inside a grouping row: full-width rows (reuses .vcl-wf-variant), stacked. */
+.vcl-app .vcl-wf-brow__pick { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.vcl-app .vcl-wf-brow__pick .vcl-wf-variant { margin: 0; }
 .vcl-app .vcl-wf-brow__input {
   width: 100%;
   box-sizing: border-box;
@@ -553,8 +556,7 @@
 /* Small legend for the RA-owned segments + a gloss for the marker abbreviations. */
 .vcl-app .vcl-wf-tl-legend {
   display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px;
-  margin-top: 10px; padding-top: 9px;
-  border-top: 0.5px solid var(--line, #eee);
+  margin-top: 12px;
 }
 .vcl-app .vcl-wf-tl-legend .k { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); }
 .vcl-app .vcl-wf-tl-legend .sw { width: 12px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
@@ -639,6 +641,40 @@
 .vcl-app .vcl-wf-sum__l { flex: 0 0 120px; color: var(--muted); }
 .vcl-app .vcl-wf-sum__v { flex: 1; color: var(--ink, #222); }
 .vcl-app .vcl-wf-sum__muted { color: var(--muted); font-size: 11.5px; }
+
+/* "Grouping" / "Worksharing" recognition tag before the value */
+.vcl-app .vcl-wf-sum__tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--workflow);
+  background: #fff;
+  border: 0.5px solid color-mix(in srgb, var(--workflow) 35%, transparent);
+  border-radius: 20px; padding: 1px 8px; margin-right: 4px;
+}
+/* "Show codes & descriptions" toggle -- a quiet inline link */
+.vcl-app .vcl-wf-sum__toggle {
+  font: inherit; font-size: 11.5px; color: var(--workflow); font-weight: 600;
+  background: none; border: none; padding: 0; margin-left: 6px; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.vcl-app .vcl-wf-sum__toggle:hover { color: var(--workflow-deep, #2f5622); }
+/* Grouped-variation list (revealed by the toggle) */
+.vcl-app .vcl-wf-sum__vlist,
+.vcl-app .vcl-wf-sum__plist { display: flex; flex-direction: column; gap: 5px; margin: 6px 0 4px; padding-left: 132px; }
+.vcl-app .vcl-wf-sum__vitem,
+.vcl-app .vcl-wf-sum__pitem {
+  font-size: 12px; color: var(--ink, #222); line-height: 1.4;
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+}
+.vcl-app .vcl-wf-sum__vcode { font-weight: 600; color: var(--workflow); white-space: nowrap; }
+.vcl-app .vcl-wf-sum__vtitle { color: var(--muted); }
+.vcl-app .vcl-wf-sum__pn {
+  flex: none; font-size: 10px; font-family: "IBM Plex Mono", monospace;
+  color: var(--muted); border: 0.5px solid var(--line, #d8d8d2); border-radius: 4px; padding: 0 5px;
+}
+@media (max-width: 560px) {
+  .vcl-app .vcl-wf-sum__vlist, .vcl-app .vcl-wf-sum__plist { padding-left: 0; }
+}
 
 /* --- Station D: strengths (default + overrides) --- */
 .vcl-app .vcl-wf-strength {

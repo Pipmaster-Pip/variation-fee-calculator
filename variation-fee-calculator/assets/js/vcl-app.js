@@ -128,6 +128,7 @@
     summaryExportDocx: document.getElementById("vcl-summaryExportDocx"),
     summaryPrint: document.getElementById("vcl-summaryPrint"),
     summaryExportCalculator: document.getElementById("vcl-summaryExportCalculator"),
+    summaryExportWorkflow: document.getElementById("vcl-summaryExportWorkflow"),
     groupingCol: document.getElementById("vcl-groupingCol"),
     preciseScopeCol: document.getElementById("vcl-preciseScopeCol"),
     qaCol: document.getElementById("vcl-qaCol"),
@@ -2015,6 +2016,32 @@
       el.browseTree.appendChild(calcDivider);
     }
 
+    // Guided Workflow -- promoted to the #2 slot, right below the Fee Calculator: the two action
+    // tools sit at the top, above the reference views. Self-contained (window.VCL_WORKFLOW).
+    const workflowBtn = document.createElement("button");
+    workflowBtn.type = "button";
+    workflowBtn.className = "tab" + (state.view === "workflow" ? " tab--active" : "");
+    workflowBtn.style.setProperty("--accent", "var(--workflow)");
+    workflowBtn.style.setProperty("--tint", "var(--workflow-tint)");
+    workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
+    workflowBtn.innerHTML = `
+      <span class="tab__code">Guided Workflow</span>
+      <span class="tab__title">One or more variations, step by step &mdash; classification to fees, with a live preview</span>
+    `;
+    workflowBtn.addEventListener("click", () => {
+      state.view = "workflow";
+      state.classifyOpen = false;
+      state.guidanceOpen = false;
+      renderBrowse();
+      switchViewVisibility();
+      if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol);
+      jumpToTop();
+    });
+    el.browseTree.appendChild(workflowBtn);
+    const workflowDivider = document.createElement("div");
+    workflowDivider.className = "tabs-divider tabs-divider--flush";
+    el.browseTree.appendChild(workflowDivider);
+
     const totalQty = totalSelectedQty();
     // Summary only appears once there's actually something to summarize -- before the first
     // variation is selected, it would just be an empty page one click away for no reason.
@@ -2210,29 +2237,6 @@
       jumpToTop();
     });
     el.browseTree.appendChild(workloadBtn);
-
-    // Guided Workflow: the 8th tool. Same self-contained wiring as the workload block --
-    // rendering lives entirely in assets/js/vcl-workflow.js (window.VCL_WORKFLOW).
-    const workflowBtn = document.createElement("button");
-    workflowBtn.type = "button";
-    workflowBtn.className = "tab" + (state.view === "workflow" ? " tab--active" : "");
-    workflowBtn.style.setProperty("--accent", "var(--workflow)");
-    workflowBtn.style.setProperty("--tint", "var(--workflow-tint)");
-    workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
-    workflowBtn.innerHTML = `
-      <span class="tab__code">Guided Workflow</span>
-      <span class="tab__title">One or more variations, step by step &mdash; classification to fees, with a live preview</span>
-    `;
-    workflowBtn.addEventListener("click", () => {
-      state.view = "workflow";
-      state.classifyOpen = false;
-      state.guidanceOpen = false;
-      renderBrowse();
-      switchViewVisibility();
-      if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol);
-      jumpToTop();
-    });
-    el.browseTree.appendChild(workflowBtn);
   }
 
   function conditionKey(entryCode, variantId) {
@@ -2487,6 +2491,27 @@
       window.VCLCALC.setGlobalCounts(totalsByBucket());
     }
     goToDestination("calculator");
+  });
+
+  // Hand the selected variations over to the Guided Workflow (richer than the fee-only calculator
+  // export): the first seeds Station A, the rest arrive pre-loaded in the grouping list with their
+  // codes, and Grouping is pre-ticked when there is more than one -- see VCL_WORKFLOW.prefill.
+  el.summaryExportWorkflow.addEventListener("click", () => {
+    const items = buildSummaryLineItems();
+    if (items.length === 0) {
+      window.alert("No variations selected yet -- nothing to hand over.");
+      return;
+    }
+    if (window.VCL_WORKFLOW && window.VCL_WORKFLOW.prefill) {
+      window.VCL_WORKFLOW.prefill({
+        variations: items.map((it) => ({
+          code: it.entry.code,
+          variantId: it.variant.id,
+          type: effectiveVariantType(it.entry, it.variant).label,
+        })),
+      });
+    }
+    goToDestination("workflow");
   });
 
   async function exportSummaryToDocx() {
@@ -3210,6 +3235,7 @@
   // nav identity color).
   const OVERVIEW_DESTINATIONS = [
     { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "Best for a quick fee across many markets at once — set the counts, export to Excel." },
+    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Best for planning one variation end to end — classification, procedure, timeline and fees." },
     { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse or search the EU classification codes E · Q · C · M." },
     { dest: "grouping", label: "Grouping of Variations", color: "var(--group)", desc: "Which changes may be grouped into one submission." },
     { dest: "precisescope", label: "Precise Scope Wording", color: "var(--plum)", desc: "Example wordings for the application form's scope field." },
@@ -3219,7 +3245,6 @@
     { dest: "qa", label: "Q&A on Variations", color: "var(--group)", desc: "The CMDh questions and answers on submitting variations." },
     { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "Day-by-day procedure timetables for Type IA / IB / II." },
     { dest: "workload", label: "Workload Planning", color: "var(--workload)", desc: "Estimate RA effort and the variation timeline." },
-    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Best for planning one variation end to end — classification, procedure, timeline and fees." },
   ];
   function overviewHtml() {
     const cards = OVERVIEW_DESTINATIONS.map((d) => `
