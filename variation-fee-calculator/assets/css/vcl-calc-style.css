@@ -671,3 +671,103 @@
 }
 
 .vclcalc-app ::selection{ background:var(--accent-soft); }
+
+/* =============================================================================
+ * Guided Workflow visual style (2026-07)
+ * Restyles the four steps + the step rail to match the Toolbox's Guided Workflow
+ * tool, in the calculator's gold instead of green. Appended so these rules win
+ * over the base rules above at equal specificity, while the base rules stay
+ * intact for contexts this doesn't touch (the changelog / HA-website lists reuse
+ * .breakdown-row outside the results .breakdown container). No markup logic
+ * changes: the fee engine, grouping/cap notes and local-currency block are all
+ * untouched — only their presentation.
+ * ========================================================================== */
+
+/* ---- Step rail -> Guided-Workflow dots (Countries · Details · Variations · Result) ---- */
+.vclcalc-app .rail{ display:flex; gap:6px; margin-bottom:20px; border:none; background:none; border-radius:0; overflow:visible; }
+.vclcalc-app .rail-step{ flex:1; flex-direction:column; align-items:center; gap:5px; border-right:none; padding:0; text-align:center; }
+.vclcalc-app button.rail-step{ background:none; padding:0; width:100%; }
+.vclcalc-app .rail-step .n{ width:30px; height:30px; border:1.5px solid var(--line-strong); font-size:13px; color:var(--ink-faint); background:var(--panel); }
+.vclcalc-app .rail-step .label{ display:inline; font-family:var(--sans); font-size:11px; line-height:1.25; color:var(--ink-faint); }
+.vclcalc-app .rail-step.active{ background:none; color:var(--accent-deep); }
+.vclcalc-app .rail-step.active .n{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep); }
+.vclcalc-app .rail-step.active .label{ color:var(--accent-deep); font-weight:600; }
+.vclcalc-app .rail-step.done .n{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.vclcalc-app button.rail-step.done{ background:none; }
+.vclcalc-app button.rail-step.done:hover{ background:none; }
+.vclcalc-app button.rail-step.done:hover .n{ box-shadow:0 0 0 3px var(--accent-soft); }
+.vclcalc-app button.rail-step.done:hover .label{ color:var(--ink-soft); }
+
+/* ---- Cards & panels: softer Guided-Workflow radius ---- */
+.vclcalc-app .panel{ border-radius:12px; padding:18px 20px; }
+.vclcalc-app .panel h2{ font-family:var(--sans); font-size:16px; }
+.vclcalc-app .panel .hint{ font-size:12px; }
+.vclcalc-app .field-label{ font-size:12px; }
+
+/* ---- Step 1: country chips ---- */
+.vclcalc-app .country-search{ border-radius:8px; }
+.vclcalc-app .country-grid{ grid-template-columns:repeat(auto-fill, minmax(112px,1fr)); gap:6px; }
+.vclcalc-app .country-tile{ border:1px solid var(--line-strong); border-radius:8px; padding:7px 10px; background:var(--panel); }
+.vclcalc-app .country-tile:hover{ border-color:var(--accent); background:var(--panel); }
+.vclcalc-app .country-tile.selected{ border-color:var(--accent); background:var(--accent-soft); box-shadow:none; }
+.vclcalc-app .country-tile .cc{ color:var(--ink-faint); }
+.vclcalc-app .country-tile.selected .cc{ color:var(--accent); }
+.vclcalc-app .country-tile.selected .cn{ color:var(--accent-deep); font-weight:600; }
+
+/* ---- Step 2: per-country detail cards ---- */
+.vclcalc-app .row-card{ border-radius:10px; background:var(--paper); }
+.vclcalc-app .row-card.active{ border-color:var(--line); background:var(--paper); }
+.vclcalc-app .row-card-title .t1{ font-size:14px; }
+.vclcalc-app .row-card-body{ grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:16px; }
+
+/* ---- Shared controls: select + stepper ---- */
+.vclcalc-app select.field-select{ border-radius:8px; padding:8px 10px; font-size:13px; background:var(--panel); }
+.vclcalc-app .num-stepper{ border-radius:8px; }
+.vclcalc-app .num-stepper button{ color:var(--accent-deep); background:var(--panel); }
+.vclcalc-app .num-stepper button:hover{ background:var(--accent-soft); color:var(--accent-deep); }
+.vclcalc-app .num-stepper input{ background:var(--panel); }
+
+/* ---- Step 3: special-cases panel (tinted like a Guided-Workflow builder) ---- */
+.vclcalc-app .special-panel{ border:1px dashed var(--line-strong); background:var(--accent-soft); }
+
+/* ---- Nav buttons ---- */
+.vclcalc-app .btn{ border-radius:8px; }
+.vclcalc-app .btn.primary{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep); }
+.vclcalc-app .btn.primary:hover{ background:var(--accent-soft); border-color:var(--accent-deep); color:var(--accent-deep); }
+.vclcalc-app .btn.ghost{ border-color:var(--line-strong); color:var(--ink-soft); background:var(--panel); }
+.vclcalc-app .btn.ghost:hover{ border-color:var(--accent); color:var(--ink); }
+
+/* ---- Step 4: result — hero + country cards (Option 1) ---- */
+.vclcalc-app .result-panel{ background:var(--accent-soft); border:1.5px solid var(--accent); color:var(--accent-deep); border-radius:12px; padding:16px 18px; }
+.vclcalc-app .result-panel .rp-label{ color:var(--accent-deep); }
+.vclcalc-app .result-panel .rp-updated{ color:var(--accent); }
+.vclcalc-app .result-panel .rp-total{ font-size:34px; color:var(--accent-deep); }
+.vclcalc-app .result-panel .rp-total .cur{ font-family:var(--mono); font-size:16px; color:var(--accent); }
+.vclcalc-app .result-panel .rp-sub{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); }
+
+/* Fees-by-country: bare heading + cards on the page ground (no enclosing box) */
+.vclcalc-app .result-breakdown-wrap{ border:none; background:none; padding:0; }
+.vclcalc-app .bd-heading{ font-family:var(--sans); font-size:16px; font-weight:600; color:var(--ink); }
+.vclcalc-app .breakdown{ border:none; border-radius:0; overflow:visible; background:none; display:flex; flex-direction:column; gap:10px; }
+.vclcalc-app .breakdown .breakdown-divider{ display:none; }
+.vclcalc-app .breakdown .breakdown-row{ border:1px solid var(--line); border-radius:12px; padding:13px 16px; }
+.vclcalc-app .breakdown .breakdown-row .bd-name{ font-size:15px; }
+.vclcalc-app .breakdown .breakdown-row .bd-items{ margin-top:10px; padding-top:9px; border-top:1px solid var(--line); gap:4px; }
+.vclcalc-app .breakdown .breakdown-row .bd-item-line{ font-family:var(--sans); font-size:12.5px; color:var(--ink-soft); }
+.vclcalc-app .breakdown .breakdown-row .bd-item-line .bd-item-amount{ font-family:var(--mono); }
+.vclcalc-app .breakdown .breakdown-row .bd-amount{ font-size:17px; }
+/* grand-total row -> accent card */
+.vclcalc-app .breakdown .breakdown-row.total-row{ border:1.5px solid var(--accent); border-radius:12px; background:var(--accent-soft); }
+.vclcalc-app .breakdown .breakdown-row.total-row .bd-name{ font-family:var(--sans); font-size:15px; font-weight:600; color:var(--accent-deep); }
+.vclcalc-app .breakdown .breakdown-row.total-row .bd-amount{ font-size:18px; color:var(--accent-deep); }
+
+/* cap / grouping notes -> soft pills */
+.vclcalc-app .fee-note{ border-radius:8px; padding:7px 10px; font-size:12px; margin-top:9px; }
+.vclcalc-app .fee-note--cap{ background:var(--amber-soft); border:none; color:var(--amber); }
+.vclcalc-app .fee-note--group{ background:var(--accent-soft); border:none; color:var(--accent-deep); }
+
+/* local-currency block -> dashed, subtle ground */
+.vclcalc-app .local-currency-row{ background:var(--paper); border:1px dashed var(--line-strong); border-radius:8px; }
+
+/* export buttons */
+.vclcalc-app .btn-export{ border-radius:8px; font-family:var(--sans); font-size:13px; padding:8px 14px; }

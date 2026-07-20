@@ -596,7 +596,7 @@ function renderStepVariations() {
       <p class="hint">Set how many variations of each type are part of this submission. This applies the same way to every selected country.</p>
       <div id="vclcalc-typeCounters"></div>
     </div>
-    <div class="panel" id="vclcalc-specialPanel" style="display:none;">
+    <div class="panel special-panel" id="vclcalc-specialPanel" style="display:none;">
       <h2 style="margin-bottom:4px;">Special cases</h2>
       <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per country below — countries without that distinction automatically use their standard fee.</p>
       <div id="vclcalc-specialBlocks"></div>
@@ -1130,8 +1130,8 @@ function renderStepResult() {
       <div class="rp-sub">${res.countries.map(cr=>cr.cc).join(' · ')}</div>
     </div>
 
-    <div class="panel" style="margin-bottom:18px;">
-      <h2 style="margin-bottom:14px;">Fees by country</h2>
+    <div class="panel result-breakdown-wrap" style="margin-bottom:18px;">
+      <h2 class="bd-heading" style="margin-bottom:14px;">Fees by country</h2>
       <div class="breakdown">${countryRows}
         <div class="breakdown-row total-row">
           <div class="bd-top">
