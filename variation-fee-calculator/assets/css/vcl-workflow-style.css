@@ -658,16 +658,26 @@
   text-decoration: underline; text-underline-offset: 2px;
 }
 .vcl-app .vcl-wf-sum__toggle:hover { color: var(--workflow-deep, #2f5622); }
-/* Grouped-variation list (revealed by the toggle) */
+/* Grouped-variation list (revealed by the toggle) + worksharing procedure list */
 .vcl-app .vcl-wf-sum__vlist,
-.vcl-app .vcl-wf-sum__plist { display: flex; flex-direction: column; gap: 5px; margin: 6px 0 4px; padding-left: 132px; }
-.vcl-app .vcl-wf-sum__vitem,
+.vcl-app .vcl-wf-sum__plist { display: flex; flex-direction: column; margin: 6px 0 4px; padding-left: 132px; }
+.vcl-app .vcl-wf-sum__plist { gap: 5px; }
+/* Variations, grouped by type: "Type IB · 3" sub-header, then code + badge over a description. */
+.vcl-app .vcl-wf-sum__vgroup {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted); margin: 9px 0 3px;
+}
+.vcl-app .vcl-wf-sum__vgroup:first-child { margin-top: 0; }
+.vcl-app .vcl-wf-sum__vitem { padding: 5px 0; border-top: 0.5px solid var(--line, #eee); }
+.vcl-app .vcl-wf-sum__vgroup + .vcl-wf-sum__vitem { border-top: none; }
+.vcl-app .vcl-wf-sum__vhead { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.vcl-app .vcl-wf-sum__vcode { font-size: 12px; font-weight: 600; color: var(--workflow); white-space: nowrap; }
+.vcl-app .vcl-wf-sum__vdesc { font-size: 12px; color: var(--muted); line-height: 1.45; }
+/* Procedures list: numbered rows */
 .vcl-app .vcl-wf-sum__pitem {
   font-size: 12px; color: var(--ink, #222); line-height: 1.4;
   display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
 }
-.vcl-app .vcl-wf-sum__vcode { font-weight: 600; color: var(--workflow); white-space: nowrap; }
-.vcl-app .vcl-wf-sum__vtitle { color: var(--muted); }
 .vcl-app .vcl-wf-sum__pn {
   flex: none; font-size: 10px; font-family: "IBM Plex Mono", monospace;
   color: var(--muted); border: 0.5px solid var(--line, #d8d8d2); border-radius: 4px; padding: 0 5px;

@@ -922,13 +922,18 @@
       const tg = row.querySelector("[data-sum-toggle]");
       if (tg) tg.addEventListener("click", () => { state.summaryShowVariations = !state.summaryShowVariations; rerender(); });
       if (state.summaryShowVariations) {
+        // Grouped by type: a small "Type IB · 3" sub-header, then each variation as code + badge
+        // over a muted one-line description.
         const vlist = el("div", "vcl-wf-sum__vlist");
         ["IA", "IB", "II"].forEach((t) => {
-          vars.filter((v) => feeBucket(v.type) === t).forEach((v) => {
+          const inBucket = vars.filter((v) => feeBucket(v.type) === t);
+          if (!inBucket.length) return;
+          vlist.appendChild(el("div", "vcl-wf-sum__vgroup", "Type " + t + " · " + inBucket.length));
+          inBucket.forEach((v) => {
             const it = el("div", "vcl-wf-sum__vitem");
-            it.innerHTML = v.code
-              ? `<span class="vcl-wf-sum__vcode">${escapeHtml(v.code)}</span> <span class="vcl-wf-sum__vtitle">${escapeHtml(v.title || "")}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`
-              : `<span class="vcl-wf-sum__vtitle">Type ${escapeHtml(v.type)} <span class="vcl-wf-sum__muted">(no code)</span></span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
+            const head = `<span class="vcl-wf-sum__vcode">${escapeHtml(v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
+            const desc = v.title ? escapeHtml(v.title) : (v.code ? "" : "no classification code");
+            it.innerHTML = `<div class="vcl-wf-sum__vhead">${head}</div>` + (desc ? `<div class="vcl-wf-sum__vdesc">${desc}</div>` : "");
             vlist.appendChild(it);
           });
         });
