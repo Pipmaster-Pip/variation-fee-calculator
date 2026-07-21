@@ -313,6 +313,84 @@ function resolveRow(cc, role, type, preferredSpecial) {
 }
 
 // ============================================================================
+// Worksharing helpers (data-driven; no country/tier is hard-coded)
+// ============================================================================
+
+// A special-case label denotes a worksharing fee if it contains "worksharing".
+// The Excel author marks these rows as e.g. "complex - worksharing".
+function isWorksharingSpecial(s) {
+  return typeof s === 'string' && /worksharing/i.test(s);
+}
+
+// The complexity tier shown to the user, derived from the label:
+// "complex - worksharing" -> "complex", "very complex - worksharing" -> "very
+// complex", a bare "worksharing" -> "" (an authority with a single, untiered
+// worksharing fee).
+function worksharingTier(special) {
+  return String(special)
+    .replace(/worksharing/i, '')
+    .replace(/[-–]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Human label for a tier ("complex" -> "Complex"; "" -> "Worksharing rate").
+function tierLabel(tier) {
+  return tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'Worksharing rate';
+}
+
+// The worksharing-specific Type II rows an authority publishes for a given role
+// (empty when it has none yet — those authorities fall back to their standard
+// Type II fee).
+function worksharingRowsFor(cc, role) {
+  return rowsFor(cc, role, 'II').filter(r => isWorksharingSpecial(r.special));
+}
+
+// True when this authority needs the user to pick a tier (it has worksharing
+// rows AND more than the single untiered variant).
+function worksharingNeedsChoice(cc, role) {
+  const ws = worksharingRowsFor(cc, role);
+  return ws.length > 0 && !(ws.length === 1 && worksharingTier(ws[0].special) === '');
+}
+
+// Make `cc` the sole Reference Member State: set it to RMS and demote any other
+// currently-RMS country to CMS (or its next available non-RMS role).
+function worksharingSetRMS(cc) {
+  appState.selectedCountries.forEach(c => {
+    const cfg = ensureCountryConfig(c);
+    if (c === cc) {
+      cfg.role = 'RMS';
+    } else if (cfg.role === 'RMS') {
+      const roles = rolesForCountry(c).filter(r => r !== 'EMA');
+      cfg.role = roles.includes('CMS') ? 'CMS' : (roles.find(r => r !== 'RMS') || roles[0] || 'CMS');
+    }
+  });
+}
+
+// Guarantee exactly one RMS among the selected countries (called when entering
+// worksharing mode and when rendering step 1).
+function ensureSingleRMS() {
+  const rmsCountries = appState.selectedCountries.filter(c => ensureCountryConfig(c).role === 'RMS');
+  if (rmsCountries.length === 1) return;
+  if (rmsCountries.length > 1) { worksharingSetRMS(rmsCountries[0]); return; }
+  const firstCapable = appState.selectedCountries.find(c => rolesForCountry(c).includes('RMS'));
+  if (firstCapable) worksharingSetRMS(firstCapable);
+}
+
+// Whether step 1 is complete enough to continue in worksharing mode: exactly one
+// RMS, and every authority that has a tiered worksharing fee has one chosen.
+function worksharingValidity() {
+  if (!appState.worksharing) return { ok: true };
+  const noRMS = !appState.selectedCountries.some(cc => ensureCountryConfig(cc).role === 'RMS');
+  const incomplete = appState.selectedCountries.some(cc => {
+    const cfg = ensureCountryConfig(cc);
+    if (!worksharingNeedsChoice(cc, cfg.role)) return false;
+    return !worksharingRowsFor(cc, cfg.role).some(r => r.special === cfg.specialByType.II);
+  });
+  return { ok: !noRMS && !incomplete, noRMS, incomplete };
+}
+
+// ============================================================================
 // Application state & wizard
 // ============================================================================
 
@@ -320,6 +398,12 @@ const STEPS = ['Countries', 'Country details', 'Variations', 'Result'];
 
 const appState = {
   step: 0,
+  // Worksharing procedure mode: one Reference Member State leads the assessment
+  // for all participating national/MRP-DCP authorisations. Toggled in step 0.
+  // When on, step 1 gains a per-authority worksharing fee-category picker and
+  // enforces exactly one RMS; the fee engine is unchanged (worksharing is just
+  // the "… - worksharing" Type II special variant in the data).
+  worksharing: false,
   selectedCountries: [],     // array of country codes, in selection order
   countrySearch: '',
   // per-country config: { [cc]: { role: 'RMS', strengths: 1, specialByType: { IA: null, IB: null, II: 'complex' } } }
@@ -469,8 +553,18 @@ function renderStepCountries() {
 
   contentEl.innerHTML = `
     <div class="panel">
+      <div class="ws-modeswitch" role="group" aria-label="Procedure type">
+        <button type="button" class="ws-modeswitch-opt ${appState.worksharing ? '' : 'on'}" data-ws-mode="off">
+          Standard variation<span>National · MRP/DCP · Centralised</span>
+        </button>
+        <button type="button" class="ws-modeswitch-opt ${appState.worksharing ? 'on' : ''}" data-ws-mode="on">
+          Worksharing procedure<span>One RMS leads all participants</span>
+        </button>
+      </div>
       <h2>Which countries is the variation being submitted in?</h2>
-      <p class="hint">Select one or more markets. You'll set the procedure role and number of strengths for each country next, then choose the variations once — they'll apply to every selected country.</p>
+      <p class="hint">${appState.worksharing
+        ? 'Select every market whose authorisation is part of this worksharing. They are assessed together under a single Reference Member State; each authority still charges its own fee. You\'ll set roles and the worksharing fee category next.'
+        : 'Select one or more markets. You\'ll set the procedure role and number of strengths for each country next, then choose the variations once — they\'ll apply to every selected country.'}</p>
       ${appState.prefillNote ? `<div class="prefill-note"><strong>Taken over from your summary:</strong> ${appState.prefillNote}. You can still adjust the numbers at the Variations step.</div>` : ''}
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap;">
         <input type="text" class="country-search" id="vclcalc-countrySearch" placeholder="Search for a country…" value="${appState.countrySearch}" style="flex:1; min-width:180px; margin-bottom:0;">
@@ -527,20 +621,43 @@ function renderStepCountries() {
       renderStepCountries();
     });
   });
+  contentEl.querySelectorAll('[data-ws-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const on = btn.dataset.wsMode === 'on';
+      if (on === appState.worksharing) return;
+      appState.worksharing = on;
+      appState.results = null;
+      // A mode switch changes what the Type II special means, so clear any
+      // previously chosen Type II variant and re-establish the RMS rule.
+      appState.selectedCountries.forEach(cc => { ensureCountryConfig(cc).specialByType.II = null; });
+      if (on) ensureSingleRMS();
+      renderStepCountries();
+    });
+  });
+
   document.getElementById('vclcalc-toStep2').addEventListener('click', () => setStep(1));
 }
 
-// ---- Step 1: per-country role + strengths ----
+// ---- Step 1: per-country role + strengths (+ worksharing fee category) ----
 function renderStepCountryDetails() {
+  const ws = appState.worksharing;
+  if (ws) ensureSingleRMS();
+
   contentEl.innerHTML = `
     <div class="panel">
-      <h2>Procedure role &amp; strengths per country</h2>
-      <p class="hint">Choose the applicable procedure role and the number of authorised strengths for each country — these can differ from country to country (e.g. one country may have 2 authorised strengths where another only has 1).</p>
+      <h2>${ws ? 'Roles, worksharing fee &amp; strengths' : 'Procedure role &amp; strengths per country'}</h2>
+      <p class="hint">${ws
+        ? 'Designate the Reference Member State that leads the assessment; every other market participates as a Concerned Member State or with a national authorisation. Where an authority publishes worksharing-specific fees, pick the fee category — the options come straight from its data.'
+        : 'Choose the applicable procedure role and the number of authorised strengths for each country — these can differ from country to country (e.g. one country may have 2 authorised strengths where another only has 1).'}</p>
+      ${ws ? '<div class="ws-rule"><span class="k">Rule</span> Exactly one Reference Member State leads a worksharing.</div>' : ''}
       <div id="vclcalc-countryDetailList"></div>
     </div>
     <div class="nav-row">
       <button class="btn ghost" id="vclcalc-back1">← Back</button>
-      <button class="btn primary" id="vclcalc-toStep3">Continue</button>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="hint ws-continue-hint" id="vclcalc-wsHint" style="margin:0; display:none;"></span>
+        <button class="btn primary" id="vclcalc-toStep3">Continue</button>
+      </div>
     </div>
   `;
 
@@ -549,21 +666,22 @@ function renderStepCountryDetails() {
     .sort((a, b) => COUNTRY_NAMES[a].localeCompare(COUNTRY_NAMES[b], 'en'));
   list.innerHTML = sortedCCs.map(cc => {
     const cfg = ensureCountryConfig(cc);
-    const roles = rolesForCountry(cc);
+    const roles = ws ? rolesForCountry(cc).filter(r => r !== 'EMA') : rolesForCountry(cc);
     return `
-      <div class="row-card active" data-cc="${cc}" style="margin-bottom:10px;">
+      <div class="row-card active${ws && cfg.role==='RMS' ? ' ws-lead' : ''}" data-cc="${cc}" style="margin-bottom:10px;">
         <div class="row-card-top">
           <div class="row-card-title" style="flex:1;">
-            <span class="t1">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span></span>
+            <span class="t1">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span>${ws && cfg.role==='RMS' ? '<span class="ws-lead-tag">RMS · leads</span>' : ''}</span>
           </div>
         </div>
         <div class="row-card-body">
           <div>
-            <span class="field-label" style="margin-bottom:6px;">Procedure role</span>
+            <span class="field-label" style="margin-bottom:6px;">${ws ? 'Role in worksharing' : 'Procedure role'}</span>
             <select class="field-select" data-role-select="${cc}">
               ${roles.map(r => `<option value="${r}" ${cfg.role===r?'selected':''}>${roleLabel(r)}</option>`).join('')}
             </select>
           </div>
+          ${ws ? worksharingFeeCellHTML(cc, cfg) : ''}
           <div>
             <span class="field-label" style="margin-bottom:6px;">Number of authorised strengths</span>
             ${stepperHTML('strengths_'+cc, cfg.strengths, 1, 99)}
@@ -576,7 +694,21 @@ function renderStepCountryDetails() {
   list.querySelectorAll('[data-role-select]').forEach(sel => {
     sel.addEventListener('change', () => {
       const cc = sel.dataset.roleSelect;
-      ensureCountryConfig(cc).role = sel.value;
+      const cfg = ensureCountryConfig(cc);
+      cfg.role = sel.value;
+      if (ws) {
+        if (sel.value === 'RMS') worksharingSetRMS(cc);
+        cfg.specialByType.II = null; // tiers differ per role — re-choose
+        renderStepCountryDetails();  // refresh fee cells + validation
+      }
+    });
+  });
+  list.querySelectorAll('[data-ws-fee-select]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const cc = sel.dataset.wsFeeSelect;
+      ensureCountryConfig(cc).specialByType.II = sel.value || null;
+      sel.classList.toggle('ws-fee-unset', sel.value === '');
+      updateWSContinueState();
     });
   });
   bindRowSteppers(list, (field, value) => {
@@ -584,8 +716,57 @@ function renderStepCountryDetails() {
     ensureCountryConfig(cc).strengths = value;
   });
 
+  updateWSContinueState();
   document.getElementById('vclcalc-back1').addEventListener('click', () => setStep(0));
-  document.getElementById('vclcalc-toStep3').addEventListener('click', () => setStep(2));
+  document.getElementById('vclcalc-toStep3').addEventListener('click', () => {
+    if (worksharingValidity().ok) setStep(2);
+  });
+}
+
+// The per-authority worksharing fee-category cell in step 1. Purely data-driven:
+// it appears as a picker only when the authority publishes worksharing rows for
+// the chosen role, shrinks to an auto-applied tag when there is a single untiered
+// worksharing fee, and shows the standard-fee fallback otherwise.
+function worksharingFeeCellHTML(cc, cfg) {
+  const wsRows = worksharingRowsFor(cc, cfg.role);
+  if (wsRows.length === 0) {
+    cfg.specialByType.II = null; // no worksharing rate -> standard Type II fallback
+    return `<div>
+        <span class="field-label" style="margin-bottom:6px;">Worksharing fee</span>
+        <div class="ws-fee-standard"><span class="dot"></span>Standard Type&nbsp;II<small>no worksharing rate published yet</small></div>
+      </div>`;
+  }
+  if (wsRows.length === 1 && worksharingTier(wsRows[0].special) === '') {
+    cfg.specialByType.II = wsRows[0].special; // single untiered fee -> auto-apply
+    return `<div>
+        <span class="field-label" style="margin-bottom:6px;">Worksharing fee</span>
+        <div class="ws-fee-auto">Worksharing rate applied</div>
+      </div>`;
+  }
+  if (!wsRows.some(r => r.special === cfg.specialByType.II)) cfg.specialByType.II = null;
+  const current = cfg.specialByType.II || '';
+  return `<div>
+      <span class="field-label" style="margin-bottom:6px;">Worksharing fee category</span>
+      <select class="field-select${current==='' ? ' ws-fee-unset' : ''}" data-ws-fee-select="${cc}">
+        <option value="" ${current===''?'selected':''}>— please choose —</option>
+        ${wsRows.map(r => `<option value="${r.special}" ${current===r.special?'selected':''}>${tierLabel(worksharingTier(r.special))}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
+// Enable/disable the step-1 Continue button (worksharing mode) and show why.
+function updateWSContinueState() {
+  const btn = document.getElementById('vclcalc-toStep3');
+  const hint = document.getElementById('vclcalc-wsHint');
+  if (!btn) return;
+  const v = worksharingValidity();
+  btn.disabled = !v.ok;
+  if (hint) {
+    hint.textContent = v.ok ? ''
+      : v.noRMS ? 'Designate one Reference Member State to lead.'
+                : 'Choose a fee category for each worksharing authority.';
+    hint.style.display = v.ok ? 'none' : '';
+  }
 }
 
 // ---- Step 2: global variations (type + count), with optional per-country special override ----
@@ -648,8 +829,10 @@ function specialChoicesForType(type) {
     const cfg = ensureCountryConfig(cc);
     const candidates = rowsFor(cc, cfg.role, type);
     if (candidates.length <= 1) return;
-    const labels = candidates.map(r => r.special).filter(Boolean);
-    if (labels.length === 0) return; // only one unlabelled row, nothing to choose
+    // Worksharing variants are chosen in step 1 (worksharing mode), never here —
+    // keep them out of the generic special-cases picker in both modes.
+    const labels = candidates.map(r => r.special).filter(s => s && !isWorksharingSpecial(s));
+    if (labels.length === 0) return; // no non-worksharing choice to make
     result.push({ cc, role: cfg.role, options: labels, hasStandard: candidates.some(r => !r.special) });
   });
   return result;
@@ -660,7 +843,9 @@ function renderSpecialPanel() {
   const blocks = document.getElementById('vclcalc-specialBlocks');
   if (!panel || !blocks) return;
 
-  const activeTypes = ['IA','IB','II'].filter(t => appState.globalCounts[t] > 0);
+  // In worksharing mode the Type II fee category is set per authority in step 1,
+  // so it must not reappear in the generic special-cases picker.
+  const activeTypes = ['IA','IB','II'].filter(t => appState.globalCounts[t] > 0 && !(appState.worksharing && t === 'II'));
   const sections = [];
 
   activeTypes.forEach(type => {
@@ -1021,7 +1206,10 @@ function renderStepResult() {
 
     const itemLines = cr.items.map(it => {
       const r = it.row;
-      const label = r.special ? `${typeLabel(r.type)} – ${r.special}` : typeLabel(r.type);
+      const label = !r.special ? typeLabel(r.type)
+        : isWorksharingSpecial(r.special)
+          ? `${typeLabel(r.type)} · worksharing${worksharingTier(r.special) ? ' (' + worksharingTier(r.special) + ')' : ''}`
+          : `${typeLabel(r.type)} – ${r.special}`;
       const countLabel = `${it.count}×`;
       const displayAmtValue = (it.capValue !== null && it.rawSumSingle > it.singleTotal + 0.01)
         ? it.rawSumSingle   // show the uncapped raw amount when per-type cap fired
@@ -1066,7 +1254,16 @@ function renderStepResult() {
       groupNote = `<div class="fee-note fee-note--group"><span class="fn-label">${label}</span><span class="fn-amount">${fmtEUR(topGrouping.total)}</span></div>`;
     }
 
-    const annotations = capNote + groupNote;
+    // ── Worksharing fallback annotation ──
+    // In worksharing mode, an authority that publishes no worksharing-specific
+    // Type II fee is billed its standard Type II fee — flag that clearly.
+    const iiItem = cr.items.find(it => it.row.type === 'II');
+    const wsFallback = appState.worksharing && iiItem && !isWorksharingSpecial(iiItem.row.special);
+    const wsNote = wsFallback
+      ? `<div class="fee-note fee-note--ws"><span class="fn-label">Worksharing fee not yet in the system — standard Type II shown.</span></div>`
+      : '';
+
+    const annotations = wsNote + capNote + groupNote;
 
     // Local currency block: heading, FX rate, each variation line converted to
     // local currency (mirrors the EUR lines above 1:1), then the total — right-aligned.
