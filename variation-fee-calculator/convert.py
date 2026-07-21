@@ -69,8 +69,7 @@ SHEET_NAME = "Variation fee calculator"
 IMPRINT_SHEET_NAME = "Imprint"
 HA_SHEET_NAME = "HA fee websites"
 FIRST_DATA_ROW = 4
-# The last data row is detected automatically (see find_last_data_row), so new
-# fee rows can be appended to the Excel sheet without ever editing this script.
+LAST_DATA_ROW = 419  # exclusive; adjust if more rows are added in future versions
 IMPRINT_FIRST_ROW = 2
 IMPRINT_LAST_ROW = 200  # exclusive; generous upper bound, stops early at first empty row
 
@@ -118,39 +117,6 @@ def num(v):
         return v
 
 
-def base_cc(cc):
-    """For a compound country code like 'DE - BfArM' (one country, several fee
-    authorities), return the underlying 2-letter code ('DE'). Plain codes are
-    returned unchanged. Used for currency mapping and display-name derivation
-    so new authorities can be added to the Excel without touching this script."""
-    m = re.match(r"^\s*([A-Za-z]{2})\s*[-–]", str(cc))
-    return m.group(1).upper() if m else cc
-
-
-def find_last_data_row(ws, first_row=FIRST_DATA_ROW, cc_col=1):
-    """Return the last row that actually holds a fee row, detected by a
-    non-empty country-code cell (column A). This replaces a hard-coded row
-    limit so rows appended to the sheet are always picked up automatically."""
-    last = first_row - 1
-    for r in range(first_row, ws.max_row + 1):
-        if ws.cell(row=r, column=cc_col).value not in (None, ""):
-            last = r
-    return last
-
-
-def display_name_for(cc):
-    """Resolve a human-readable country name. Known codes use COUNTRY_NAMES;
-    compound codes 'XX - Authority' derive 'Country (Authority)' automatically;
-    anything else falls back to the raw code (and is flagged by the caller).
-    Returns (name, recognised)."""
-    if cc in COUNTRY_NAMES:
-        return COUNTRY_NAMES[cc], True
-    m = re.match(r"^\s*([A-Za-z]{2})\s*[-–]\s*(.+?)\s*$", str(cc))
-    if m and m.group(1).upper() in COUNTRY_NAMES:
-        return f"{COUNTRY_NAMES[m.group(1).upper()]} ({m.group(2)})", True
-    return str(cc), False
-
-
 def load_rows(xlsx_path: Path):
     wb_vals = openpyxl.load_workbook(xlsx_path, data_only=True)
     wb_form = openpyxl.load_workbook(xlsx_path, data_only=False)
@@ -162,10 +128,6 @@ def load_rows(xlsx_path: Path):
 
     ws_vals = wb_vals[SHEET_NAME]
     ws_form = wb_form[SHEET_NAME]
-
-    # Detect where the data ends instead of relying on a fixed row number, so
-    # appended rows are always included automatically.
-    last_data_row = find_last_data_row(ws_vals)
 
     # Look up the exchange-rate anchor dynamically rather than hardcoding it
     # — if the rate changes, the script automatically picks up the current
@@ -182,9 +144,9 @@ def load_rows(xlsx_path: Path):
     local_amounts = {}  # row_number -> {F_lc, G_lc, H_lc, I_lc, J_lc, K_lc}
     if "National currencies" in wb_vals.sheetnames:
         ws_nc = wb_vals["National currencies"]
-        for r in range(FIRST_DATA_ROW, last_data_row + 1):
+        for r in range(FIRST_DATA_ROW, LAST_DATA_ROW):
             cc_nc = ws_nc.cell(row=r, column=1).value
-            if cc_nc and base_cc(cc_nc) in CC_TO_CURRENCY:
+            if cc_nc and cc_nc in CC_TO_CURRENCY:
                 local_amounts[r] = {
                     "F_lc": num(ws_nc.cell(row=r, column=6).value),
                     "G_lc": num(ws_nc.cell(row=r, column=7).value),
@@ -195,7 +157,7 @@ def load_rows(xlsx_path: Path):
                 }
 
     rows = []
-    for r in range(FIRST_DATA_ROW, last_data_row + 1):
+    for r in range(FIRST_DATA_ROW, LAST_DATA_ROW):
         cc = ws_vals.cell(row=r, column=1).value
         if not cc:
             continue
@@ -222,7 +184,7 @@ def load_rows(xlsx_path: Path):
         }
         # Attach local-currency amounts if available for live FX conversion
         if r in local_amounts:
-            row["currency"] = CC_TO_CURRENCY[base_cc(cc)]
+            row["currency"] = CC_TO_CURRENCY[cc]
             row.update(local_amounts[r])
         rows.append(row)
     return rows
@@ -275,42 +237,18 @@ def resolve_sheet_refs(rows):
     return replaced, unknown_refs
 
 
-def strip_absolute_refs(rows):
-    """Remove Excel absolute-reference markers ($) from in-sheet formula
-    references (e.g. $O$2 -> O2, $B$9 -> B9). The in-browser formula
-    interpreter resolves every reference by its cell coordinates, so the $ is
-    meaningless to it — and its regex only recognises the plain A1 form, so a
-    stray $ leaves the reference undefined and the fee silently evaluates to 0.
-    Newer Excel versions emit absolute refs, so normalise them here.
-
-    Runs AFTER resolve_sheet_refs, so cross-sheet anchors like
-    'Exchange rates'!$B$9 have already been replaced by their numeric value and
-    no legitimate $ remains to protect."""
-    formula_keys = ["Mf", "Nf", "Of", "Pf", "Qf", "Rf", "Sf"]
-    stripped = 0
-    for r in rows:
-        for key in formula_keys:
-            f = r.get(key)
-            if isinstance(f, str) and "$" in f:
-                r[key] = f.replace("$", "")
-                stripped += 1
-    return stripped
-
-
 def build_country_names(rows):
-    """Resolve a display name for every country code found in the data.
-    Known codes use COUNTRY_NAMES; compound codes 'XX - Authority' (one country
-    split across several fee authorities, e.g. 'DE - BfArM') derive their name
-    automatically as 'Country (Authority)'. Only genuinely unrecognisable codes
-    are flagged — so new authorities can be added to the Excel with no edits
-    here."""
+    """Use the static English name table, but fall back gracefully to the
+    raw country code if a future Excel version adds an unrecognised one —
+    so the script never crashes on new countries, it just flags them."""
     codes = sorted(set(r["cc"] for r in rows))
     names = {}
     missing = []
     for c in codes:
-        name, recognised = display_name_for(c)
-        names[c] = name
-        if not recognised:
+        if c in COUNTRY_NAMES:
+            names[c] = COUNTRY_NAMES[c]
+        else:
+            names[c] = c
             missing.append(c)
     return names, missing
 
@@ -418,10 +356,6 @@ def main():
         print("  The web calculator currently CANNOT resolve these references.")
         print("  Please add the value manually (see KNOWN_SHEET_REFS in this script)")
         print("  or check back before deploying the new data.js.\n")
-
-    stripped = strip_absolute_refs(rows)
-    if stripped:
-        print(f"  {stripped} formula(s) normalised (removed absolute-reference $ markers).")
 
     country_names, missing_names = build_country_names(rows)
     if missing_names:

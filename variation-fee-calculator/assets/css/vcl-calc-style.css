@@ -783,38 +783,3 @@
 .vclcalc-app #vclcalc-toggleHaWebsites{ border:none; background:none; }
 .vclcalc-app #vclcalc-toggleChangelog:hover,
 .vclcalc-app #vclcalc-toggleHaWebsites:hover{ border:none; background:none; color:var(--accent-deep); }
-
-/* ============================================================================
- * Worksharing procedure mode (2026-07)
- * Additive styles for the worksharing flow: mode switch (step 0), the RMS rule
- * hint + per-authority fee-category picker (step 1) and the fallback note
- * (result). Appended last so they win over the base rules where they overlap.
- * ==========================================================================*/
-
-/* Step 0 — Standard / Worksharing mode switch */
-.vclcalc-app .ws-modeswitch{ display:flex; border:1px solid var(--line-strong); border-radius:10px; overflow:hidden; margin-bottom:16px; }
-.vclcalc-app .ws-modeswitch-opt{ flex:1; border:0; background:var(--panel); padding:11px 14px; font-family:var(--sans); font-size:13.5px; color:var(--ink-soft); cursor:pointer; text-align:center; line-height:1.3; }
-.vclcalc-app .ws-modeswitch-opt + .ws-modeswitch-opt{ border-left:1px solid var(--line-strong); }
-.vclcalc-app .ws-modeswitch-opt span{ display:block; font-size:10.5px; font-weight:400; color:var(--ink-faint); margin-top:2px; }
-.vclcalc-app .ws-modeswitch-opt.on{ background:var(--accent); color:#fff; font-weight:600; }
-.vclcalc-app .ws-modeswitch-opt.on span{ color:rgba(255,255,255,.85); }
-.vclcalc-app .ws-modeswitch-opt:hover:not(.on){ background:var(--accent-soft); }
-
-/* Step 1 — "exactly one RMS" rule hint */
-.vclcalc-app .ws-rule{ display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--accent-deep); background:var(--accent-soft); border-radius:8px; padding:7px 11px; margin-bottom:14px; }
-.vclcalc-app .ws-rule .k{ font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; background:var(--accent); color:#fff; padding:2px 7px; border-radius:5px; }
-
-/* Step 1 — leading (RMS) authority row + tag */
-.vclcalc-app .row-card.ws-lead{ border-color:var(--accent); background:var(--accent-soft); }
-.vclcalc-app .ws-lead-tag{ font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; background:var(--accent); color:#fff; padding:2px 8px; border-radius:5px; margin-left:8px; vertical-align:middle; }
-
-/* Step 1 — worksharing fee-category cell states */
-.vclcalc-app .ws-fee-standard{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-faint); padding:8px 0; flex-wrap:wrap; }
-.vclcalc-app .ws-fee-standard .dot{ width:7px; height:7px; border-radius:50%; background:var(--line-strong); flex:none; }
-.vclcalc-app .ws-fee-standard small{ width:100%; font-size:11px; color:var(--ink-faint); }
-.vclcalc-app .ws-fee-auto{ display:inline-flex; align-items:center; font-size:12.5px; color:var(--accent-deep); background:var(--accent-soft); border:1px solid var(--accent); border-radius:7px; padding:7px 11px; }
-.vclcalc-app select.field-select.ws-fee-unset{ border-color:var(--amber); color:var(--amber); }
-.vclcalc-app .ws-continue-hint{ color:var(--amber); font-size:12px; text-align:right; }
-
-/* Result — worksharing fallback note (amber, like the cap note) */
-.vclcalc-app .fee-note--ws{ background:var(--amber-soft); border:none; color:var(--amber); }
