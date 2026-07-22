@@ -797,3 +797,42 @@
   line-height: 4px;
   color: var(--workflow);
 }
+
+/* --- Station D worksharing view: column grid per procedure card ("V1") --- */
+.vcl-app .vcl-wf-fee-proc { overflow-x: auto; }
+.vcl-app .vcl-wf-fee-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 64px 195px 70px 100px;
+  gap: 5px 10px;
+  align-items: center;
+  font-size: 12.5px;
+  padding: 2px 0;
+  min-width: 620px;
+}
+.vcl-app .vcl-wf-fee-grid__h {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 0.5px solid var(--line, #eee);
+  padding-bottom: 3px;
+}
+.vcl-app .vcl-wf-fee-grid__h.is-c { text-align: center; }
+.vcl-app .vcl-wf-fee-grid__str { font-size: 11px; color: var(--muted); text-align: center; }
+.vcl-app .vcl-wf-fee-grid .is-r { text-align: right; }
+.vcl-app .vcl-wf-fee-sel { width: 185px; max-width: 185px; box-sizing: border-box; }
+.vcl-app .vcl-wf-fee-sel--static {
+  display: inline-block;
+  color: var(--muted);
+  background: #f6f6f2;
+  text-align: center;
+}
+/* CMS chip: tiny authority suffix for composite codes ("DE" + "BfArM") on one line. */
+.vcl-app .vcl-wf-cc__sfx {
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 2px;
+}
+.vcl-app .vcl-wf-cc.is-on .vcl-wf-cc__sfx { color: inherit; }

@@ -168,7 +168,31 @@
   const WS_RMS_PRICES_AS = "RMS";
   function wsPricingRole(role) { return role === "RMS" ? WS_RMS_PRICES_AS : role; }
   function wsSpecialKey(cc, role) { return cc + "|" + role; }
-  function wsSpecialFor(cc, role) { return state.wsSpecials[wsSpecialKey(cc, role)] || null; }
+  function isWorksharingSpecial(s) { return /worksharing/i.test(s || ""); }
+  // Options offered in a worksharing pricing context: where an authority publishes
+  // "… - worksharing" variants, ONLY those are offered (standard is no longer a choice);
+  // authorities without them keep their normal special cases as the fallback.
+  function wsOptionsFor(cc, role) {
+    const all = specialOptionsFor(cc, role);
+    const ws = all.filter(isWorksharingSpecial);
+    return ws.length ? ws : all;
+  }
+  // The effective pick for a line: the stored choice if it is still on offer, otherwise --
+  // for WS-only dropdowns -- their first tier, so a fee is always computed (user decision).
+  function wsSpecialFor(cc, role) {
+    const opts = wsOptionsFor(cc, role);
+    const stored = state.wsSpecials[wsSpecialKey(cc, role)];
+    if (stored && opts.indexOf(stored) !== -1) return stored;
+    return (opts.length && isWorksharingSpecial(opts[0])) ? opts[0] : null;
+  }
+  // Same rule for the lead's own pick.
+  function leadSpecial() {
+    if (!state.worksharingLead) return null;
+    const opts = wsOptionsFor(state.worksharingLead, leadPricingRole());
+    const stored = state.worksharingLeadSpecial;
+    if (stored && opts.indexOf(stored) !== -1) return stored;
+    return (opts.length && isWorksharingSpecial(opts[0])) ? opts[0] : null;
+  }
   // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
   // publishes RMS rows, falling back to national, then CMS.
   function leadPricingRole() {
@@ -184,7 +208,7 @@
     if (feeCountsTotal(counts) === 0) return null;
     const cc = state.worksharingLead;
     const r = window.VCLCALC.computeFees({
-      countries: [{ cc: cc, role: leadPricingRole(), strengths: strengthsFor(cc), special: { IA: null, IB: null, II: state.worksharingLeadSpecial } }],
+      countries: [{ cc: cc, role: leadPricingRole(), strengths: strengthsFor(cc), special: { IA: null, IB: null, II: leadSpecial() } }],
       counts: counts,
     });
     return (r.countries && r.countries[0]) || null;
@@ -313,7 +337,13 @@
     if (key === "B") return procComplete(state.procedure);
     return true; // C/D are placeholders for now
   }
-  function goto(key) { if (state.reached[key]) { state.station = key; rerender(); } }
+  // Station changes land the user at the top of the tool again (same behaviour as the
+  // toolbox nav's jumpToTop) -- without this, Next/Back/Start over left the view at the
+  // bottom of the new station.
+  function jumpTop() {
+    if (container && container.scrollIntoView) container.scrollIntoView({ block: "start", behavior: "auto" });
+  }
+  function goto(key) { if (state.reached[key]) { state.station = key; rerender(); jumpTop(); } }
   function advance(dir) {
     const i = stationIndex(state.station);
     const j = Math.max(0, Math.min(STATIONS.length - 1, i + dir));
@@ -321,8 +351,10 @@
     state.reached[key] = true;
     state.station = key;
     rerender();
+    jumpTop();
   }
   function resetAll() {
+    jumpTop();
     state.station = "A";
     state.reached = { A: true, B: false, C: false, D: false };
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
@@ -534,7 +566,11 @@
       cd.cms.forEach((cc) => {
         const isRms = p.rms === cc;
         const on = p.cms.indexOf(cc) !== -1;
-        const chip = el("button", "vcl-wf-cc" + (on ? " is-on" : "") + (isRms ? " is-disabled" : ""), escapeHtml(cc));
+        // Composite codes ("DE - BfArM") render as the base code plus a tiny authority
+        // suffix on one line, so every chip keeps the same compact size.
+        const m = /^([A-Za-z]{2})\s*[-–]\s*(.+)$/.exec(cc);
+        const chipLabel = m ? escapeHtml(m[1]) + '<span class="vcl-wf-cc__sfx">' + escapeHtml(m[2]) + "</span>" : escapeHtml(cc);
+        const chip = el("button", "vcl-wf-cc" + (on ? " is-on" : "") + (isRms ? " is-disabled" : ""), chipLabel);
         chip.type = "button"; chip.disabled = isRms; chip.title = cd.nameOf[cc] || cc;
         chip.addEventListener("click", () => {
           if (on) p.cms = p.cms.filter((x) => x !== cc); else p.cms.push(cc);
@@ -942,38 +978,60 @@
       // The engine results run in ccAll order minus (in a worksharing) the lead, which gets
       // a zero line instead -- walk both lists in lockstep.
       let k = 0;
-      ccAll.forEach((x) => {
-        const isLeadLine = ws && x.cc === state.worksharingLead;
-        const cr = isLeadLine ? null : r.countries[k++];
-        const line = el("div", "vcl-wf-fee-line");
-        const name = (cd.nameOf[x.cc] || x.cc);
-        const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[x.role] || x.role;
-        const strengthsNote = (!ws && x.strengths > 1) ? ` <span class="vcl-wf-fee-line__role">×${x.strengths} strengths</span>` : "";
-        line.appendChild(el("span", "vcl-wf-fee-line__c",
-          `${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span>${strengthsNote}`));
-        if (isLeadLine) {
-          // Double-counting guard: the lead is priced once, in the lead box above.
-          line.appendChild(el("span", "vcl-wf-fee-line__r",
-            `<span class="vcl-wf-fee-line__note">priced as worksharing lead above</span><span class="vcl-wf-fee-line__amt">${fmtEUR(0)}</span>`));
-        } else if (ws) {
-          const right = el("span", "vcl-wf-fee-line__r");
-          const prole = wsPricingRole(x.role);
-          const opts = specialOptionsFor(x.cc, prole);
-          if (opts.length) {
-            right.appendChild(specialSelect(opts, wsSpecialFor(x.cc, prole), (v) => {
-              if (v) state.wsSpecials[wsSpecialKey(x.cc, prole)] = v;
-              else delete state.wsSpecials[wsSpecialKey(x.cc, prole)];
-              rerender();
-            }));
+      if (ws) {
+        // Worksharing view: one column grid per card (Country · Role · Fee category ·
+        // Strengths · Fee) so the dropdowns line up at a uniform width and the amounts
+        // read as one column ("V1" layout, user-picked).
+        const grid = el("div", "vcl-wf-fee-grid");
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h", "Country"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h", "Role"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h", "Fee category"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h is-c", "Strengths"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h is-r", "Fee"));
+        ccAll.forEach((x) => {
+          const isLeadLine = x.cc === state.worksharingLead;
+          const cr = isLeadLine ? null : r.countries[k++];
+          const name = (cd.nameOf[x.cc] || x.cc);
+          const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[x.role] || x.role;
+          grid.appendChild(el("div", "vcl-wf-fee-line__c", `${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span>`));
+          grid.appendChild(el("div", "vcl-wf-fee-line__role", escapeHtml(roleShort)));
+          if (isLeadLine) {
+            // Double-counting guard: the lead is priced once, in the lead box above.
+            grid.appendChild(el("div", "vcl-wf-fee-line__note", "worksharing lead — priced above"));
+            grid.appendChild(el("div", "vcl-wf-fee-grid__str", "—"));
+            grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", fmtEUR(0)));
+          } else {
+            const prole = wsPricingRole(x.role);
+            const opts = wsOptionsFor(x.cc, prole);
+            const cell = el("div");
+            if (opts.length) {
+              cell.appendChild(specialSelect(opts, wsSpecialFor(x.cc, prole), (v) => {
+                if (v) state.wsSpecials[wsSpecialKey(x.cc, prole)] = v;
+                else delete state.wsSpecials[wsSpecialKey(x.cc, prole)];
+                rerender();
+              }, !isWorksharingSpecial(opts[0])));
+            } else {
+              cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", "Standard"));
+            }
+            grid.appendChild(cell);
+            grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(x.strengths)));
+            grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
           }
-          right.appendChild(el("span", "vcl-wf-fee-line__str", x.strengths + (x.strengths === 1 ? " strength" : " strengths")));
-          right.appendChild(el("span", "vcl-wf-fee-line__amt", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
-          line.appendChild(right);
-        } else {
+        });
+        card.appendChild(grid);
+      } else {
+        ccAll.forEach((x) => {
+          const cr = r.countries[k++];
+          const line = el("div", "vcl-wf-fee-line");
+          const name = (cd.nameOf[x.cc] || x.cc);
+          const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[x.role] || x.role;
+          const strengthsNote = (x.strengths > 1) ? ` <span class="vcl-wf-fee-line__role">×${x.strengths} strengths</span>` : "";
+          line.appendChild(el("span", "vcl-wf-fee-line__c",
+            `${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span>${strengthsNote}`));
           line.appendChild(el("span", "vcl-wf-fee-line__amt", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
-        }
-        card.appendChild(line);
-      });
+          card.appendChild(line);
+        });
+      }
       body.appendChild(card);
     });
 
@@ -1004,9 +1062,11 @@
     line.appendChild(el("span", "vcl-wf-fee-line__c",
       `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span> <span class="vcl-wf-fee-line__role">worksharing lead${worksharingHasCP() ? " · auto (CP)" : ""}</span>`));
     const right = el("span", "vcl-wf-fee-line__r");
-    const opts = specialOptionsFor(cc, leadPricingRole());
+    const opts = wsOptionsFor(cc, leadPricingRole());
     if (opts.length) {
-      right.appendChild(specialSelect(opts, state.worksharingLeadSpecial, (v) => { state.worksharingLeadSpecial = v; rerender(); }));
+      right.appendChild(specialSelect(opts, leadSpecial(), (v) => { state.worksharingLeadSpecial = v; rerender(); }, !isWorksharingSpecial(opts[0])));
+    } else {
+      right.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", "Standard"));
     }
     const n = strengthsFor(cc);
     right.appendChild(el("span", "vcl-wf-fee-line__str", n + (n === 1 ? " strength" : " strengths")));
@@ -1017,13 +1077,16 @@
     host.appendChild(box);
   }
 
-  // Small dropdown over the published Type-II special-case labels ("Standard" = no special).
-  function specialSelect(options, current, onChange) {
+  // Small dropdown over the published Type-II special-case labels. "Standard" (= no special)
+  // is offered unless the list is worksharing-only -- there the tiers are the only choices.
+  function specialSelect(options, current, onChange, includeStandard) {
     const sel = document.createElement("select");
     sel.className = "vcl-wf-fee-sel";
-    const o0 = document.createElement("option");
-    o0.value = ""; o0.textContent = "Standard";
-    sel.appendChild(o0);
+    if (includeStandard !== false) {
+      const o0 = document.createElement("option");
+      o0.value = ""; o0.textContent = "Standard";
+      sel.appendChild(o0);
+    }
     options.forEach((s) => {
       const o = document.createElement("option");
       o.value = s; o.textContent = s;
@@ -1323,7 +1386,7 @@
     // fee-data date as the fallback -- see fillCalcHead() in vcl-app.js.
     const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     head.innerHTML = "<h3>Guided Workflow</h3>"
-      + "<p><strong>Best for planning one variation end to end</strong> &mdash; or a grouped set &mdash; from classification through procedure and timeline to the fees. The live preview below updates as you go.</p>"
+      + "<p>The Guided Workflow helps to plan single variations, grouped variations and/or variations submitted under the Worksharing Procedure from classification through procedures and timelines to fees. The live preview below updates as you go.</p>"
       + '<p class="ref-line">Reference: ' + cfgReferenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).") + "</p>"
       + '<p class="ref-updated">Last updated in Variation Toolbox: ' + cfgLastUpdated("calculator", calcUpdated) + "</p>";
     root.appendChild(head);

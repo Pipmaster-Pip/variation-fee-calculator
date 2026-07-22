@@ -460,6 +460,13 @@ function renderRail() {
   });
 }
 
+// Country tile display name: composite codes ("DE - BfArM") already carry the authority in
+// the code line, so the name drops its "(BfArM)"-style suffix to keep the tile compact.
+function tileName(cc) {
+  const n = COUNTRY_NAMES[cc] || cc;
+  return /^[A-Za-z]{2}\s*[-–]/.test(cc) ? n.replace(/\s*\([^)]*\)\s*$/, '') : n;
+}
+
 // ---- Step 0: select one or more countries ----
 function renderStepCountries() {
   const codes = Object.keys(COUNTRY_NAMES).sort((a,b) => COUNTRY_NAMES[a].localeCompare(COUNTRY_NAMES[b],'en'));
@@ -481,7 +488,7 @@ function renderStepCountries() {
         ${filtered.map(c => `
           <button class="country-tile ${appState.selectedCountries.includes(c)?'selected':''}" data-cc="${c}">
             <span class="cc">${c}</span>
-            <span class="cn">${COUNTRY_NAMES[c]}</span>
+            <span class="cn">${tileName(c)}</span>
           </button>
         `).join('')}
       </div>
@@ -648,7 +655,9 @@ function specialChoicesForType(type) {
     const cfg = ensureCountryConfig(cc);
     const candidates = rowsFor(cc, cfg.role, type);
     if (candidates.length <= 1) return;
-    const labels = candidates.map(r => r.special).filter(Boolean);
+    // Worksharing variants stay out of the classic calculator's special-case picker --
+    // they belong to the Guided Workflow's worksharing path (user decision 2026-07-22).
+    const labels = candidates.map(r => r.special).filter(Boolean).filter(l => !/worksharing/i.test(l));
     if (labels.length === 0) return; // only one unlabelled row, nothing to choose
     result.push({ cc, role: cfg.role, options: labels, hasStandard: candidates.some(r => !r.special) });
   });
