@@ -728,3 +728,49 @@
   text-align: center;
 }
 .vcl-app .vcl-wf-num:focus { outline: none; border-color: var(--workflow); }
+
+/* --- Station D: worksharing (lead box + per-line special-case picker) --- */
+.vcl-app .vcl-wf-ws-lead {
+  border: 1.5px solid var(--workflow);
+  background: var(--workflow-tint);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 14px 0;
+}
+.vcl-app .vcl-wf-ws-lead__head {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--workflow);
+  margin-bottom: 4px;
+}
+.vcl-app .vcl-wf-ws-lead .vcl-wf-fee-line { padding: 4px 0; }
+.vcl-app .vcl-wf-ws-lead .vcl-wf-fee-line__amt { color: var(--workflow); font-weight: 600; }
+.vcl-app .vcl-wf-ws-lead .vcl-wf-hint { margin-top: 6px; }
+.vcl-app .vcl-wf-fee-line__r {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.vcl-app .vcl-wf-fee-sel {
+  font-size: 11.5px;
+  padding: 3px 6px;
+  border: 1px solid var(--line, #d8d8d2);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink, #222);
+  max-width: 190px;
+}
+.vcl-app .vcl-wf-fee-sel:focus { outline: none; border-color: var(--workflow); }
+.vcl-app .vcl-wf-fee-line__str { font-size: 11px; color: var(--muted); }
+.vcl-app .vcl-wf-fee-line__note { font-size: 11px; color: var(--muted); font-style: italic; }
+
+/* Summary: one line per variation (code + badge + description, no type sub-headers). */
+.vcl-app .vcl-wf-sum__vitem1 {
+  padding: 5px 0;
+  border-top: 0.5px solid var(--line, #eee);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.vcl-app .vcl-wf-sum__vitem1:first-child { border-top: none; }

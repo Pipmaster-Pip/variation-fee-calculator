@@ -41,6 +41,7 @@
     submission: { grouping: false, worksharing: false },
     grouping: [],                      // additional variations: [{ code, variantId, type }]
     worksharing: [],                   // additional procedures: [newProcedure(), ...]
+    worksharingLead: null,             // cc of the authority leading the worksharing (auto = EMA when a CP is involved)
     // Station C
     submissionDate: "",
     iiSub: "60",                       // Type II sub-procedure: 30 | 60 | 90 (days)
@@ -50,6 +51,10 @@
     strengthsOverrides: {},            // cc -> number of strengths (shown for strength-sensitive countries)
     // Summary (Station D): reveal the grouped variations' codes & descriptions on demand.
     summaryShowVariations: false,
+    // Worksharing pricing (Station D): the lead's one-off Type-II special-case pick, and the
+    // per-line picks for every participating authority (keyed "cc|role").
+    worksharingLeadSpecial: null,
+    wsSpecials: {},
   };
 
   let container = null;
@@ -133,16 +138,77 @@
     if (state.submission.worksharing) state.worksharing.forEach((p) => list.push(p));
     return list;
   }
+  // A Centralised procedure (CP/EMA) taking part in a worksharing automatically leads it.
+  function worksharingHasCP() { return allProcedures().some((p) => p.kind === "cp"); }
+
+  // ---- worksharing pricing ----
+  // Worksharing is priced through the Type-II "… - worksharing" special-case rows the fee
+  // data already carries; the engine (VCLCALC.computeFees) takes `special` per country, so
+  // nothing below touches the engine. Pricing switches to worksharing once the user has
+  // turned Worksharing on AND picked the lead authority in Station B.
+  function wsActive() { return state.submission.worksharing && !!state.worksharingLead; }
+  function feeRows() { return (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || []; }
+  // Type-II special-case labels published for a country+role ("complex - worksharing",
+  // "simple", ...). A literal "standard" label just duplicates the default option, so it is
+  // dropped from the list (resolveRow falls back to that row anyway when nothing is chosen).
+  function specialOptionsFor(cc, role) {
+    const seen = {}; const out = [];
+    feeRows().forEach((r) => {
+      if (r.cc !== cc || r.role !== role || r.type !== "II") return;
+      const s = r.special;
+      if (!s || /^standard$/i.test(s) || seen[s]) return;
+      seen[s] = 1; out.push(s);
+    });
+    return out;
+  }
+  // ⚠️ OPEN QUESTION (role mapping): does the RMS of an MRP/DCP inside a worksharing pay its
+  // RMS fee, or the worksharing-CMS fee when it is not the lead? Tendency: "WS-CMS", to be
+  // confirmed against real data. Until then RMS stays RMS -- flip the constant to "CMS" and
+  // every lookup below (dropdown options and pricing) follows from this single spot.
+  const WS_RMS_PRICES_AS = "RMS";
+  function wsPricingRole(role) { return role === "RMS" ? WS_RMS_PRICES_AS : role; }
+  function wsSpecialKey(cc, role) { return cc + "|" + role; }
+  function wsSpecialFor(cc, role) { return state.wsSpecials[wsSpecialKey(cc, role)] || null; }
+  // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
+  // publishes RMS rows, falling back to national, then CMS.
+  function leadPricingRole() {
+    const cc = state.worksharingLead;
+    if (!cc) return null;
+    if (cc === countryData().ema) return "EMA";
+    const has = (role) => feeRows().some((r) => r.cc === cc && r.role === role);
+    return has("RMS") ? "RMS" : (has("national") ? "national" : "CMS");
+  }
+  // The lead's one-off fee: a single engine country-result, or null while it can't be priced.
+  function leadFees(counts) {
+    if (!wsActive() || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
+    if (feeCountsTotal(counts) === 0) return null;
+    const cc = state.worksharingLead;
+    const r = window.VCLCALC.computeFees({
+      countries: [{ cc: cc, role: leadPricingRole(), strengths: strengthsFor(cc), special: { IA: null, IB: null, II: state.worksharingLeadSpecial } }],
+      counts: counts,
+    });
+    return (r.countries && r.countries[0]) || null;
+  }
   function fmtEUR(v) {
     if (v === null || v === undefined) return "–";
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
   }
+  // Flatten a procedure for PRICING: in a worksharing the lead authority is excluded here
+  // (it is priced exactly once, in Station D's lead box) and every remaining line carries
+  // its chosen Type-II special case.
+  function procPricedCountries(p) {
+    const list = procCountries(p);
+    if (!wsActive()) return list;
+    return list.filter((x) => x.cc !== state.worksharingLead).map((x) => {
+      const role = wsPricingRole(x.role);
+      return { cc: x.cc, role: role, strengths: x.strengths, special: { IA: null, IB: null, II: wsSpecialFor(x.cc, role) } };
+    });
+  }
   // Fees for one procedure, via the shared engine (window.VCLCALC.computeFees).
   function procFees(p, counts) {
     if (!window.VCLCALC || !window.VCLCALC.computeFees) return null;
-    const cc = procCountries(p);
-    if (!cc.length || feeCountsTotal(counts) === 0) return { countries: [], grandTotal: 0 };
-    return window.VCLCALC.computeFees({ countries: cc, counts: counts });
+    if (!procCountries(p).length || feeCountsTotal(counts) === 0) return { countries: [], grandTotal: 0 };
+    return window.VCLCALC.computeFees({ countries: procPricedCountries(p), counts: counts });
   }
   function grandTotalFees() {
     const counts = feeCounts();
@@ -150,12 +216,16 @@
     let total = 0;
     let any = false;
     allProcedures().forEach((p) => { const r = procFees(p, counts); if (r) { total += r.grandTotal; if (procCountries(p).length) any = true; } });
+    if (wsActive()) { const lf = leadFees(counts); if (lf) { total += lf.total || 0; any = true; } }
     return any ? total : null;
   }
 
   // Unique selected countries across all procedures (keyed by cc, strengths is per product/cc).
   function selectedCcs() {
     const seen = {}; const out = [];
+    // In a worksharing the lead is a fee-payer of its own (even when it sits in none of the
+    // procedures), so it must show up here too -- e.g. for the strengths list.
+    if (wsActive()) { seen[state.worksharingLead] = 1; out.push({ cc: state.worksharingLead, role: leadPricingRole() }); }
     allProcedures().forEach((p) => procCountries(p).forEach((x) => { if (!seen[x.cc]) { seen[x.cc] = 1; out.push({ cc: x.cc, role: x.role }); } }));
     return out;
   }
@@ -257,7 +327,8 @@
     state.reached = { A: true, B: false, C: false, D: false };
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
     state.procedure = newProcedure(); state.submission = { grouping: false, worksharing: false };
-    state.grouping = []; state.worksharing = [];
+    state.grouping = []; state.worksharing = []; state.worksharingLead = null;
+    state.worksharingLeadSpecial = null; state.wsSpecials = {};
     state.submissionDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
     state.strengthsDefault = 1; state.strengthsOverrides = {};
     state.summaryShowVariations = false;
@@ -293,34 +364,36 @@
   // ---- Station A: Identify (classification + active substance) ----
   function buildStationA(body) {
     body.appendChild(el("div", "vcl-wf-body__title", "Identify"));
-    body.appendChild(el("div", "vcl-wf-body__sub", "Which variation, and which active substance?"));
+    body.appendChild(el("div", "vcl-wf-body__sub", "Which active substance, and which variation(s)?"));
 
+    // 1) Active substance -- first, independent of the variation choice.
+    buildSubstance(body);
+
+    // 2) The (base) variation.
     if (state.typeOnly) {
       buildTypeOnlyHeader(body);
-      buildSubstance(body);
-      return;
+    } else {
+      const entry = pickedEntry();
+      const variant = pickedVariant();
+      if (!entry) { buildSearch(body); buildTypeQuickPick(body); return; }
+      if (!variant) {
+        buildPickedHeader(body, entry, null);
+        const chooser = el("div", "vcl-wf-variants");
+        entry.variants.forEach((v) => {
+          const row = el("div", "vcl-wf-variant");
+          row.innerHTML = `<span class="vcl-wf-variant__label">${escapeHtml(variantLabel(v) || entry.title)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
+          row.addEventListener("click", () => { state.pickedVariantId = v.id; rerender(); });
+          chooser.appendChild(row);
+        });
+        body.appendChild(chooser);
+        return;
+      }
+      buildPickedHeader(body, entry, variant);
     }
 
-    const entry = pickedEntry();
-    const variant = pickedVariant();
-
-    if (!entry) { buildSearch(body); buildTypeQuickPick(body); return; }
-
-    if (!variant) {
-      buildPickedHeader(body, entry, null);
-      const chooser = el("div", "vcl-wf-variants");
-      entry.variants.forEach((v) => {
-        const row = el("div", "vcl-wf-variant");
-        row.innerHTML = `<span class="vcl-wf-variant__label">${escapeHtml(variantLabel(v) || entry.title)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
-        row.addEventListener("click", () => { state.pickedVariantId = v.id; rerender(); });
-        chooser.appendChild(row);
-      });
-      body.appendChild(chooser);
-      return;
-    }
-
-    buildPickedHeader(body, entry, variant);
-    buildSubstance(body);
+    // 3) Further variations -- listed here too; more than one is treated as a
+    // grouping automatically (no separate toggle -- that lives nowhere now).
+    buildGroupingList(body);
   }
 
   function buildSubstance(body) {
@@ -420,20 +493,18 @@
     body.appendChild(flabel("Procedure", 0));
     procEditor(body, state.procedure, {});
 
-    // Submission type -- grouping and worksharing may be combined.
+    // Submission type -- grouping is automatic (set in Identify by listing more than
+    // one variation); only worksharing is chosen here.
     body.appendChild(flabel("Submission type", 18));
     const opts = el("div", "vcl-wf-opts");
-    [{ key: "grouping", label: "Grouping" }, { key: "worksharing", label: "Worksharing" }].forEach((o) => {
-      const chip = el("button", "vcl-wf-opt" + (state.submission[o.key] ? " is-on" : ""), escapeHtml(o.label));
-      chip.type = "button";
-      chip.addEventListener("click", () => { state.submission[o.key] = !state.submission[o.key]; rerender(); });
-      opts.appendChild(chip);
-    });
+    const wsChip = el("button", "vcl-wf-opt" + (state.submission.worksharing ? " is-on" : ""), "Worksharing");
+    wsChip.type = "button";
+    wsChip.addEventListener("click", () => { state.submission.worksharing = !state.submission.worksharing; rerender(); });
+    opts.appendChild(wsChip);
     body.appendChild(opts);
-    body.appendChild(el("p", "vcl-wf-hint", "Tick both if the change is grouped and shared across several procedures. Leave both off for a single variation in one procedure."));
+    body.appendChild(el("p", "vcl-wf-hint", "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation in Identify."));
 
-    if (state.submission.grouping) buildGroupingList(body);
-    if (state.submission.worksharing) buildWorksharingList(body);
+    if (state.submission.worksharing) { buildWorksharingLead(body); buildWorksharingList(body); }
   }
 
   // Reusable procedure editor: kind (National/MRP-DCP/CP) + country-level selection.
@@ -495,7 +566,7 @@
   function buildGroupingList(host) {
     const panel = el("div", "vcl-wf-builder");
     const head = el("div", "vcl-wf-builder__head");
-    head.appendChild(el("span", null, "Additional variations (grouping)"));
+    head.appendChild(el("span", null, "Additional variations"));
     head.appendChild(el("span", "vcl-wf-count", String(state.grouping.length)));
     panel.appendChild(head);
 
@@ -578,6 +649,34 @@
     rm.addEventListener("click", () => { state.grouping.splice(idx, 1); rerender(); });
     row.appendChild(rm);
     return row;
+  }
+
+  // Worksharing lead (Station B): one authority leads the whole worksharing. Free choice of any
+  // authority (including the EMA); locks to the EMA automatically when a CP is part of it. The fee
+  // category is chosen later, in Station D (Fees).
+  function buildWorksharingLead(host) {
+    const cd = countryData();
+    const hasCP = worksharingHasCP();
+    const wrap = el("div", "vcl-wf-field");
+    wrap.appendChild(flabel("Worksharing RMS (lead)", 12));
+    const sel = document.createElement("select");
+    sel.className = "vcl-wf-select";
+    sel.disabled = hasCP;
+    const opt0 = document.createElement("option");
+    opt0.value = ""; opt0.textContent = "— select —";
+    sel.appendChild(opt0);
+    cd.all.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.cc; o.textContent = (c.name || c.cc) + " (" + c.cc + ")";
+      if (state.worksharingLead === c.cc) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", () => { state.worksharingLead = sel.value || null; rerender(); });
+    wrap.appendChild(sel);
+    wrap.appendChild(el("p", "vcl-wf-hint", hasCP
+      ? "Automatically the EMA, because a Centralised procedure (CP) is part of the worksharing."
+      : "Any authority can lead the worksharing — including the EMA. The fee category is set later, in Fees."));
+    host.appendChild(wrap);
   }
 
   // Worksharing list: additional procedures (procedure 1 is the primary one above).
@@ -807,35 +906,69 @@
 
     buildStrengths(body);
 
+    const ws = wsActive();
+    const lead = leadFees(counts); // null unless the worksharing lead can be priced
     const procs = allProcedures();
     let grand = 0;
     let anyCountries = false;
 
+    // Worksharing: the lead's one-off fee sits in its own box, above the procedures.
+    if (state.submission.worksharing) {
+      buildWorksharingLeadBox(body, lead);
+      if (lead) { grand += lead.total || 0; anyCountries = true; }
+    }
+
+    const cd = countryData();
     procs.forEach((p, i) => {
       const card = el("div", "vcl-wf-fee-proc");
       const head = el("div", "vcl-wf-fee-proc__head");
       head.appendChild(el("span", null, "Procedure " + (i + 1) + " — " + escapeHtml(procLabel(p))));
-      const r = procFees(p, counts);
-      const ccPairs = procCountries(p);
-      if (!ccPairs.length) {
+      const ccAll = procCountries(p);
+      if (!ccAll.length) {
         head.appendChild(el("span", "vcl-wf-fee-proc__sum", "no countries yet"));
         card.appendChild(head);
         body.appendChild(card);
         return;
       }
       anyCountries = true;
+      const r = procFees(p, counts); // in a worksharing the lead is already excluded here
       head.appendChild(el("span", "vcl-wf-fee-proc__sum", fmtEUR(r.grandTotal)));
       card.appendChild(head);
       grand += r.grandTotal;
 
-      const cd = countryData();
-      r.countries.forEach((cr) => {
+      // The engine results run in ccAll order minus (in a worksharing) the lead, which gets
+      // a zero line instead -- walk both lists in lockstep.
+      let k = 0;
+      ccAll.forEach((x) => {
+        const isLeadLine = ws && x.cc === state.worksharingLead;
+        const cr = isLeadLine ? null : r.countries[k++];
         const line = el("div", "vcl-wf-fee-line");
-        const name = (cd.nameOf[cr.cc] || cr.cc);
-        const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[cr.role] || cr.role;
-        const strengthsNote = (cr.strengths > 1) ? ` <span class="vcl-wf-fee-line__role">×${cr.strengths} strengths</span>` : "";
-        line.innerHTML = `<span class="vcl-wf-fee-line__c">${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cr.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span>${strengthsNote}</span>`
-          + `<span class="vcl-wf-fee-line__amt">${cr.hasData ? fmtEUR(cr.total) : "no fee data"}</span>`;
+        const name = (cd.nameOf[x.cc] || x.cc);
+        const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[x.role] || x.role;
+        const strengthsNote = (!ws && x.strengths > 1) ? ` <span class="vcl-wf-fee-line__role">×${x.strengths} strengths</span>` : "";
+        line.appendChild(el("span", "vcl-wf-fee-line__c",
+          `${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span>${strengthsNote}`));
+        if (isLeadLine) {
+          // Double-counting guard: the lead is priced once, in the lead box above.
+          line.appendChild(el("span", "vcl-wf-fee-line__r",
+            `<span class="vcl-wf-fee-line__note">priced as worksharing lead above</span><span class="vcl-wf-fee-line__amt">${fmtEUR(0)}</span>`));
+        } else if (ws) {
+          const right = el("span", "vcl-wf-fee-line__r");
+          const prole = wsPricingRole(x.role);
+          const opts = specialOptionsFor(x.cc, prole);
+          if (opts.length) {
+            right.appendChild(specialSelect(opts, wsSpecialFor(x.cc, prole), (v) => {
+              if (v) state.wsSpecials[wsSpecialKey(x.cc, prole)] = v;
+              else delete state.wsSpecials[wsSpecialKey(x.cc, prole)];
+              rerender();
+            }));
+          }
+          right.appendChild(el("span", "vcl-wf-fee-line__str", x.strengths + (x.strengths === 1 ? " strength" : " strengths")));
+          right.appendChild(el("span", "vcl-wf-fee-line__amt", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
+          line.appendChild(right);
+        } else {
+          line.appendChild(el("span", "vcl-wf-fee-line__amt", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
+        }
         card.appendChild(line);
       });
       body.appendChild(card);
@@ -849,17 +982,53 @@
     }
 
     buildSummaryCard(body, grand, anyCountries);
+  }
 
-    // Hand-off to the Fee Calculator: the faster route when someone only wants a fee across many
-    // markets at once. Switches the Toolbox view in place via vcl-app's additive VCL_APP.goTo.
-    if (window.VCL_APP && window.VCL_APP.goTo) {
-      const xl = el("div", "vcl-wf-xlink");
-      const btn = el("button", "vcl-wf-xlink__btn", "Just need a quick fee across several markets? Open the Variation Fee Calculator →");
-      btn.type = "button";
-      btn.addEventListener("click", () => window.VCL_APP.goTo("calculator"));
-      xl.appendChild(btn);
-      body.appendChild(xl);
+  // The worksharing lead's one-off fee (Station D): the lead authority is charged exactly
+  // once, here, with its own special-case pick -- and shown as a zero line wherever it also
+  // appears inside a procedure below.
+  function buildWorksharingLeadBox(host, lead) {
+    const box = el("div", "vcl-wf-ws-lead");
+    box.appendChild(el("div", "vcl-wf-ws-lead__head", "Worksharing RMS (lead)"));
+    if (!state.worksharingLead) {
+      box.appendChild(el("p", "vcl-wf-hint", "Pick the lead authority in step B (Procedure) — its one-off worksharing fee will appear here."));
+      host.appendChild(box);
+      return;
     }
+    const cd = countryData();
+    const cc = state.worksharingLead;
+    const line = el("div", "vcl-wf-fee-line");
+    line.appendChild(el("span", "vcl-wf-fee-line__c",
+      `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span> <span class="vcl-wf-fee-line__role">worksharing lead${worksharingHasCP() ? " · auto (CP)" : ""}</span>`));
+    const right = el("span", "vcl-wf-fee-line__r");
+    const opts = specialOptionsFor(cc, leadPricingRole());
+    if (opts.length) {
+      right.appendChild(specialSelect(opts, state.worksharingLeadSpecial, (v) => { state.worksharingLeadSpecial = v; rerender(); }));
+    }
+    const n = strengthsFor(cc);
+    right.appendChild(el("span", "vcl-wf-fee-line__str", n + (n === 1 ? " strength" : " strengths")));
+    right.appendChild(el("span", "vcl-wf-fee-line__amt", (lead && lead.hasData) ? fmtEUR(lead.total) : "no fee data"));
+    line.appendChild(right);
+    box.appendChild(line);
+    box.appendChild(el("p", "vcl-wf-hint", "The lead is charged once, here — its worksharing fee category where published, otherwise the standard one. In its own procedure below it is not charged again."));
+    host.appendChild(box);
+  }
+
+  // Small dropdown over the published Type-II special-case labels ("Standard" = no special).
+  function specialSelect(options, current, onChange) {
+    const sel = document.createElement("select");
+    sel.className = "vcl-wf-fee-sel";
+    const o0 = document.createElement("option");
+    o0.value = ""; o0.textContent = "Standard";
+    sel.appendChild(o0);
+    options.forEach((s) => {
+      const o = document.createElement("option");
+      o.value = s; o.textContent = s;
+      if (current === s) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", () => onChange(sel.value || null));
+    return sel;
   }
 
   // Every variation in play (base + resolved grouping) -- for the summary's Variation(s) row.
@@ -922,20 +1091,15 @@
       const tg = row.querySelector("[data-sum-toggle]");
       if (tg) tg.addEventListener("click", () => { state.summaryShowVariations = !state.summaryShowVariations; rerender(); });
       if (state.summaryShowVariations) {
-        // Grouped by type: a small "Type IB · 3" sub-header, then each variation as code + badge
-        // over a muted one-line description.
+        // One line per variation (IA -> IB -> II, no sub-headers): code + badge + muted
+        // one-line description.
         const vlist = el("div", "vcl-wf-sum__vlist");
-        ["IA", "IB", "II"].forEach((t) => {
-          const inBucket = vars.filter((v) => feeBucket(v.type) === t);
-          if (!inBucket.length) return;
-          vlist.appendChild(el("div", "vcl-wf-sum__vgroup", "Type " + t + " · " + inBucket.length));
-          inBucket.forEach((v) => {
-            const it = el("div", "vcl-wf-sum__vitem");
-            const head = `<span class="vcl-wf-sum__vcode">${escapeHtml(v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
-            const desc = v.title ? escapeHtml(v.title) : (v.code ? "" : "no classification code");
-            it.innerHTML = `<div class="vcl-wf-sum__vhead">${head}</div>` + (desc ? `<div class="vcl-wf-sum__vdesc">${desc}</div>` : "");
-            vlist.appendChild(it);
-          });
+        const sorted = vars.slice().sort((a, b) => typeRankOf(a.type) - typeRankOf(b.type));
+        sorted.forEach((v) => {
+          const it = el("div", "vcl-wf-sum__vitem1");
+          const desc = v.title ? escapeHtml(v.title) : "no classification code";
+          it.innerHTML = `<span class="vcl-wf-sum__vcode">${escapeHtml(v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__vdesc">— ${desc}</span>`;
+          vlist.appendChild(it);
         });
         card.appendChild(vlist);
       }
@@ -946,8 +1110,12 @@
     if (procs.length <= 1) {
       line("Procedure", escapeHtml(procDetail(procs[0])));
     } else {
-      // [Proposal B, shown live] Worksharing header + each procedure on its own line.
-      line("Procedures", `<span class="vcl-wf-sum__tag">Worksharing</span> ${procs.length} procedures`);
+      // [Proposal B, shown live] Worksharing header (with the lead) + each procedure on its own line.
+      const cd = countryData();
+      const leadBit = state.worksharingLead
+        ? ` led by <strong>${escapeHtml(cd.nameOf[state.worksharingLead] || state.worksharingLead)}</strong> <span class="vcl-wf-sum__muted">·</span>`
+        : "";
+      line("Procedures", `<span class="vcl-wf-sum__tag">Worksharing</span>${leadBit} ${procs.length} procedures`);
       const plist = el("div", "vcl-wf-sum__plist");
       procs.forEach((p, i) => {
         const it = el("div", "vcl-wf-sum__pitem");
@@ -969,7 +1137,7 @@
     }
 
     const ra = raEffort();
-    if (ra !== null) line("RA effort", `~ ${escapeHtml(fmtNum(ra))} h`);
+    if (ra !== null) line("RA workload", `~ ${escapeHtml(fmtNum(ra))} h`);
     if (anyCountries) line("Total fees", `<strong>${escapeHtml(fmtEUR(grand))}</strong>`);
     body.appendChild(card);
   }
@@ -1089,7 +1257,7 @@
 
     const row = el("div", "vcl-wf-live__row");
     const ra = raEffort();
-    row.appendChild(el("div", "vcl-wf-live__stat", '<div class="v">' + (ra !== null ? escapeHtml(fmtNum(ra)) + " h" : "—") + '</div><div class="l">RA effort</div>'));
+    row.appendChild(el("div", "vcl-wf-live__stat", '<div class="v">' + (ra !== null ? escapeHtml(fmtNum(ra)) + " h" : "—") + '</div><div class="l">RA workload</div>'));
 
     const sch = workflowSchedule();
     let midHtml = '<div class="l" style="font-size:10px;color:var(--muted);margin-bottom:4px;">Timeline</div>';
@@ -1117,6 +1285,12 @@
 
   function rerender() {
     if (!container) return;
+    // Grouping is automatic: it is "on" whenever more than the base variation is
+    // listed in Identify. Derived here so every downstream reader (fees, timeline,
+    // RA workload, summary, live preview) stays correct without a manual toggle.
+    state.submission.grouping = state.grouping.some((g) => g.type);
+    // Worksharing lead: a Centralised procedure (EMA) auto-leads the worksharing (the field locks).
+    if (state.submission.worksharing && worksharingHasCP()) state.worksharingLead = countryData().ema;
     container.innerHTML = "";
     const root = el("div", "vcl-wf");
     const head = el("div", "vcl-wf-head");
