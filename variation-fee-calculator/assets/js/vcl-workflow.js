@@ -1058,21 +1058,24 @@
     }
     const cd = countryData();
     const cc = state.worksharingLead;
-    const line = el("div", "vcl-wf-fee-line");
-    line.appendChild(el("span", "vcl-wf-fee-line__c",
-      `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span> <span class="vcl-wf-fee-line__role">worksharing lead${worksharingHasCP() ? " · auto (CP)" : ""}</span>`));
-    const right = el("span", "vcl-wf-fee-line__r");
+    // Same column grid as the procedure cards below (Country / Role / Fee category /
+    // Strengths / Fee), just without the header row -- so the lead's dropdown, strengths
+    // and amount sit exactly over the cards' columns.
+    const grid = el("div", "vcl-wf-fee-grid");
+    grid.appendChild(el("div", "vcl-wf-fee-line__c",
+      `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span>${worksharingHasCP() ? ' <span class="vcl-wf-fee-line__role">auto (CP)</span>' : ""}`));
+    grid.appendChild(el("div", "vcl-wf-fee-line__role", "WS Lead"));
+    const cell = el("div");
     const opts = wsOptionsFor(cc, leadPricingRole());
     if (opts.length) {
-      right.appendChild(specialSelect(opts, leadSpecial(), (v) => { state.worksharingLeadSpecial = v; rerender(); }, !isWorksharingSpecial(opts[0])));
+      cell.appendChild(specialSelect(opts, leadSpecial(), (v) => { state.worksharingLeadSpecial = v; rerender(); }, !isWorksharingSpecial(opts[0])));
     } else {
-      right.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", "Standard"));
+      cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", "Standard"));
     }
-    const n = strengthsFor(cc);
-    right.appendChild(el("span", "vcl-wf-fee-line__str", n + (n === 1 ? " strength" : " strengths")));
-    right.appendChild(el("span", "vcl-wf-fee-line__amt", (lead && lead.hasData) ? fmtEUR(lead.total) : "no fee data"));
-    line.appendChild(right);
-    box.appendChild(line);
+    grid.appendChild(cell);
+    grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(strengthsFor(cc))));
+    grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", (lead && lead.hasData) ? fmtEUR(lead.total) : "no fee data"));
+    box.appendChild(grid);
     box.appendChild(el("p", "vcl-wf-hint", "The lead is charged once, here — its worksharing fee category where published, otherwise the standard one. In its own procedure below it is not charged again."));
     host.appendChild(box);
   }
@@ -1214,7 +1217,7 @@
   function buildStrengths(host) {
     const wrap = el("div", "vcl-wf-strength");
     const row = el("div", "vcl-wf-strength__row");
-    row.appendChild(el("span", "vcl-wf-strength__l", "Strengths (default for all countries)"));
+    row.appendChild(el("span", "vcl-wf-strength__l vcl-wf-strength__l--head", "Strengths (default for all countries)"));
     const def = numInput(state.strengthsDefault, (v) => { state.strengthsDefault = v; });
     row.appendChild(def);
     wrap.appendChild(row);
@@ -1229,15 +1232,24 @@
     // Show the strength-sensitive countries straight away: users can't be expected to know which
     // markets charge per strength, so we list them here (rather than hiding them behind a toggle)
     // each with its own input, pre-filled from the default. Changing one makes it a per-country
-    // value; the rest keep following the default.
+    // value; the rest keep following the default. Countries that deviate are tinted green, and
+    // the reset button clears every deviation so all fields follow the default again.
     const cd = countryData();
-    wrap.appendChild(el("p", "vcl-wf-hint", "These countries charge per strength — set a different number for any that differ from the default:"));
+    const hintRow = el("div", "vcl-wf-strength__hintrow");
+    hintRow.appendChild(el("p", "vcl-wf-hint", "These countries charge per strength — set a different number for any that differ from the default:"));
+    const reset = el("button", "vcl-wf-strength__reset", "↺ Set all strengths to default");
+    reset.type = "button";
+    reset.disabled = !Object.keys(state.strengthsOverrides).length;
+    reset.addEventListener("click", () => { state.strengthsOverrides = {}; rerender(); });
+    hintRow.appendChild(reset);
+    wrap.appendChild(hintRow);
     const list = el("div", "vcl-wf-strength__list");
     sens.forEach((x) => {
       const r = el("div", "vcl-wf-strength__row");
       r.appendChild(el("span", "vcl-wf-strength__l", `${escapeHtml(cd.nameOf[x.cc] || x.cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span>`));
       const cur = strengthsFor(x.cc);
       const inp = numInput(cur, (v) => { state.strengthsOverrides[x.cc] = v; });
+      if (cur !== Math.max(1, parseInt(state.strengthsDefault, 10) || 1)) inp.classList.add("is-diff");
       r.appendChild(inp);
       list.appendChild(r);
     });

@@ -836,3 +836,32 @@
   margin-left: 2px;
 }
 .vcl-app .vcl-wf-cc.is-on .vcl-wf-cc__sfx { color: inherit; }
+
+/* --- Station D: strengths block (bold head, right-aligned reset, deviation tint) --- */
+.vcl-app .vcl-wf-strength__l--head { font-weight: 700; }
+.vcl-app .vcl-wf-strength__hintrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.vcl-app .vcl-wf-strength__hintrow .vcl-wf-hint { flex: 1; margin: 6px 0; }
+.vcl-app .vcl-wf-strength__reset {
+  font-size: 12px;
+  border: 1px solid var(--workflow);
+  color: var(--workflow);
+  background: #fff;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.vcl-app .vcl-wf-strength__reset:hover { background: var(--workflow-tint); }
+.vcl-app .vcl-wf-strength__reset[disabled] { opacity: 0.4; cursor: default; }
+.vcl-app .vcl-wf-num.is-diff {
+  border-color: var(--workflow);
+  background: var(--workflow-bg);
+  font-weight: 600;
+}
