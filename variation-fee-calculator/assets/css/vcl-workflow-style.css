@@ -774,3 +774,26 @@
   line-height: 1.45;
 }
 .vcl-app .vcl-wf-sum__vitem1:first-child { border-top: none; }
+
+/* --- Live preview: dates above / key-point markers below the mini timeline --- */
+.vcl-app .vcl-wf-tl-dates { font-size: 11px; color: var(--ink, #222); margin: 0 0 4px; }
+.vcl-app .vcl-wf-tl-dates strong { color: var(--workflow); }
+.vcl-app .vcl-wf-tl-dates--muted { color: var(--muted); }
+.vcl-app .vcl-wf-tl-dates__muted { color: var(--muted); }
+/* NB: class deliberately NOT "vcl-wf-tl-marks" -- that one belongs to Station C's big timeline. */
+.vcl-app .vcl-wf-live-marks {
+  position: relative;
+  height: 15px;
+  margin-top: 3px;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.vcl-app .vcl-wf-live-marks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.vcl-app .vcl-wf-live-marks span::before {
+  content: "\25B2";
+  display: block;
+  text-align: center;
+  font-size: 6px;
+  line-height: 4px;
+  color: var(--workflow);
+}

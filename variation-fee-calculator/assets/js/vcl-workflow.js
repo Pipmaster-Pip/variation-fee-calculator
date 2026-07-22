@@ -407,6 +407,9 @@
       chip.addEventListener("click", () => { state.activeSubstance = o.key; rerender(); });
       opts.appendChild(chip);
     });
+    // Same 16px rhythm as between the other Station A blocks -- without it the chips sit
+    // flush on the variation box below.
+    opts.style.marginBottom = "16px";
     body.appendChild(opts);
   }
 
@@ -1239,11 +1242,11 @@
     } else if (state.typeOnly) {
       chips.appendChild(el("span", "vcl-wf-chip", `<span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span>`));
     }
-    // Grouping: a type tally of the ADDITIONAL variations, right next to the base variation's
-    // chip (replaces the old bare "N variations" count).
+    // Grouping: a type tally of ALL variations -- including the base one, so the chip reads
+    // as the whole submission (replaces the old bare "N variations" count).
     if (state.submission.grouping) {
-      const gb = groupingBuckets();
-      const bits = ["IA", "IB", "II"].filter((t) => gb[t] > 0).map((t) => gb[t] + " × " + t);
+      const gc = feeCounts();
+      const bits = ["IA", "IB", "II"].filter((t) => gc[t] > 0).map((t) => gc[t] + " × " + t);
       if (bits.length) chips.appendChild(el("span", "vcl-wf-chip", "Grouping " + bits.join(" · ")));
     }
     if (state.activeSubstance) {
@@ -1265,16 +1268,32 @@
     row.appendChild(el("div", "vcl-wf-live__stat", '<div class="v">' + (ra !== null ? escapeHtml(fmtNum(ra)) + " h" : "—") + '</div><div class="l">RA workload</div>'));
 
     const sch = workflowSchedule();
-    let midHtml = '<div class="l" style="font-size:10px;color:var(--muted);margin-bottom:4px;">Timeline</div>';
+    // Plain "Timeline" -- the clock-stop actually applied (from Station C's slider) is
+    // carried by its marker under the bar, so a label suffix would only repeat it.
+    let midHtml = '<div class="l" style="font-size:10px;color:var(--muted);margin-bottom:2px;">Timeline</div>';
     if (sch) {
       const total = Math.max(sch.dClose, 1);
       const p = (d) => (d / total) * 100;
+      // Dates line above the bar: real calendar dates once Station C has a submission date,
+      // otherwise the old duration-only fallback.
+      const sd = state.submissionDate;
+      const eopD = sd ? addDays(sd, sch.subToEop) : null;
+      if (sd) {
+        midHtml += '<div class="vcl-wf-tl-dates">Submission <strong>' + escapeHtml(fmtDate(addDays(sd, 0))) + '</strong> &rarr; EOP <strong>' + escapeHtml(fmtDate(eopD)) + '</strong> <span class="vcl-wf-tl-dates__muted">&middot; ' + sch.subToEop + ' d</span></div>';
+      } else {
+        midHtml += '<div class="vcl-wf-tl-dates vcl-wf-tl-dates--muted">Sub &rarr; EOP &asymp; ' + sch.subToEop + ' d &mdash; add a date in step C</div>';
+      }
       midHtml += '<div class="vcl-wf-tl vcl-wf-tl--mini">'
         + seg2("prep", 0, sch.dSub, p) + seg2("val", sch.dSub, sch.validationDays, p)
         + seg2("assess", sch.dDay0, sch.a1, p) + (sch.stop > 0 ? seg2("stop", sch.dA1End, sch.stop, p) : "")
         + (sch.showA2 ? seg2("assess", sch.dStopEnd, sch.a2, p) : "") + seg2("closure", sch.dEop, sch.closureDays, p)
-        + '</div>'
-        + '<div style="font-size:10px;color:var(--muted);margin-top:3px;">Sub → EOP ≈ ' + sch.subToEop + ' d</div>';
+        + '</div>';
+      // Key points under the bar -- Submission, Clock-stop, EOP, deliberately nothing more.
+      const shortDate = (d) => d ? String(d.getDate()).padStart(2, "0") + "." + String(d.getMonth() + 1).padStart(2, "0") + "." : "";
+      let marks = '<span style="left:' + p(sch.dSub) + '%">' + (sd ? "Sub " + shortDate(addDays(sd, 0)) : "Sub") + '</span>';
+      if (sch.stop > 0) marks += '<span style="left:' + p(sch.dA1End + sch.stop / 2) + '%">Clock-stop ' + sch.stop + ' d</span>';
+      marks += '<span style="left:' + p(sch.dEop) + '%">' + (sd ? "EOP " + shortDate(eopD) : "EOP") + '</span>';
+      midHtml += '<div class="vcl-wf-live-marks">' + marks + '</div>';
     } else {
       midHtml += '<div style="font-size:11px;color:var(--ink-faint);">set the procedure and date first</div>';
     }
