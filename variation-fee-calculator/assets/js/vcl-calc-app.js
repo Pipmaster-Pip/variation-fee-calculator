@@ -331,8 +331,49 @@ const appState = {
   // it the hand-off is invisible until the user has walked two steps to the Variations counters,
   // which is indistinguishable from the button not having worked.
   prefillNote: null,
+  // Which classification-exception hint lists are expanded in the special-cases panel
+  // (keyed "cc|type|label") -- survives the panel's re-renders.
+  specialHintOpen: {},
   results: null
 };
+
+// ---- Classification-exception hints (pilot: FR only) ----
+// Which classification codes qualify for a country's special-case fee, keyed
+// "cc|type|special label". Shown as an expandable list under that country's row in the
+// special-cases panel -- purely informational; the fee itself stays whatever special
+// the user picks in the dropdown above. Codes use the CURRENT classification and are
+// resolved to their descriptions at runtime against the Toolbox's own classification
+// data (window.VCL_DATA), sub-variants included.
+// TODO: move to the Excel -> convert.py path once a normalised "Classification
+// exceptions" sheet exists -- then LT, DK etc. join without touching this file.
+const SPECIAL_CODE_HINTS = {
+  'FR|IA|Type IA exemptions': [
+    'Q.I.a.3.a', 'Q.I.b.1', 'Q.I.d.1.a.5', 'Q.I.d.1.b.1', 'Q.I.d.1.c',
+    'Q.II.b.1', 'Q.II.b.1.b', 'Q.II.b.3.a', 'Q.II.c.1', 'Q.II.d.1',
+    'Q.II.d.1.a', 'Q.II.d.1.b', 'Q.II.e.1', 'Q.IV.1.a', 'E.1', 'E.4',
+  ],
+};
+
+// Resolve a classification code to its description via the Toolbox's classification
+// data: exact entry code first, otherwise entry + variant id (the variant tail loses
+// its dots: "Q.I.d.1.b.1" -> entry "Q.I.d.1", variant "b1"). Returns null when the
+// code is not in the current classification -- callers show it flagged, not hidden.
+function classificationTitleFor(code) {
+  const entries = (window.VCL_DATA && window.VCL_DATA.ENTRIES) || [];
+  let e = entries.find(x => x.code === code);
+  if (e) return { title: e.title, variant: null };
+  const parts = code.split('.');
+  for (let cut = parts.length - 1; cut >= 2; cut--) {
+    const base = parts.slice(0, cut).join('.');
+    e = entries.find(x => x.code === base);
+    if (e) {
+      const vid = parts.slice(cut).join('.').replace(/\./g, '');
+      const v = (e.variants || []).find(x => String(x.id) === vid);
+      return v ? { title: e.title, variant: v.label || vid } : null;
+    }
+  }
+  return null;
+}
 
 // Optional pre-fill from a companion tool (e.g. the Variation Toolbox's
 // "Export to Fee Calculator" button) via URL query params ?ia=&ib=&ii= -- only seeds the
@@ -699,6 +740,7 @@ function renderSpecialPanel() {
                 ${options.map(o => `<option value="${o}" ${current===o?'selected':''}>${o}</option>`).join('')}
               </select>
             </div>
+            ${options.map(o => specialHintHTML(cc, type, o)).join('')}
           `;
         }).join('')}
       </div>
@@ -712,7 +754,53 @@ function renderSpecialPanel() {
     });
   });
 
+  blocks.querySelectorAll('[data-exm-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.exmToggle;
+      appState.specialHintOpen[k] = !appState.specialHintOpen[k];
+      renderSpecialPanel();
+    });
+  });
+
   equalizeSelectWidths(blocks.querySelectorAll('select.field-select'));
+}
+
+// The expandable "which codes qualify?" hint under a special-case row (see
+// SPECIAL_CODE_HINTS). Returns '' where no hint list is registered for this
+// country/type/label, so it costs nothing anywhere else.
+function specialHintHTML(cc, type, label) {
+  const codes = SPECIAL_CODE_HINTS[cc + '|' + type + '|' + label];
+  if (!codes) return '';
+  const key = cc + '|' + type + '|' + label;
+  const open = !!appState.specialHintOpen[key];
+  const toggle = `
+    <button type="button" class="exm-toggle" data-exm-toggle="${escapeHtml(key)}">
+      <span class="exm-toggle__car">${open ? '&#9660;' : '&#9654;'}</span> ${escapeHtml(label)} &mdash; which codes qualify?
+    </button>`;
+  if (!open) return toggle;
+
+  // Fee amount straight from the special row itself, so the head stays true to the data.
+  const cfg = ensureCountryConfig(cc);
+  const row = rowsFor(cc, cfg.role, type).find(r => r.special === label);
+  const feeBit = row && row.F ? ` (${fmtEUR(row.F)})` : '';
+  const items = codes.map(code => {
+    const res = classificationTitleFor(code);
+    const desc = res
+      ? escapeHtml(res.title) + (res.variant ? ` <span class="exm-var">&mdash; ${escapeHtml(res.variant)}</span>` : '')
+      : '<span class="exm-miss">not in the current classification</span>';
+    return `<div class="exm-row"><span class="exm-code">${escapeHtml(code)}</span><span class="exm-desc">${desc}</span></div>`;
+  }).join('');
+  // Source line: the authority's own fee page from the HA-websites data, when present.
+  const ha = (HA_WEBSITES || []).find(h => h.cc === cc);
+  const source = ha && ha.link_url
+    ? `Source: <a href="${escapeHtml(ha.link_url)}" target="_blank" rel="noopener">${escapeHtml(ha.link_text || cc)}</a> fee schedule &middot; descriptions from the Classification of Variations (this Toolbox).`
+    : 'Descriptions from the Classification of Variations (this Toolbox).';
+  return `${toggle}
+    <div class="exm-list">
+      <div class="exm-list__head">These classification codes qualify for the ${escapeHtml(COUNTRY_NAMES[cc] || cc)} &quot;${escapeHtml(label)}&quot; fee${feeBit}:</div>
+      ${items}
+      <div class="exm-foot">${source}</div>
+    </div>`;
 }
 
 // Gives every <select> in the list the same width, wide enough to fit the

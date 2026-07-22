@@ -783,3 +783,69 @@
 .vclcalc-app #vclcalc-toggleHaWebsites{ border:none; background:none; }
 .vclcalc-app #vclcalc-toggleChangelog:hover,
 .vclcalc-app #vclcalc-toggleHaWebsites:hover{ border:none; background:none; color:var(--accent-deep); }
+
+/* --- Classification-exception hints in the special-cases panel (pilot: FR) --- */
+.vclcalc-app .exm-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent, #8f6e2e);
+  background: #fff;
+  border: 1px solid var(--accent, #8f6e2e);
+  border-radius: 7px;
+  padding: 4px 11px;
+  cursor: pointer;
+  font-family: inherit;
+  align-self: flex-start;
+}
+.vclcalc-app .exm-toggle:hover { background: rgba(143, 110, 46, 0.06); }
+.vclcalc-app .exm-toggle__car { font-size: 9px; }
+.vclcalc-app .exm-list {
+  border: 1px solid var(--border, #e2ddd2);
+  border-radius: 9px;
+  background: #fff;
+  padding: 4px 14px;
+}
+.vclcalc-app .exm-list__head {
+  font-size: 11.5px;
+  color: var(--ink-soft, #555);
+  padding: 8px 0 6px;
+  border-bottom: 0.5px solid var(--border, #eee);
+}
+.vclcalc-app .exm-row {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-top: 0.5px solid #f0efe9;
+  font-size: 12px;
+}
+.vclcalc-app .exm-row:first-of-type { border-top: none; }
+.vclcalc-app .exm-code {
+  font-family: var(--mono, Consolas, monospace);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent, #8f6e2e);
+  white-space: nowrap;
+}
+.vclcalc-app .exm-desc { color: var(--ink-soft, #444); line-height: 1.45; }
+.vclcalc-app .exm-var { color: var(--ink-faint, #8a8a83); }
+.vclcalc-app .exm-miss {
+  font-size: 10.5px;
+  color: #A6790A;
+  background: #FBF0E2;
+  border-radius: 4px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+.vclcalc-app .exm-foot {
+  font-size: 11px;
+  color: var(--ink-faint, #8a8a83);
+  padding: 8px 0;
+  border-top: 0.5px solid var(--border, #eee);
+}
+.vclcalc-app .exm-foot a { color: var(--accent, #8f6e2e); }
