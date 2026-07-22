@@ -71,6 +71,7 @@
   const state = {
     classifyOpen: false, // whether the "Classification of Variations" chapter branch is expanded
     guidanceOpen: false, // whether the "Guidance on Variations" sub-nav branch is expanded
+    guidanceHub: false, // whether the detail area shows the Guidance hub (its three documents as cards) instead of the welcome overview
     activeChapter: null, // no chapter expanded at first -- only E/Q/C/M show, all collapsed
     activeSection: null, // e.g. "I", "II" ... within a chapter that has SECTIONS (currently only Q)
     query: "",
@@ -1998,7 +1999,7 @@
           <span class="tab__code">Variation Fee Calculator</span>
           <span class="tab--calc__chip">&euro; Fees</span>
         </span>
-        <span class="tab__title">Calculate official variation fees for your markets</span>
+        <span class="tab__title">The classic calculator for variation fees w/o worksharing.</span>
       `;
       calcBtn.addEventListener("click", () => {
         state.view = "calculator";
@@ -2026,7 +2027,7 @@
     workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
     workflowBtn.innerHTML = `
       <span class="tab__code">Guided Workflow</span>
-      <span class="tab__title">One or more variations, step by step &mdash; classification to fees, with a live preview</span>
+      <span class="tab__title">Step by step from classification to fees with worksharing.</span>
     `;
     workflowBtn.addEventListener("click", () => {
       state.view = "workflow";
@@ -2081,11 +2082,12 @@
     classifyBtn.style.setProperty("--tab-bg", "var(--classify-bg)");
     classifyBtn.innerHTML = `
       <span class="tab__code">Classification of Variations</span>
-      <span class="tab__title">Browse by chapter E · Q · C · M · Art. 5</span>
+      <span class="tab__title">Browse the Classification Guideline by chapter E, Q, C, M, Art. 5.</span>
     `;
     classifyBtn.addEventListener("click", () => {
       state.classifyOpen = !state.classifyOpen;
       state.guidanceOpen = false;
+      state.guidanceHub = false;
       state.view = "browse";
       renderBrowse();
       switchViewVisibility();
@@ -2153,12 +2155,19 @@
     guidanceBtn.style.setProperty("--tab-bg", "var(--group-bg)");
     guidanceBtn.innerHTML = `
       <span class="tab__code">Guidance on Variations</span>
-      <span class="tab__title">Procedural guidance on variation applications</span>
+      <span class="tab__title">Procedural guidance and Q&amp;A on variations.</span>
     `;
     guidanceBtn.addEventListener("click", () => {
       state.guidanceOpen = !state.guidanceOpen;
       state.classifyOpen = false;
+      // Like the Classification button: opening the branch also shows its overview in the
+      // detail area (the three documents as cards); closing falls back to the welcome overview.
+      state.guidanceHub = state.guidanceOpen;
+      state.view = "browse";
       renderBrowse();
+      switchViewVisibility();
+      renderDetail();
+      jumpToTop();
     });
     el.browseTree.appendChild(guidanceBtn);
 
@@ -2178,6 +2187,7 @@
         row.addEventListener("click", () => {
           state.view = view;
           state.classifyOpen = false;
+          state.guidanceHub = false;
           renderBrowse();
           switchViewVisibility();
           // Its two siblings are static and rendered once at init; this one carries state
@@ -2201,7 +2211,7 @@
     timetablesBtn.style.setProperty("--tab-bg", "var(--slate-bg)");
     timetablesBtn.innerHTML = `
       <span class="tab__code">Timetables for Variations</span>
-      <span class="tab__title">Day-by-day procedure timetables (IA / IB / II)</span>
+      <span class="tab__title">A visual representation of the timelines of variations.</span>
     `;
     timetablesBtn.addEventListener("click", () => {
       state.view = "timetables";
@@ -2225,7 +2235,7 @@
     workloadBtn.style.setProperty("--tab-bg", "var(--workload-bg)");
     workloadBtn.innerHTML = `
       <span class="tab__code">Workload Planning</span>
-      <span class="tab__title">Estimate preparation timeline, department workload &amp; submission readiness</span>
+      <span class="tab__title">Estimated RA workload from start to closure of variations.</span>
     `;
     workloadBtn.addEventListener("click", () => {
       state.view = "workload";
@@ -3206,8 +3216,10 @@
     state.query = ""; el.search.value = "";
     state.classifyOpen = false;
     state.guidanceOpen = false;
+    state.guidanceHub = dest === "guidance";
     if (dest === "calculator") state.view = "calculator";
     else if (dest === "classification") { state.view = "browse"; state.classifyOpen = true; }
+    else if (dest === "guidance") { state.view = "browse"; state.guidanceOpen = true; }
     else if (dest === "grouping") { state.view = "grouping"; state.guidanceOpen = true; }
     else if (dest === "precisescope") { state.view = "precisescope"; state.guidanceOpen = true; }
     else if (dest === "qa") { state.view = "qa"; state.guidanceOpen = true; }
@@ -3233,18 +3245,16 @@
 
   // First-load overview: the main destinations as cards in the detail area (each shares its
   // nav identity color).
+  // Card texts mirror the left nav's tab__title lines word for word (user decision 2026-07-22:
+  // nav and overview read identically). The three guidance documents no longer get cards of
+  // their own -- they live behind the "Guidance on Variations" card (see guidanceHubHtml).
   const OVERVIEW_DESTINATIONS = [
-    { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "Best for a quick fee across many markets at once — set the counts, export to Excel." },
-    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Best for planning one variation end to end — classification, procedure, timeline and fees." },
-    { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse or search the EU classification codes E · Q · C · M." },
-    { dest: "grouping", label: "Grouping of Variations", color: "var(--group)", desc: "Which changes may be grouped into one submission." },
-    { dest: "precisescope", label: "Precise Scope Wording", color: "var(--plum)", desc: "Example wordings for the application form's scope field." },
-    // Shares the Guidance branch's --group colour with the Grouping card rather than claiming a
-    // new identity tone: every colour in the palette already means something else (--history in
-    // particular labels "changed in this revision" over in Classification).
-    { dest: "qa", label: "Q&A on Variations", color: "var(--group)", desc: "The CMDh questions and answers on submitting variations." },
-    { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "Day-by-day procedure timetables for Type IA / IB / II." },
-    { dest: "workload", label: "Workload Planning", color: "var(--workload)", desc: "Estimate RA effort and the variation timeline." },
+    { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "The classic calculator for variation fees w/o worksharing." },
+    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Step by step from classification to fees with worksharing." },
+    { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse the Classification Guideline by chapter E, Q, C, M, Art. 5." },
+    { dest: "guidance", label: "Guidance on Variations", color: "var(--group)", desc: "Procedural guidance and Q&amp;A on variations." },
+    { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "A visual representation of the timelines of variations." },
+    { dest: "workload", label: "Workload Planning", color: "var(--workload)", desc: "Estimated RA workload from start to closure of variations." },
   ];
   function overviewHtml() {
     const cards = OVERVIEW_DESTINATIONS.map((d) => `
@@ -3263,6 +3273,28 @@
     container.querySelectorAll(".guide-overview__card[data-dest]").forEach((btn) => {
       btn.addEventListener("click", () => goToDestination(btn.getAttribute("data-dest")));
     });
+  }
+
+  // The Guidance hub: shown in the detail area when "Guidance on Variations" is opened (nav
+  // button or overview card) -- its documents as cards, same language as the welcome overview,
+  // all in the branch's own "--group" identity color. Clicking a card goes to the document.
+  function guidanceHubHtml() {
+    const docs = [
+      { dest: "grouping", label: GROUPING_GUIDANCE.title, desc: "Which changes may be grouped into one submission." },
+      { dest: "precisescope", label: PRECISE_SCOPE_GUIDANCE.title, desc: "Example wordings for the application form's scope field." },
+    ];
+    if (QA_DATA) docs.push({ dest: "qa", label: "Q&A on Variations", desc: "The CMDh questions and answers on submitting variations." });
+    const cards = docs.map((d) => `
+      <button type="button" class="guide-overview__card" data-dest="${d.dest}" style="--card-accent: var(--group)">
+        <span class="guide-overview__title"><span class="guide-overview__dot"></span>${d.label}</span>
+        <span class="guide-overview__desc">${d.desc}</span>
+      </button>`).join("");
+    return `
+      <div class="guide-overview">
+        <h3 class="guide-overview__heading" style="color: var(--group);">Guidance on Variations</h3>
+        <p class="guide-overview__intro">Procedural guidance and Q&amp;A on variations &mdash; pick a document.</p>
+        <div class="guide-overview__grid">${cards}</div>
+      </div>`;
   }
 
   function renderDetail() {
@@ -3289,7 +3321,9 @@
         wireBreadcrumb(el.detailEmpty);
         wireLevelCards(el.detailEmpty, levelNav);
       } else {
-        el.detailEmpty.innerHTML = overviewHtml();
+        // Same empty-scope slot, two occupants: the Guidance hub while that branch is open,
+        // otherwise the first-load welcome overview. Both wire their cards the same way.
+        el.detailEmpty.innerHTML = state.guidanceHub ? guidanceHubHtml() : overviewHtml();
         wireOverviewCards(el.detailEmpty);
       }
       return;

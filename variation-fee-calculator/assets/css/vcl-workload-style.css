@@ -722,3 +722,27 @@
   color: var(--workload);
   border-bottom-color: var(--workload);
 }
+
+/* --- Type-only quick pick (mirrors the Guided Workflow's Station A) --- */
+.vcl-app .vcl-wl-quicktype {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--line, #e4e4de);
+}
+.vcl-app .vcl-wl-quicktype__label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.vcl-app .vcl-wl-quicktype__opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.vcl-app .vcl-wl-typeopt {
+  font-size: 12px;
+  border: 1px solid var(--line, #d8d8d2);
+  background: #fff;
+  color: var(--ink, #222);
+  border-radius: 8px;
+  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.vcl-app .vcl-wl-typeopt:hover { border-color: var(--workload); }
+.vcl-app .vcl-wl-picked__muted { color: var(--muted); font-size: 12.5px; }

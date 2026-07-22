@@ -264,7 +264,7 @@ function vcl_shortcode( $atts ) {
 	<div class="layout">
 	  <div class="browse-col" id="vcl-browseCol">
 	    <div class="search-box">
-	      <input type="text" id="vcl-searchInput" placeholder="Search a variation by code, keyword, or description…" autocomplete="off" />
+	      <input type="text" id="vcl-searchInput" placeholder="Search by code or keyword (i. e. shape, shelf, leaflet) ..." autocomplete="off" />
 	    </div>
 	    <div class="browse-tree" id="vcl-browseTree"></div>
 	  </div>

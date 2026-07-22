@@ -121,6 +121,7 @@
     query: "",
     pickedCode: null,
     pickedVariantId: undefined,
+    typeOnly: null,          // "IA" | "IB" | "II" when the user skips the classification and just picks a type (mirrors the Guided Workflow)
     activeSubstance: null,   // "biologic" | "chemical" | null
     procedure: "national",
     iiSubProcedure: "60",
@@ -400,10 +401,15 @@
     if (entry && variant) {
       buildForm(container, entry, variant);
       buildResults(container, variant.type);
+    } else if (!entry && state.typeOnly) {
+      // Type-only case (no classification code): buildForm/buildResults only ever read the
+      // type, so a minimal variant stand-in carries it through unchanged.
+      buildForm(container, null, { type: state.typeOnly });
+      buildResults(container, state.typeOnly);
     }
     // Always rendered, even with nothing picked: the tables are a reference in their own right,
     // and someone who wants to know what the tool assumes shouldn't have to invent a case first.
-    buildMethodology(container, variant ? variant.type : null);
+    buildMethodology(container, variant ? variant.type : (!entry ? state.typeOnly : null));
   }
 
   function buildPicker(container) {
@@ -436,9 +442,20 @@
       section.appendChild(list); container.appendChild(section); return;
     }
 
+    // Type-only case picked: same "picked" header treatment as a classification, with the
+    // type badge and a Change button that reopens the picker.
+    if (state.typeOnly) {
+      section.innerHTML = `<h4>Classification</h4>`;
+      const picked = document.createElement("div"); picked.className = "vcl-wl-picked";
+      picked.innerHTML = `<span>Type ${escapeHtml(state.typeOnly)} <span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span> <span class="vcl-wl-picked__muted">— no classification code</span></span>`;
+      const changeBtn = document.createElement("button"); changeBtn.type = "button"; changeBtn.textContent = "Change";
+      changeBtn.addEventListener("click", () => { state.typeOnly = null; state.query = ""; rerender(); });
+      picked.appendChild(changeBtn); section.appendChild(picked); container.appendChild(section); return;
+    }
+
     section.innerHTML = `<h4>Classification</h4>`;
     const searchBox = document.createElement("div"); searchBox.className = "search-box vcl-wl-search";
-    searchBox.innerHTML = `<input type="text" id="vcl-wl-search-input" placeholder="Search by code or title…" autocomplete="off" />`;
+    searchBox.innerHTML = `<input type="text" id="vcl-wl-search-input" placeholder="Search by code or keyword (i. e. shape, shelf, leaflet) ..." autocomplete="off" />`;
     const input = searchBox.querySelector("input"); input.value = state.query;
     input.addEventListener("input", () => { state.query = input.value; rerender(); });
     section.appendChild(searchBox);
@@ -454,6 +471,7 @@
           state.pickedCode = e.code;
           const only = e.variants && e.variants.length === 1 ? e.variants[0] : null;
           state.pickedVariantId = only ? only.id : undefined;
+          state.typeOnly = null;
           rerender();
         });
         results.appendChild(row);
@@ -462,6 +480,22 @@
       else if (matches.length > 25) { const note = document.createElement("p"); note.className = "vcl-wl-note"; note.textContent = matches.length - 25 + " more matches — refine your search."; results.appendChild(note); }
       section.appendChild(results);
     }
+
+    // Type-only quick pick (mirrors the Guided Workflow's Station A): plan a case without a
+    // classification code by choosing the variation type directly.
+    const quick = document.createElement("div"); quick.className = "vcl-wl-quicktype";
+    const quickLabel = document.createElement("div"); quickLabel.className = "vcl-wl-quicktype__label";
+    quickLabel.textContent = "No classification code? Set the type directly:";
+    quick.appendChild(quickLabel);
+    const quickOpts = document.createElement("div"); quickOpts.className = "vcl-wl-quicktype__opts";
+    ["IA", "IB", "II"].forEach((t) => {
+      const chip = document.createElement("button"); chip.type = "button"; chip.className = "vcl-wl-typeopt";
+      chip.innerHTML = `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`;
+      chip.addEventListener("click", () => { state.typeOnly = t; state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); });
+      quickOpts.appendChild(chip);
+    });
+    quick.appendChild(quickOpts);
+    section.appendChild(quick);
     container.appendChild(section);
   }
 

@@ -440,7 +440,7 @@
     body.appendChild(label);
     const box = el("div", "vcl-wf-search");
     const input = document.createElement("input");
-    input.type = "text"; input.placeholder = "Search by code or title…"; input.value = state.query;
+    input.type = "text"; input.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ..."; input.value = state.query;
     input.addEventListener("input", () => { state.query = input.value; renderResults(); });
     box.appendChild(input);
     body.appendChild(box);
@@ -609,7 +609,7 @@
     } else {
       // Search by code/title, or set the type directly (no classification).
       const main = el("div", "vcl-wf-brow__main");
-      const inp = document.createElement("input"); inp.type = "text"; inp.className = "vcl-wf-brow__input"; inp.placeholder = "Search code or title…"; inp.value = g.query || "";
+      const inp = document.createElement("input"); inp.type = "text"; inp.className = "vcl-wf-brow__input"; inp.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ..."; inp.value = g.query || "";
       inp.addEventListener("input", () => { g.query = inp.value; renderMatches(); });
       main.appendChild(inp);
       const matches = el("div", "vcl-wf-brow__matches");
@@ -1239,18 +1239,23 @@
     } else if (state.typeOnly) {
       chips.appendChild(el("span", "vcl-wf-chip", `<span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span>`));
     }
+    // Grouping: a type tally of the ADDITIONAL variations, right next to the base variation's
+    // chip (replaces the old bare "N variations" count).
+    if (state.submission.grouping) {
+      const gb = groupingBuckets();
+      const bits = ["IA", "IB", "II"].filter((t) => gb[t] > 0).map((t) => gb[t] + " × " + t);
+      if (bits.length) chips.appendChild(el("span", "vcl-wf-chip", "Grouping " + bits.join(" · ")));
+    }
     if (state.activeSubstance) {
       chips.appendChild(el("span", "vcl-wf-chip", state.activeSubstance === "biologic" ? "Biologic" : "Chemical API"));
     }
-    if (procComplete(state.procedure)) {
+    // Procedure: in a worksharing, "Worksharing" + the lead replace the procedure chip (and
+    // the old "N procedures" count); otherwise the primary procedure shows as before.
+    if (state.submission.worksharing) {
+      chips.appendChild(el("span", "vcl-wf-chip", "Worksharing"));
+      if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", "WS-Lead-RMS: " + escapeHtml(state.worksharingLead)));
+    } else if (procComplete(state.procedure)) {
       chips.appendChild(el("span", "vcl-wf-chip", escapeHtml(procLabel(state.procedure))));
-    }
-    if (state.submission.worksharing && state.worksharing.length) {
-      chips.appendChild(el("span", "vcl-wf-chip", (state.worksharing.length + 1) + " procedures"));
-    }
-    if (state.submission.grouping && state.grouping.length) {
-      const resolved = state.grouping.filter((g) => g.type).length;
-      chips.appendChild(el("span", "vcl-wf-chip", (resolved + 1) + " variations"));
     }
     if (!chips.children.length) chips.appendChild(el("span", "vcl-wf-hint", "Your choices will appear here as you go."));
     live.appendChild(chips);
