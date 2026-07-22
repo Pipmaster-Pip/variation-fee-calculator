@@ -142,24 +142,42 @@
   function worksharingHasCP() { return allProcedures().some((p) => p.kind === "cp"); }
 
   // ---- worksharing pricing ----
-  // Worksharing is priced through the Type-II "… - worksharing" special-case rows the fee
-  // data already carries; the engine (VCLCALC.computeFees) takes `special` per country, so
-  // nothing below touches the engine. Pricing switches to worksharing once the user has
-  // turned Worksharing on AND picked the lead authority in Station B.
+  // Worksharing is priced through the "… - worksharing" special-case rows the fee data
+  // already carries (Type II today, Type IB as soon as the Excel lists them); the engine
+  // (VCLCALC.computeFees) takes `special` per country and type, so nothing below touches
+  // the engine. Pricing switches to worksharing once the user has turned Worksharing on
+  // AND picked the lead authority in Station B.
   function wsActive() { return state.submission.worksharing && !!state.worksharingLead; }
   function feeRows() { return (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || []; }
-  // Type-II special-case labels published for a country+role ("complex - worksharing",
-  // "simple", ...). A literal "standard" label just duplicates the default option, so it is
-  // dropped from the list (resolveRow falls back to that row anyway when nothing is chosen).
+  // The variation types actually being priced (from the IA/IB/II tally) -- the fee-category
+  // choices below are drawn from exactly these types' rows, so an IB worksharing shows IB
+  // categories (DK) and not Type II ones.
+  function activeTypes() {
+    const c = feeCounts();
+    return ["IA", "IB", "II"].filter((t) => c[t] > 0);
+  }
+  // Special-case labels published for a country+role across the active types ("complex -
+  // worksharing", "quality, simple (\"B\" or \"D\")", ...). A literal "standard" label just
+  // duplicates the default option, so it is dropped from the list (resolveRow falls back to
+  // that row anyway when nothing is chosen).
   function specialOptionsFor(cc, role) {
+    const types = activeTypes();
     const seen = {}; const out = [];
     feeRows().forEach((r) => {
-      if (r.cc !== cc || r.role !== role || r.type !== "II") return;
+      if (r.cc !== cc || r.role !== role || types.indexOf(r.type) === -1) return;
       const s = r.special;
       if (!s || /^standard$/i.test(s) || seen[s]) return;
       seen[s] = 1; out.push(s);
     });
     return out;
+  }
+  // Does this country+role publish a plain standard row for any active type? Where it
+  // doesn't (DK, ES: every row is labelled), a "Standard" option would be misleading --
+  // the dropdown then offers only the real categories, first one preselected.
+  function hasStandardRow(cc, role) {
+    const types = activeTypes();
+    return feeRows().some((r) => r.cc === cc && r.role === role && types.indexOf(r.type) !== -1
+      && (!r.special || /^standard$/i.test(r.special)));
   }
   // ⚠️ OPEN QUESTION (role mapping): does the RMS of an MRP/DCP inside a worksharing pay its
   // RMS fee, or the worksharing-CMS fee when it is not the lead? Tendency: "WS-CMS", to be
@@ -177,13 +195,20 @@
     const ws = all.filter(isWorksharingSpecial);
     return ws.length ? ws : all;
   }
-  // The effective pick for a line: the stored choice if it is still on offer, otherwise --
-  // for WS-only dropdowns -- their first tier, so a fee is always computed (user decision).
+  // The effective pick for a line: the stored choice if it is still on offer; otherwise the
+  // first option wherever "no pick" is not a real alternative -- WS-only dropdowns (user
+  // decision) and countries without a plain standard row (DK, ES), where the engine would
+  // silently price the first row anyway; naming it keeps display and pricing in sync.
+  function defaultSpecial(cc, role, opts) {
+    if (!opts.length) return null;
+    if (isWorksharingSpecial(opts[0]) || !hasStandardRow(cc, role)) return opts[0];
+    return null;
+  }
   function wsSpecialFor(cc, role) {
     const opts = wsOptionsFor(cc, role);
     const stored = state.wsSpecials[wsSpecialKey(cc, role)];
     if (stored && opts.indexOf(stored) !== -1) return stored;
-    return (opts.length && isWorksharingSpecial(opts[0])) ? opts[0] : null;
+    return defaultSpecial(cc, role, opts);
   }
   // Same rule for the lead's own pick.
   function leadSpecial() {
@@ -191,7 +216,7 @@
     const opts = wsOptionsFor(state.worksharingLead, leadPricingRole());
     const stored = state.worksharingLeadSpecial;
     if (stored && opts.indexOf(stored) !== -1) return stored;
-    return (opts.length && isWorksharingSpecial(opts[0])) ? opts[0] : null;
+    return defaultSpecial(state.worksharingLead, leadPricingRole(), opts);
   }
   // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
   // publishes RMS rows, falling back to national, then CMS.
@@ -207,8 +232,11 @@
     if (!wsActive() || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
     if (feeCountsTotal(counts) === 0) return null;
     const cc = state.worksharingLead;
+    const s = leadSpecial();
     const r = window.VCLCALC.computeFees({
-      countries: [{ cc: cc, role: leadPricingRole(), strengths: strengthsFor(cc), special: { IA: null, IB: null, II: leadSpecial() } }],
+      // The picked category is handed to every type; resolveRow falls back to the standard
+      // row per type wherever the label is not published for it.
+      countries: [{ cc: cc, role: leadPricingRole(), strengths: strengthsFor(cc), special: { IA: s, IB: s, II: s } }],
       counts: counts,
     });
     return (r.countries && r.countries[0]) || null;
@@ -219,13 +247,15 @@
   }
   // Flatten a procedure for PRICING: in a worksharing the lead authority is excluded here
   // (it is priced exactly once, in Station D's lead box) and every remaining line carries
-  // its chosen Type-II special case.
+  // its chosen fee category, applied to every type (resolveRow falls back to standard per
+  // type wherever the label is not published).
   function procPricedCountries(p) {
     const list = procCountries(p);
     if (!wsActive()) return list;
     return list.filter((x) => x.cc !== state.worksharingLead).map((x) => {
       const role = wsPricingRole(x.role);
-      return { cc: x.cc, role: role, strengths: x.strengths, special: { IA: null, IB: null, II: wsSpecialFor(x.cc, role) } };
+      const s = wsSpecialFor(x.cc, role);
+      return { cc: x.cc, role: role, strengths: x.strengths, special: { IA: s, IB: s, II: s } };
     });
   }
   // Fees for one procedure, via the shared engine (window.VCLCALC.computeFees).
@@ -1002,18 +1032,11 @@
             grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", fmtEUR(0)));
           } else {
             const prole = wsPricingRole(x.role);
-            const opts = wsOptionsFor(x.cc, prole);
-            const cell = el("div");
-            if (opts.length) {
-              cell.appendChild(specialSelect(opts, wsSpecialFor(x.cc, prole), (v) => {
-                if (v) state.wsSpecials[wsSpecialKey(x.cc, prole)] = v;
-                else delete state.wsSpecials[wsSpecialKey(x.cc, prole)];
-                rerender();
-              }, !isWorksharingSpecial(opts[0])));
-            } else {
-              cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", "Standard"));
-            }
-            grid.appendChild(cell);
+            grid.appendChild(buildFeeCategoryCell(x.cc, prole, x.strengths, wsSpecialFor(x.cc, prole), (v) => {
+              if (v) state.wsSpecials[wsSpecialKey(x.cc, prole)] = v;
+              else delete state.wsSpecials[wsSpecialKey(x.cc, prole)];
+              rerender();
+            }));
             grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(x.strengths)));
             grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
           }
@@ -1065,14 +1088,8 @@
     grid.appendChild(el("div", "vcl-wf-fee-line__c",
       `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span>${worksharingHasCP() ? ' <span class="vcl-wf-fee-line__role">auto (CP)</span>' : ""}`));
     grid.appendChild(el("div", "vcl-wf-fee-line__role", "WS Lead"));
-    const cell = el("div");
-    const opts = wsOptionsFor(cc, leadPricingRole());
-    if (opts.length) {
-      cell.appendChild(specialSelect(opts, leadSpecial(), (v) => { state.worksharingLeadSpecial = v; rerender(); }, !isWorksharingSpecial(opts[0])));
-    } else {
-      cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", "Standard"));
-    }
-    grid.appendChild(cell);
+    grid.appendChild(buildFeeCategoryCell(cc, leadPricingRole(), strengthsFor(cc), leadSpecial(),
+      (v) => { state.worksharingLeadSpecial = v; rerender(); }));
     grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(strengthsFor(cc))));
     grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", (lead && lead.hasData) ? fmtEUR(lead.total) : "no fee data"));
     box.appendChild(grid);
@@ -1080,8 +1097,36 @@
     host.appendChild(box);
   }
 
-  // Small dropdown over the published Type-II special-case labels. "Standard" (= no special)
-  // is offered unless the list is worksharing-only -- there the tiers are the only choices.
+  // One line's fee-category cell: a dropdown over the published categories -- or, when
+  // there is nothing real to choose, a static field. Collapses when (a) there is at most
+  // one choice, or (b) every choice prices identically with the current counts/strengths
+  // (e.g. ES's "full" vs "abbreviated" IB applications carry the same fee). Data-driven:
+  // should the Excel ever price them apart, the dropdown reappears on the next regen.
+  function buildFeeCategoryCell(cc, role, strengths, current, onPick) {
+    const opts = wsOptionsFor(cc, role);
+    const withStd = hasStandardRow(cc, role);
+    const choices = (withStd ? [null] : []).concat(opts);
+    let collapse = choices.length <= 1;
+    if (!collapse && window.VCLCALC && window.VCLCALC.computeFees) {
+      const counts = feeCounts();
+      const probe = (s) => window.VCLCALC.computeFees({
+        countries: [{ cc: cc, role: role, strengths: strengths, special: { IA: s, IB: s, II: s } }],
+        counts: counts,
+      }).grandTotal || 0;
+      const fees = choices.map(probe);
+      collapse = fees.every((f) => Math.abs(f - fees[0]) < 0.005);
+    }
+    const cell = el("div");
+    if (collapse) {
+      cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", escapeHtml(current || "Standard")));
+    } else {
+      cell.appendChild(specialSelect(opts, current, onPick, withStd));
+    }
+    return cell;
+  }
+
+  // Small dropdown over the published special-case labels. "Standard" (= no special) is
+  // offered only where a plain standard row exists and the list is not worksharing-only.
   function specialSelect(options, current, onChange, includeStandard) {
     const sel = document.createElement("select");
     sel.className = "vcl-wf-fee-sel";
