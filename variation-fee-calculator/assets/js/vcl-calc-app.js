@@ -344,14 +344,24 @@ const appState = {
 // the user picks in the dropdown above. Codes use the CURRENT classification and are
 // resolved to their descriptions at runtime against the Toolbox's own classification
 // data (window.VCL_DATA), sub-variants included.
+// FR list transcribed from the official Décret no 2025-1445 du 31/12/2025 (JO of
+// 1 Jan 2026, texte 41; applies to applications filed from 15 Jan 2026; replaces
+// Décret 2019-388): Type IA variations are free of the ANSM registration fee EXCEPT
+// these -- which therefore carry the "Type IA exemptions" fee row (EUR 2,500).
 // TODO: move to the Excel -> convert.py path once a normalised "Classification
 // exceptions" sheet exists -- then LT, DK etc. join without touching this file.
 const SPECIAL_CODE_HINTS = {
-  'FR|IA|Type IA exemptions': [
-    'Q.I.a.3.a', 'Q.I.b.1', 'Q.I.d.1.a.5', 'Q.I.d.1.b.1', 'Q.I.d.1.c',
-    'Q.II.b.1', 'Q.II.b.1.b', 'Q.II.b.3.a', 'Q.II.c.1', 'Q.II.d.1',
-    'Q.II.d.1.a', 'Q.II.d.1.b', 'Q.II.e.1', 'Q.IV.1.a', 'E.1', 'E.4',
-  ],
+  'FR|IA|Type IA exemptions': {
+    codes: [
+      'C.3.a', 'Q.I.a.3.a', 'Q.I.b.1.c', 'Q.I.b.2.h', 'Q.I.d.1.a.5', 'Q.I.d.1.b.1',
+      'Q.I.d.1.c', 'Q.I.e.5.b', 'Q.II.b.1.b', 'Q.II.c.1.b', 'Q.II.d.1.c',
+      'Q.II.f.1.a.1', 'Q.II.f.1.b.1', 'Q.II.g.5.b', 'Q.III.1.a.1', 'Q.III.1.a.2', 'Q.IV.1.a',
+    ],
+    source: {
+      text: 'Décret n° 2025-1445 du 31/12/2025 (JO 01/01/2026), applicable to applications filed from 15/01/2026',
+      url: 'https://www.legifrance.gouv.fr/download/pdf?id=rTBlMhYaksAKNHFY-s19Qb3QdemZfdsvuyg_hvSsm3I=',
+    },
+  },
 };
 
 // Resolve a classification code to its description via the Toolbox's classification
@@ -769,8 +779,9 @@ function renderSpecialPanel() {
 // SPECIAL_CODE_HINTS). Returns '' where no hint list is registered for this
 // country/type/label, so it costs nothing anywhere else.
 function specialHintHTML(cc, type, label) {
-  const codes = SPECIAL_CODE_HINTS[cc + '|' + type + '|' + label];
-  if (!codes) return '';
+  const hint = SPECIAL_CODE_HINTS[cc + '|' + type + '|' + label];
+  if (!hint) return '';
+  const codes = hint.codes;
   const key = cc + '|' + type + '|' + label;
   const open = !!appState.specialHintOpen[key];
   const toggle = `
@@ -790,10 +801,11 @@ function specialHintHTML(cc, type, label) {
       : '<span class="exm-miss">not in the current classification</span>';
     return `<div class="exm-row"><span class="exm-code">${escapeHtml(code)}</span><span class="exm-desc">${desc}</span></div>`;
   }).join('');
-  // Source line: the authority's own fee page from the HA-websites data, when present.
-  const ha = (HA_WEBSITES || []).find(h => h.cc === cc);
-  const source = ha && ha.link_url
-    ? `Source: <a href="${escapeHtml(ha.link_url)}" target="_blank" rel="noopener">${escapeHtml(ha.link_text || cc)}</a> fee schedule &middot; descriptions from the Classification of Variations (this Toolbox).`
+  // Source line: the hint list's own legal source (decree etc.), plus where the
+  // descriptions come from.
+  const src = hint.source;
+  const source = src
+    ? `Source: ${src.url ? `<a href="${escapeHtml(src.url)}" target="_blank" rel="noopener">${escapeHtml(src.text)}</a>` : escapeHtml(src.text)} &middot; descriptions from the Classification of Variations (this Toolbox).`
     : 'Descriptions from the Classification of Variations (this Toolbox).';
   return `${toggle}
     <div class="exm-list">
