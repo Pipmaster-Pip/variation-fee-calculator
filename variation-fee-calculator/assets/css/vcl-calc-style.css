@@ -670,6 +670,53 @@
   letter-spacing:0.03em;
 }
 
+/* Coloured IA/IB/II type pills -- same look as the Toolbox-wide .badge.type-ia/-ib/-ii
+   (vcl-style.css); own classes + fallback colors so the calculator also renders them
+   standalone, without colliding with the calculator's own gold .badge above. */
+.vclcalc-app .type-pill{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:600;
+  padding:2px 8px;
+  border-radius:999px;
+  letter-spacing:0.02em;
+}
+.vclcalc-app .type-pill--ia{ background:var(--ia-bg,#E8F1F0); color:var(--ia,#1F5F5B); }
+.vclcalc-app .type-pill--ib{ background:var(--ib-bg,#FBF0E2); color:var(--ib,#A8651A); }
+.vclcalc-app .type-pill--ii{ background:var(--ii-bg,#FBEAE7); color:var(--ii,#B23A2E); }
+
+/* Special-cases country cards: one card per country, one row per type with a real
+   choice, hint buttons (exm-toggle) once per country at the card's foot. */
+.vclcalc-app .sp-card{
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:var(--paper);
+  padding:12px 16px 14px;
+  margin-bottom:12px;
+}
+.vclcalc-app .sp-card:last-child{ margin-bottom:0; }
+.vclcalc-app .sp-card__head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--ink);
+  padding-bottom:8px;
+  border-bottom:0.5px solid var(--line);
+  margin-bottom:4px;
+}
+.vclcalc-app .sp-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:7px 0;
+}
+.vclcalc-app .sp-hint{ padding:2px 0 6px; }
+.vclcalc-app .sp-card .exm-list{ margin-top:8px; background:var(--panel); }
+
 .vclcalc-app ::selection{ background:var(--accent-soft); }
 
 /* =============================================================================

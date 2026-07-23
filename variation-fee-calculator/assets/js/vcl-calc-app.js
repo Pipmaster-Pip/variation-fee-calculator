@@ -226,6 +226,13 @@ function typeLabel(t) {
   return { IA: 'Type IA', IB: 'Type IB', II: 'Type II' }[t] || t;
 }
 
+// The coloured IA/IB/II pill used all over the Toolbox (.badge.type-ia etc. in
+// vcl-style.css) -- own classes here so the calculator also renders it standalone.
+function typePillHTML(t) {
+  const cls = { IA: 'type-pill--ia', IB: 'type-pill--ib', II: 'type-pill--ii' }[t];
+  return cls ? `<span class="type-pill ${cls}">${t}</span>` : '';
+}
+
 // Used to pick which type's grouping-fee rate to display when more than
 // one item has one (should be rare in practice, since a lower type is
 // normally already subsumed by a higher one — this is a safety-net tiebreak).
@@ -337,19 +344,38 @@ const appState = {
   results: null
 };
 
-// ---- Classification-exception hints (pilot: FR only) ----
+// ---- Classification-exception hints ----
 // Which classification codes qualify for a country's special-case fee, keyed
-// "cc|type|special label". Shown as an expandable list under that country's row in the
+// "cc|type|special label". Shown as an expandable list under that country's card in the
 // special-cases panel -- purely informational; the fee itself stays whatever special
 // the user picks in the dropdown above. Codes use the CURRENT classification and are
 // resolved to their descriptions at runtime against the Toolbox's own classification
-// data (window.VCL_DATA), sub-variants included.
+// data (window.VCL_DATA), sub-variants included. An optional buttonLabel overrides the
+// special label in the toggle button text; several keys may share ONE hint object
+// (e.g. DK complex applies to IB and II alike) -- the panel renders shared objects once.
 // FR list transcribed from the official Décret no 2025-1445 du 31/12/2025 (JO of
 // 1 Jan 2026, texte 41; applies to applications filed from 15 Jan 2026; replaces
 // Décret 2019-388): Type IA variations are free of the ANSM registration fee EXCEPT
 // these -- which therefore carry the "Type IA exemptions" fee row (EUR 2,500).
+// DK list transcribed from the Danish Medicines Agency's fee guidance ("complex
+// variations" examples; DK's own "B.I.z"-style shorthand mapped to the current
+// classification -- the guidance's Q.I.z has no counterpart and is left out, user
+// decision 2026-07-23). Same fee row for IB and II, hence one shared object.
 // TODO: move to the Excel -> convert.py path once a normalised "Classification
-// exceptions" sheet exists -- then LT, DK etc. join without touching this file.
+// exceptions" sheet exists -- then LT etc. join without touching this file.
+const DK_COMPLEX_HINT = {
+  buttonLabel: 'Complex variations',
+  codes: [
+    'Q.I.a.1.f', 'Q.I.a.1.b', 'Q.I.a.1.d', 'Q.I.a.2.b', 'Q.I.a.3.c', 'Q.I.a.5',
+    'Q.II.a.3.b.2', 'Q.II.a.3.b.3', 'Q.II.a.z', 'Q.II.d.3',
+    'Q.I.e.1.a', 'Q.II.g.1.a', 'Q.I.e.2', 'Q.II.g.2',
+    'Q.II.b.1.c', 'Q.II.b.3.b', 'Q.II.b.4.c', 'C.4',
+  ],
+  source: {
+    text: 'Danish Medicines Agency — Guidance for companies (fees)',
+    url: 'https://laegemiddelstyrelsen.dk/en/licensing/fees/guidance-for-companies-/',
+  },
+};
 const SPECIAL_CODE_HINTS = {
   'FR|IA|Type IA exemptions': {
     codes: [
@@ -362,6 +388,8 @@ const SPECIAL_CODE_HINTS = {
       url: 'https://www.legifrance.gouv.fr/download/pdf?id=rTBlMhYaksAKNHFY-s19Qb3QdemZfdsvuyg_hvSsm3I=',
     },
   },
+  'DK|IB|quality, complex (Q)': DK_COMPLEX_HINT,
+  'DK|II|quality, complex (Q)': DK_COMPLEX_HINT,
 };
 
 // Resolve a classification code to its description via the Toolbox's classification
@@ -656,7 +684,7 @@ function renderStepVariations() {
     </div>
     <div class="panel special-panel" id="vclcalc-specialPanel" style="display:none;">
       <h2 style="margin-bottom:4px;">Special cases</h2>
-      <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per country below — countries without that distinction automatically use their standard fee.</p>
+      <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per type below — countries without that distinction automatically use their standard fee.</p>
       <div id="vclcalc-specialBlocks"></div>
     </div>
     <div class="nav-row">
@@ -669,7 +697,7 @@ function renderStepVariations() {
   counters.innerHTML = ['IA','IB','II'].map(type => `
     <div class="field-group">
       <div class="num-row">
-        <div style="width:110px;font-size:13px;font-weight:600;color:var(--ink);">${typeLabel(type)}</div>
+        <div style="width:130px;font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;">${typeLabel(type)} ${typePillHTML(type)}</div>
         ${stepperHTML('global_'+type, appState.globalCounts[type], 0, 99)}
       </div>
     </div>
@@ -735,27 +763,49 @@ function renderSpecialPanel() {
   }
   panel.style.display = '';
 
-  blocks.innerHTML = sections.map(({type, choices}) => `
-    <div class="field-group">
-      <span class="field-label">${typeLabel(type)}</span>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        ${choices.map(({cc, options, hasStandard}) => {
-          const cfg = ensureCountryConfig(cc);
+  // Regroup type-first into country-first: one card per country, one row per type with a
+  // real choice (user decision 2026-07-23, mockup "B"). Each country appears exactly once,
+  // and a hint list shared between types (DK complex: IB + II) renders one single button.
+  const choicesByType = {};
+  sections.forEach(({type, choices}) => { choicesByType[type] = choices; });
+  const cards = [];
+  appState.selectedCountries.forEach(cc => {
+    const rows = [];
+    sections.forEach(({type}) => {
+      const hit = choicesByType[type].find(c => c.cc === cc);
+      if (hit) rows.push({ type, options: hit.options, hasStandard: hit.hasStandard });
+    });
+    if (rows.length) cards.push({ cc, rows });
+  });
+
+  blocks.innerHTML = cards.map(({cc, rows}) => {
+    const cfg = ensureCountryConfig(cc);
+    // One hint button per distinct hint object -- keys sharing an object collapse to one.
+    const seenHints = [];
+    const hintRefs = [];
+    rows.forEach(({type, options}) => {
+      options.forEach(label => {
+        const hint = SPECIAL_CODE_HINTS[cc + '|' + type + '|' + label];
+        if (hint && seenHints.indexOf(hint) === -1) { seenHints.push(hint); hintRefs.push({ type, label }); }
+      });
+    });
+    return `
+      <div class="sp-card">
+        <div class="sp-card__head">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span></div>
+        ${rows.map(({type, options, hasStandard}) => {
           const current = cfg.specialByType[type] || '';
           return `
-            <div class="num-row" style="justify-content:space-between;">
-              <div style="font-size:13px; color:var(--ink-soft);">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span></div>
+            <div class="sp-row">
+              ${typePillHTML(type)}
               <select class="field-select" style="width:auto; min-width:220px;" data-special-select="${cc}|${type}">
                 ${hasStandard ? `<option value="" ${current===''?'selected':''}>Standard</option>` : ''}
                 ${options.map(o => `<option value="${o}" ${current===o?'selected':''}>${o}</option>`).join('')}
               </select>
-            </div>
-            ${options.map(o => specialHintHTML(cc, type, o)).join('')}
-          `;
+            </div>`;
         }).join('')}
-      </div>
-    </div>
-  `).join('');
+        ${hintRefs.map(h => `<div class="sp-hint">${specialHintHTML(cc, h.type, h.label)}</div>`).join('')}
+      </div>`;
+  }).join('');
 
   blocks.querySelectorAll('[data-special-select]').forEach(sel => {
     sel.addEventListener('change', () => {
@@ -786,7 +836,7 @@ function specialHintHTML(cc, type, label) {
   const open = !!appState.specialHintOpen[key];
   const toggle = `
     <button type="button" class="exm-toggle" data-exm-toggle="${escapeHtml(key)}">
-      <span class="exm-toggle__car">${open ? '&#9660;' : '&#9654;'}</span> ${escapeHtml(label)} &mdash; which codes qualify?
+      <span class="exm-toggle__car">${open ? '&#9660;' : '&#9654;'}</span> ${escapeHtml(hint.buttonLabel || label)} &mdash; which codes qualify?
     </button>`;
   if (!open) return toggle;
 
