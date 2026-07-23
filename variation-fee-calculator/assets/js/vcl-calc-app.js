@@ -341,6 +341,9 @@ const appState = {
   // Which classification-exception hint lists are expanded in the special-cases panel
   // (keyed "cc|type|label") -- survives the panel's re-renders.
   specialHintOpen: {},
+  // Which result-card status chips (cap / grouping / local currency) are expanded
+  // (keyed "cc|kind") -- survives re-renders of the result step.
+  resultChipOpen: {},
   results: null
 };
 
@@ -1180,16 +1183,17 @@ function renderStepResult() {
 
     const itemLines = cr.items.map(it => {
       const r = it.row;
-      const label = r.special ? `${typeLabel(r.type)} – ${r.special}` : typeLabel(r.type);
+      // Coloured type pill instead of the written-out "Type IA" (card design 2026-07-23);
+      // the special label alone follows the count -- rows without one show just the count.
+      const label = r.special ? `${r.special}` : '';
       const countLabel = `${it.count}×`;
       const displayAmtValue = (it.capValue !== null && it.rawSumSingle > it.singleTotal + 0.01)
         ? it.rawSumSingle   // show the uncapped raw amount when per-type cap fired
         : (it.singleTotal !== null ? it.singleTotal : it.total);
       const displayAmt = fmtEUR(displayAmtValue);
 
-      // No extra "(before cap:)" hint needed — the raw amount IS the line display
-      const uncappedHint = '';
-      return { html: `<span class="bd-meta bd-item-line">${countLabel} ${label}${uncappedHint}<span class="bd-item-amount">${displayAmt}</span></span>`, label, countLabel, eurValue: displayAmtValue };
+      const lineStart = `${typePillHTML(r.type)}<span class="bd-item-label">${countLabel}${label ? ' ' + label : ''}</span>`;
+      return { html: `<span class="bd-meta bd-item-line">${lineStart}<span class="bd-item-amount">${displayAmt}</span></span>`, lineStart, eurValue: displayAmtValue };
     });
     const itemLinesHtml = itemLines.map(l => l.html).join('');
 
@@ -1225,15 +1229,13 @@ function renderStepResult() {
       groupNote = `<div class="fee-note fee-note--group"><span class="fn-label">${label}</span><span class="fn-amount">${fmtEUR(topGrouping.total)}</span></div>`;
     }
 
-    const annotations = capNote + groupNote;
-
     // Local currency block: heading, FX rate, each variation line converted to
     // local currency (mirrors the EUR lines above 1:1), then the total — right-aligned.
     const hasLocal = cr.hasData && cr.currency && cr.fxRate != null && cr.totalLocal != null;
     const localItemLines = hasLocal ? itemLines.map(l => {
       const localValue = (l.eurValue !== null && l.eurValue !== undefined) ? l.eurValue * cr.fxRate : null;
       const localAmt = localValue !== null ? fmtLocalCurrency(localValue, cr.currency) : '–';
-      return `<span class="bd-meta bd-item-line">${l.countLabel} ${l.label}<span class="bd-item-amount">${localAmt}</span></span>`;
+      return `<span class="bd-meta bd-item-line">${l.lineStart}<span class="bd-item-amount">${localAmt}</span></span>`;
     }).join('') : '';
     const localBlock = hasLocal ? `
       <div class="local-currency-row">
@@ -1247,6 +1249,29 @@ function renderStepResult() {
           <span class="lc-amount">${fmtLocalCurrency(cr.totalLocal, cr.currency)}</span>
         </div>
       </div>` : '';
+
+    // ── Status chips (2026-07-23, mockup B): cap / grouping / local currency become
+    // small toggle buttons at the card's foot -- plain markers without amounts (user
+    // decision), all in the grouping chip's gold. The detail they reveal is the
+    // unchanged note / local-currency block, wrapped in .rdetail; open state lives in
+    // appState.resultChipOpen so it survives re-renders. Print always shows details.
+    const chipDefs = [];
+    if (capNote) chipDefs.push({ kind: 'cap', label: 'Cap fee', detail: capNote });
+    if (groupNote) chipDefs.push({ kind: 'group', label: 'Grouping fee', detail: groupNote });
+    if (localBlock) chipDefs.push({ kind: 'fx', label: 'Fees in local currency', detail: localBlock });
+    const chipRow = chipDefs.length ? `
+      <div class="result-chiprow">
+        ${chipDefs.map(c => {
+          const key = cr.cc + '|' + c.kind;
+          const open = !!appState.resultChipOpen[key];
+          return `<button type="button" class="rchip" data-rchip="${escapeHtml(key)}"><span class="rchip__car">${open ? '&#9660;' : '&#9654;'}</span> ${c.label}</button>`;
+        }).join('')}
+      </div>` : '';
+    const detailBlocks = chipDefs.map(c => {
+      const key = cr.cc + '|' + c.kind;
+      const open = !!appState.resultChipOpen[key];
+      return `<div class="rdetail${open ? ' open' : ''}" data-rdetail="${escapeHtml(key)}">${c.detail}</div>`;
+    }).join('');
 
     // EUR total column
     const eurLabel = (cr.currency && cr.fxRate) ? 'EUR equivalent' : '';
@@ -1267,8 +1292,8 @@ function renderStepResult() {
           ${amountBlock}
         </div>
         <div class="bd-items">${itemLinesHtml}</div>
-        ${annotations}
-        ${localBlock}
+        ${chipRow}
+        ${detailBlocks}
       </div>
     `;
   // Insert a divider element between rows (not after the last one)
@@ -1339,6 +1364,19 @@ function renderStepResult() {
   `;
 
   document.getElementById('vclcalc-back3').addEventListener('click', () => setStep(2));
+
+  // Status-chip toggles: flip the stored state and the DOM directly (no re-render,
+  // so open changelog/HA panels are left alone).
+  contentEl.querySelectorAll('[data-rchip]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.rchip;
+      const open = (appState.resultChipOpen[key] = !appState.resultChipOpen[key]);
+      const detail = contentEl.querySelector(`[data-rdetail="${key}"]`);
+      if (detail) detail.classList.toggle('open', open);
+      const car = btn.querySelector('.rchip__car');
+      if (car) car.innerHTML = open ? '&#9660;' : '&#9654;';
+    });
+  });
 
   // ── Print ──
   document.getElementById('vclcalc-btnPrint').addEventListener('click', () => window.print());

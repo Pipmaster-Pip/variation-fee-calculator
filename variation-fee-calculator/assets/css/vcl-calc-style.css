@@ -896,3 +896,38 @@
   border-top: 0.5px solid var(--border, #eee);
 }
 .vclcalc-app .exm-foot a { color: var(--accent, #8f6e2e); }
+
+/* --- Result cards in the special-cases card look + status chips (2026-07-23) ---
+   Country cards on the paper ground with the sp-card radius; coloured type pills
+   in the fee lines; cap / grouping / local-currency become small gold toggle
+   chips at the card's foot (.rchip) that reveal the unchanged detail blocks
+   (.rdetail wrappers). Print always shows the details and hides the chips. */
+.vclcalc-app .breakdown .breakdown-row{ background:var(--paper); border-radius:6px; }
+.vclcalc-app .breakdown .breakdown-row .bd-item-line{ gap:10px; align-items:baseline; }
+.vclcalc-app .bd-item-line .type-pill{ flex-shrink:0; transform:translateY(-1px); }
+.vclcalc-app .bd-item-line .bd-item-label{ flex:1; }
+.vclcalc-app .result-chiprow{ display:flex; gap:6px; flex-wrap:wrap; margin-top:9px; }
+.vclcalc-app .rchip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-family:var(--mono);
+  font-size:10.5px;
+  font-weight:600;
+  padding:3px 10px;
+  border-radius:999px;
+  white-space:nowrap;
+  background:var(--accent-soft);
+  color:var(--accent-deep);
+  border:none;
+  cursor:pointer;
+  transition:filter .12s ease;
+}
+.vclcalc-app .rchip:hover{ filter:brightness(0.96); }
+.vclcalc-app .rchip .rchip__car{ font-size:8px; }
+.vclcalc-app .rdetail{ display:none; }
+.vclcalc-app .rdetail.open{ display:block; }
+@media print{
+  .vclcalc-app .result-chiprow{ display:none; }
+  .vclcalc-app .rdetail{ display:block !important; }
+}
