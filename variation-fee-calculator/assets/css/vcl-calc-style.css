@@ -793,7 +793,8 @@
 .vclcalc-app .result-panel .rp-sub{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); }
 
 /* Fees-by-country: bare heading + cards on the page ground (no enclosing box) */
-.vclcalc-app .result-breakdown-wrap{ border:none; background:none; padding:0; }
+/* The white .panel box around Fees-by-country stays (2026-07-23c): the cream country
+   cards inside it read exactly like the Country-details and Special-cases cards. */
 .vclcalc-app .bd-heading{ font-family:var(--sans); font-size:16px; font-weight:600; color:var(--ink); }
 .vclcalc-app .breakdown{ border:none; border-radius:0; overflow:visible; background:none; display:flex; flex-direction:column; gap:10px; }
 .vclcalc-app .breakdown .breakdown-divider{ display:none; }
@@ -810,7 +811,8 @@
 
 /* cap / grouping notes -> soft pills */
 .vclcalc-app .fee-note{ border-radius:8px; padding:7px 10px; font-size:12px; margin-top:9px; }
-.vclcalc-app .fee-note--cap{ background:var(--amber-soft); border:none; color:var(--amber); }
+/* Both notes in the toggle chips' gold, so the opened box matches its chip (2026-07-23c). */
+.vclcalc-app .fee-note--cap{ background:var(--accent-soft); border:none; color:var(--accent-deep); }
 .vclcalc-app .fee-note--group{ background:var(--accent-soft); border:none; color:var(--accent-deep); }
 
 /* local-currency block -> dashed, subtle ground */

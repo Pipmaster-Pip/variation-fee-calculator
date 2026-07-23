@@ -219,7 +219,9 @@ function rowsForCountry(cc) {
 }
 
 function roleLabel(role) {
-  return { RMS: 'RMS (Reference Member State)', CMS: 'CMS (Concerned Member State)', national: 'National procedure', EMA: 'Centralised procedure (EMA)' }[role] || role;
+  // Bare abbreviations for RMS/CMS (user decision 2026-07-23) -- used in the
+  // country-details role dropdown and the result cards alike.
+  return { RMS: 'RMS', CMS: 'CMS', national: 'National procedure', EMA: 'Centralised procedure (EMA)' }[role] || role;
 }
 
 function typeLabel(t) {
