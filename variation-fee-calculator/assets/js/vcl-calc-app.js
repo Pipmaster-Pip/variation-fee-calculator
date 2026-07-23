@@ -381,6 +381,28 @@ const DK_COMPLEX_HINT = {
     url: 'https://laegemiddelstyrelsen.dk/en/licensing/fees/guidance-for-companies-/',
   },
 };
+// IE list transcribed from the HPRA "Guide to Fees for Human Products"
+// (FIN-G0002-37), Appendix "List of Complex Variations" -- already in the current
+// Q-classification. Applies to Type II ("complex" and "complex - reduced" share
+// this one object -> one button). A code entry may be {code, extra} where extra
+// is an HPRA precision appended after the classification description (C.4's
+// SmPC sections); the optional note renders as an italic line above the source.
+const IE_COMPLEX_HINT = {
+  buttonLabel: 'Complex variations',
+  codes: [
+    'Q.I.a.1.b', 'Q.I.a.1.d', 'Q.I.a.1.f', 'Q.I.a.2.b',
+    'Q.I.e.1.a', 'Q.I.e.2', 'Q.I.e.6',
+    'Q.II.a.3.b.2', 'Q.II.a.3.b.3', 'Q.II.a.5', 'Q.II.b.3.b', 'Q.II.c.3.c',
+    'Q.II.d.3', 'Q.II.e.1.b.2', 'Q.II.g.1.a', 'Q.II.g.2', 'Q.II.g.6',
+    { code: 'C.4', extra: 'SmPC sections 4.2, 4.3 or 5.1' },
+    'C.6.a',
+  ],
+  note: 'Note (HPRA): the complex fee is not charged for a modification of an approved indication (C.6.a); other categories of variations with substantial changes may be considered complex case-by-case.',
+  source: {
+    text: 'HPRA — Guide to Fees for Human Products (FIN-G0002-37), Appendix: List of Complex Variations',
+    url: 'https://assets.hpra.ie/data/docs/default-source/external-guidance-document/fin-g0002-guide-to-fees-for-human-products-v37.pdf?sfvrsn=dd51febb_51',
+  },
+};
 const SPECIAL_CODE_HINTS = {
   'FR|IA|Type IA exemptions': {
     codes: [
@@ -395,6 +417,8 @@ const SPECIAL_CODE_HINTS = {
   },
   'DK|IB|quality, complex (Q)': DK_COMPLEX_HINT,
   'DK|II|quality, complex (Q)': DK_COMPLEX_HINT,
+  'IE|II|complex': IE_COMPLEX_HINT,
+  'IE|II|complex - reduced': IE_COMPLEX_HINT,
 };
 
 // Resolve a classification code to its description via the Toolbox's classification
@@ -849,11 +873,16 @@ function specialHintHTML(cc, type, label) {
   const cfg = ensureCountryConfig(cc);
   const row = rowsFor(cc, cfg.role, type).find(r => r.special === label);
   const feeBit = row && row.F ? ` (${fmtEUR(row.F)})` : '';
-  const items = codes.map(code => {
+  const items = codes.map(entry => {
+    // An entry is either the code string or {code, extra} -- extra being the
+    // authority's own precision, appended in the same grey as a variant label.
+    const code = typeof entry === 'string' ? entry : entry.code;
+    const extra = typeof entry === 'string' ? null : entry.extra;
     const res = classificationTitleFor(code);
-    const desc = res
+    let desc = res
       ? escapeHtml(res.title) + (res.variant ? ` <span class="exm-var">&mdash; ${escapeHtml(res.variant)}</span>` : '')
       : '<span class="exm-miss">not in the current classification</span>';
+    if (res && extra) desc += ` <span class="exm-var">&mdash; ${escapeHtml(extra)}</span>`;
     return `<div class="exm-row"><span class="exm-code">${escapeHtml(code)}</span><span class="exm-desc">${desc}</span></div>`;
   }).join('');
   // Source line: the hint list's own legal source (decree etc.), plus where the
@@ -866,6 +895,7 @@ function specialHintHTML(cc, type, label) {
     <div class="exm-list">
       <div class="exm-list__head">These classification codes qualify for the ${escapeHtml(COUNTRY_NAMES[cc] || cc)} &quot;${escapeHtml(label)}&quot; fee${feeBit}:</div>
       ${items}
+      ${hint.note ? `<div class="exm-note">${escapeHtml(hint.note)}</div>` : ''}
       <div class="exm-foot">${source}</div>
     </div>`;
 }

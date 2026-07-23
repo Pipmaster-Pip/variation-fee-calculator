@@ -891,6 +891,14 @@
   padding: 0 5px;
   white-space: nowrap;
 }
+/* Optional authority note (e.g. HPRA's C.6.a caveat) above the source line. */
+.vclcalc-app .exm-note {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-soft, #5f5140);
+  padding: 8px 0 2px;
+  border-top: 0.5px solid var(--border, #eee);
+}
 .vclcalc-app .exm-foot {
   font-size: 11px;
   color: var(--ink-faint, #8a8a83);
