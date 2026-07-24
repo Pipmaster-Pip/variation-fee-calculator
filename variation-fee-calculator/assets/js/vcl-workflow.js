@@ -1302,23 +1302,33 @@
     const vars = summaryVariations();
     if (!vars.length) { window.alert("No variations selected yet — nothing to export."); return; }
 
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } = window.docx;
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, LineRuleType } = window.docx;
     const meta = DATA.CLASSIFICATION_META || {};
     const ws = wsActive();
     const cd = countryData();
 
+    // Document-wide look (matches the user's reference .docx 2026-07-24): 12 pt body
+    // (size 24 half-points) and 1.2 line spacing on every paragraph. `sp()` folds that line
+    // spacing into any per-paragraph before/after so it is never lost.
+    const LINE = { line: 288, lineRule: LineRuleType.AUTO };
+    function sp(extra) { return Object.assign({}, LINE, extra || {}); }
+    // Fonts matching the on-screen preview: clean sans-serif body, monospace for the
+    // classification codes (in the table's Number column and the precise-scope headings).
+    const SANS = "Calibri";
+    const MONO = "Consolas";
+
     const children = [];
-    children.push(new Paragraph({ text: ws ? "Worksharing — Summary & Variations" : "Variation — Summary & Variations", heading: HeadingLevel.HEADING_1 }));
+    children.push(new Paragraph({ text: ws ? "Worksharing — Summary & Variations" : "Variation — Summary & Variations", heading: HeadingLevel.HEADING_1, spacing: sp() }));
 
     const metaBits = ["Generated " + new Date().toLocaleDateString()];
     if (meta.guidelineRef) metaBits.push("Classification Guideline " + meta.guidelineRef + (meta.applicableFrom ? ", applicable from " + meta.applicableFrom : ""));
     if (ws) metaBits.push("for use in the Worksharing Letter of Intent");
-    children.push(new Paragraph({ children: [new TextRun({ text: metaBits.join(" · "), italics: true, color: "5B6572" })], spacing: { after: 300 } }));
+    children.push(new Paragraph({ children: [new TextRun({ text: metaBits.join(" · "), italics: true, color: "5B6572" })], spacing: sp({ after: 300 }) }));
 
     // ---- Summary block (mirrors the on-screen card) ----
-    children.push(new Paragraph({ text: "Summary", heading: HeadingLevel.HEADING_2 }));
+    children.push(new Paragraph({ text: "Summary", heading: HeadingLevel.HEADING_2, spacing: sp() }));
     function kv(label, valueRuns) {
-      return new Paragraph({ children: [new TextRun({ text: label + ":  ", bold: true })].concat(valueRuns), spacing: { after: 80 } });
+      return new Paragraph({ children: [new TextRun({ text: label + ":  ", bold: true })].concat(valueRuns), spacing: sp({ after: 80 }) });
     }
     if (state.activeSubstance) children.push(kv("Active substance", [new TextRun(state.activeSubstance === "biologic" ? "Biologic" : "Chemically-synthesized API")]));
 
@@ -1337,7 +1347,7 @@
       const leadName = state.worksharingLead ? (cd.nameOf[state.worksharingLead] || state.worksharingLead) : null;
       children.push(kv("Procedures", [new TextRun("Worksharing" + (leadName ? " led by " + leadName : "") + " · " + procs.length + " procedures")]));
       procs.forEach((p, i) => {
-        children.push(new Paragraph({ children: [new TextRun({ text: (i + 1) + ". ", bold: true }), new TextRun(procDetail(p))], indent: { left: 360 }, spacing: { after: 40 } }));
+        children.push(new Paragraph({ children: [new TextRun({ text: (i + 1) + ". ", bold: true }), new TextRun(procDetail(p))], indent: { left: 360 }, spacing: sp({ after: 40 }) }));
       });
     } else {
       children.push(kv("Procedure", [new TextRun(procDetail(procs[0]))]));
@@ -1353,14 +1363,15 @@
     if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
 
     // ---- Variations table (Letter-of-Intent columns) ----
-    children.push(new Paragraph({ text: ws ? "Variations (for the Letter of Intent)" : "Variations", heading: HeadingLevel.HEADING_2, spacing: { before: 200 } }));
+    children.push(new Paragraph({ text: ws ? "Variations (for the Letter of Intent)" : "Variations", heading: HeadingLevel.HEADING_2, spacing: sp({ before: 200 }) }));
     const border = { style: BorderStyle.SINGLE, size: 4, color: "9A9A9A" };
     function cell(text, opts) {
       opts = opts || {};
       return new TableCell({
         width: { size: opts.width, type: WidthType.PERCENTAGE },
         shading: opts.header ? { fill: "EDEDE7" } : undefined,
-        children: [new Paragraph({ alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: text, bold: !!opts.bold })] })],
+        // Padded cells (before/after 60 + left/right indent) so text does not hug the borders.
+        children: [new Paragraph({ alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT, spacing: sp({ before: 60, after: 60 }), indent: { left: 127, right: 137 }, children: [new TextRun({ text: text, bold: !!opts.bold, font: opts.mono ? MONO : undefined })] })],
       });
     }
     const rows = [new TableRow({ tableHeader: true, children: [
@@ -1370,18 +1381,19 @@
     ] })];
     vars.slice().sort((a, b) => typeRankOf(a.type) - typeRankOf(b.type)).forEach((v) => {
       rows.push(new TableRow({ children: [
-        cell(v.code || "—", { width: 22 }),
+        cell(v.code || "—", { width: 22, mono: true }),
         cell(v.title || "No classification code (type only)", { width: 63 }),
         cell(v.type || "—", { width: 15, center: true }),
       ] }));
     });
     children.push(new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
+      margins: { left: 10, right: 10 },
       borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
       rows: rows,
     }));
 
-    children.push(new Paragraph({ children: [new TextRun({ text: "Variation numbering and titles as in the Classification Guideline" + (meta.guidelineRef ? " (" + meta.guidelineRef + ")" : "") + ". Generated by the Variation Toolbox.", italics: true, size: 18, color: "6A6A6A" })], spacing: { before: 240 } }));
+    children.push(new Paragraph({ children: [new TextRun({ text: "Variation numbering and titles as in the Classification Guideline" + (meta.guidelineRef ? " (" + meta.guidelineRef + ")" : "") + ". Generated by the Variation Toolbox.", italics: true, size: 18, color: "6A6A6A" })], spacing: sp({ before: 240 }) }));
 
     // ---- Precise Scope Wordings (for the eAF's 'precise scope' field) ----
     // Only the variations that carry an example wording in the guidance are listed; each wording's
@@ -1393,32 +1405,43 @@
       .map((v) => ({ v: v, item: preciseScopeFor(v.code, v.variantId) }))
       .filter((x) => x.item);
     if (scoped.length) {
-      children.push(new Paragraph({ text: "Precise Scope Wordings", heading: HeadingLevel.HEADING_2, spacing: { before: 240 } }));
-      children.push(new Paragraph({ children: [new TextRun({ text: (psg.subtitle || "Example wordings for the ‘precise scope’ section of the variation application form") + " (eAF). Only variations for which the guidance provides an example are listed.", italics: true, color: "5B6572" })], spacing: { after: 160 } }));
+      children.push(new Paragraph({ text: "Precise Scope Wordings", heading: HeadingLevel.HEADING_2, spacing: sp({ before: 240 }) }));
+      children.push(new Paragraph({ children: [new TextRun({ text: (psg.subtitle || "Example wordings for the ‘precise scope’ section of the variation application form") + " (eAF). Only variations for which the guidance provides an example are listed.", italics: true, color: "5B6572" })], spacing: sp({ after: 160 }) }));
       scoped.forEach((x) => {
         const v = x.v;
         const codeLabel = (v.code || ("Type " + v.type)) + (v.variantId ? "." + v.variantId : "");
         children.push(new Paragraph({
           children: [
-            new TextRun({ text: codeLabel, bold: true }),
+            new TextRun({ text: codeLabel, bold: true, font: MONO }),
             new TextRun({ text: v.title ? " — " + v.title : "" }),
             new TextRun({ text: "  (Type " + v.type + ")", color: "5B6572" }),
           ],
-          spacing: { before: 120, after: 40 },
+          spacing: sp({ before: 120, after: 40 }),
         }));
         // "/" separates the guidance's alternative wordings -> one bullet each.
         x.item.text.split(" / ").map((s) => s.trim()).filter(Boolean).forEach((alt) => {
-          children.push(new Paragraph({ text: alt, bullet: { level: 0 }, spacing: { after: 40 } }));
+          children.push(new Paragraph({ text: alt, bullet: { level: 0 }, spacing: sp({ after: 40 }) }));
         });
       });
       const src = psg.source;
       const srcText = src
         ? "Precise scope example wordings from: " + src.docTitle + (src.docRef ? " (" + src.docRef + (src.docDate ? ", " + src.docDate : "") + ")" : "") + ". Placeholders in { } and options in < > are to be completed/selected by the applicant."
         : "Precise scope example wordings from the Classification of Variations (this Toolbox).";
-      children.push(new Paragraph({ children: [new TextRun({ text: srcText, italics: true, size: 18, color: "6A6A6A" })], spacing: { before: 160 } }));
+      children.push(new Paragraph({ children: [new TextRun({ text: srcText, italics: true, size: 18, color: "6A6A6A" })], spacing: sp({ before: 160 }) }));
     }
 
-    const doc = new Document({ sections: [{ children: children }] });
+    // 12 pt sans-serif body + 1.2 line spacing as document defaults; headings sans-serif too
+    // so the whole document reads like the on-screen preview (blue heading colours stay).
+    const doc = new Document({
+      styles: {
+        default: { document: { run: { size: 24, font: SANS }, paragraph: { spacing: sp() } } },
+        paragraphStyles: [
+          { id: "Heading1", name: "Heading 1", run: { font: SANS } },
+          { id: "Heading2", name: "Heading 2", run: { font: SANS } },
+        ],
+      },
+      sections: [{ children: children }],
+    });
     const blob = await Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
