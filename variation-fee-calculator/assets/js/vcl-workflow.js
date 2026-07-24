@@ -1253,7 +1253,129 @@
     const ra = raEffort();
     if (ra !== null) line("RA workload", `~ ${escapeHtml(fmtNum(ra))} h`);
     if (anyCountries) line("Total fees", `<strong>${escapeHtml(fmtEUR(grand))}</strong>`);
+
+    // Export link: mirrors the whole summary into a .docx plus the variations table in the
+    // three Letter-of-Intent columns (Number / Title / Type). Reuses the existing dashed-green
+    // xlink style (the retired calculator hand-off used it) -- no new UI vocabulary. The label
+    // gains the "WS Letter of Intent" wording only for a worksharing, where that document is used.
+    if (summaryVariations().length) {
+      const xwrap = el("div", "vcl-wf-xlink");
+      const xbtn = el("button", "vcl-wf-xlink__btn",
+        wsActive()
+          ? "Export summary and classification codes to .docx for use in the WS Letter of Intent"
+          : "Export summary and classification codes to .docx");
+      xbtn.type = "button";
+      xbtn.addEventListener("click", () => exportSummaryDocx(grand, anyCountries));
+      xwrap.appendChild(xbtn);
+      card.appendChild(xwrap);
+    }
     body.appendChild(card);
+  }
+
+  // Build the Word document behind the summary's export link (Proposal A, user decision
+  // 2026-07-24): the on-screen summary rendered as text, then a "Variations" table in the
+  // official Letter-of-Intent columns. Uses the docx library already loaded for the
+  // Classification summary export; the variation numbers/titles come straight from the
+  // classification data, never free text.
+  async function exportSummaryDocx(grand, anyCountries) {
+    if (!window.docx) {
+      window.alert("The Word export library failed to load (no internet connection?). Please check your connection and try again.");
+      return;
+    }
+    const vars = summaryVariations();
+    if (!vars.length) { window.alert("No variations selected yet — nothing to export."); return; }
+
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } = window.docx;
+    const meta = DATA.CLASSIFICATION_META || {};
+    const ws = wsActive();
+    const cd = countryData();
+
+    const children = [];
+    children.push(new Paragraph({ text: ws ? "Worksharing — Summary & Variations" : "Variation — Summary & Variations", heading: HeadingLevel.HEADING_1 }));
+
+    const metaBits = ["Generated " + new Date().toLocaleDateString()];
+    if (meta.guidelineRef) metaBits.push("Classification Guideline " + meta.guidelineRef + (meta.applicableFrom ? ", applicable from " + meta.applicableFrom : ""));
+    if (ws) metaBits.push("for use in the Worksharing Letter of Intent");
+    children.push(new Paragraph({ children: [new TextRun({ text: metaBits.join(" · "), italics: true, color: "5B6572" })], spacing: { after: 300 } }));
+
+    // ---- Summary block (mirrors the on-screen card) ----
+    children.push(new Paragraph({ text: "Summary", heading: HeadingLevel.HEADING_2 }));
+    function kv(label, valueRuns) {
+      return new Paragraph({ children: [new TextRun({ text: label + ":  ", bold: true })].concat(valueRuns), spacing: { after: 80 } });
+    }
+    if (state.activeSubstance) children.push(kv("Active substance", [new TextRun(state.activeSubstance === "biologic" ? "Biologic" : "Chemically-synthesized API")]));
+
+    const counts = { IA: 0, IB: 0, II: 0 };
+    vars.forEach((v) => { const b = feeBucket(v.type); if (b) counts[b]++; });
+    const bits = ["IA", "IB", "II"].filter((t) => counts[t] > 0).map((t) => counts[t] + " × " + t).join(" · ");
+    if (vars.length > 1) {
+      children.push(kv("Variations", [new TextRun("Grouping · " + vars.length + " variations"), new TextRun({ text: bits ? " (" + bits + ")" : "", color: "5B6572" })]));
+    } else {
+      const v = vars[0];
+      children.push(kv("Variation", [new TextRun(v.code ? v.code + " — " + (v.title || "") + " (Type " + v.type + ")" : "Type " + v.type + " (no classification code)")]));
+    }
+
+    const procs = allProcedures();
+    if (ws && procs.length > 1) {
+      const leadName = state.worksharingLead ? (cd.nameOf[state.worksharingLead] || state.worksharingLead) : null;
+      children.push(kv("Procedures", [new TextRun("Worksharing" + (leadName ? " led by " + leadName : "") + " · " + procs.length + " procedures")]));
+      procs.forEach((p, i) => {
+        children.push(new Paragraph({ children: [new TextRun({ text: (i + 1) + ". ", bold: true }), new TextRun(procDetail(p))], indent: { left: 360 }, spacing: { after: 40 } }));
+      });
+    } else {
+      children.push(kv("Procedure", [new TextRun(procDetail(procs[0]))]));
+    }
+
+    const sch = workflowSchedule();
+    if (sch) {
+      const sd = state.submissionDate;
+      children.push(kv("Timeline", [new TextRun(sd ? fmtDate(addDays(sd, 0)) + " → EOP " + fmtDate(addDays(sd, sch.subToEop)) + " (" + sch.subToEop + " days)" : "Submission → EOP " + sch.subToEop + " days")]));
+    }
+    const ra = raEffort();
+    if (ra !== null) children.push(kv("RA workload", [new TextRun("~ " + fmtNum(ra) + " h")]));
+    if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
+
+    // ---- Variations table (Letter-of-Intent columns) ----
+    children.push(new Paragraph({ text: ws ? "Variations (for the Letter of Intent)" : "Variations", heading: HeadingLevel.HEADING_2, spacing: { before: 200 } }));
+    const border = { style: BorderStyle.SINGLE, size: 4, color: "9A9A9A" };
+    function cell(text, opts) {
+      opts = opts || {};
+      return new TableCell({
+        width: { size: opts.width, type: WidthType.PERCENTAGE },
+        shading: opts.header ? { fill: "EDEDE7" } : undefined,
+        children: [new Paragraph({ alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: text, bold: !!opts.bold })] })],
+      });
+    }
+    const rows = [new TableRow({ tableHeader: true, children: [
+      cell("Number as in the classification guideline", { header: true, bold: true, width: 22 }),
+      cell("Title of variation as in the classification guideline", { header: true, bold: true, width: 63 }),
+      cell("Type of variation", { header: true, bold: true, width: 15, center: true }),
+    ] })];
+    vars.slice().sort((a, b) => typeRankOf(a.type) - typeRankOf(b.type)).forEach((v) => {
+      rows.push(new TableRow({ children: [
+        cell(v.code || "—", { width: 22 }),
+        cell(v.title || "No classification code (type only)", { width: 63 }),
+        cell(v.type || "—", { width: 15, center: true }),
+      ] }));
+    });
+    children.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
+      rows: rows,
+    }));
+
+    children.push(new Paragraph({ children: [new TextRun({ text: "Variation numbering and titles as in the Classification Guideline" + (meta.guidelineRef ? " (" + meta.guidelineRef + ")" : "") + ". Generated by the Variation Toolbox.", italics: true, size: 18, color: "6A6A6A" })], spacing: { before: 240 } }));
+
+    const doc = new Document({ sections: [{ children: children }] });
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = ws ? "Worksharing-Summary-and-Variations.docx" : "Variation-Summary.docx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
 
