@@ -941,3 +941,53 @@
   .vclcalc-app .result-chiprow{ display:none; }
   .vclcalc-app .rdetail{ display:block !important; }
 }
+
+/* ============================================================================
+ * Result step v2 (2026-07-25): per-variation / per-strength breakdown table,
+ * EUR/local-currency toggle, subtle cap/grouping markers. New .vres-* classes
+ * (later rules win) so the older .breakdown-* rules -- reused by the changelog
+ * and HA-website lists -- stay untouched.
+ * ========================================================================== */
+.vclcalc-app .vres-panelhead{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.vclcalc-app .vres-curtoggle{ display:inline-flex; border:1.5px solid var(--accent); border-radius:999px; overflow:hidden; }
+.vclcalc-app .vres-curtoggle .vres-ct{ font-family:var(--sans); font-size:11.5px; font-weight:600; padding:5px 14px; border:none; background:#fff; color:var(--accent-deep); cursor:pointer; }
+.vclcalc-app .vres-curtoggle .vres-ct.on{ background:var(--accent); color:#fff; }
+
+.vclcalc-app .vres-cty{ border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:12px; background:#fff; }
+.vclcalc-app .vres-top{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 15px; background:var(--paper); border-bottom:1px solid var(--line); }
+.vclcalc-app .vres-name{ font-size:14.5px; font-weight:600; color:var(--ink); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.vclcalc-app .vres-meta{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:2px; }
+.vclcalc-app .vres-meta b{ color:var(--ink-soft); font-weight:700; }
+.vclcalc-app .vres-total{ text-align:right; flex-shrink:0; }
+.vclcalc-app .vres-eq{ display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); }
+.vclcalc-app .vres-amt{ font-family:var(--serif); font-size:18px; font-weight:600; color:var(--accent-deep); }
+
+.vclcalc-app .vres-mtag{ display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.03em; padding:2px 6px; border-radius:5px; border:1px solid; }
+.vclcalc-app .vres-mtag--grp{ background:var(--accent-soft); color:var(--accent-deep); border-color:#e7d9b6; }
+.vclcalc-app .vres-mtag--cap{ background:var(--amber-soft); color:var(--amber); border-color:#f0dcc4; }
+
+.vclcalc-app .vres-tbl{ width:100%; border-collapse:collapse; font-size:12px; }
+.vclcalc-app .vres-tbl thead th{ font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--accent-deep); background:var(--accent-soft); text-align:right; padding:7px 15px; }
+.vclcalc-app .vres-tbl thead th:first-child{ text-align:left; }
+.vclcalc-app .vres-tbl tbody td{ padding:7px 15px; border-bottom:1px solid #f0ece3; color:var(--ink-soft); text-align:right; vertical-align:top; }
+.vclcalc-app .vres-tbl tbody td:first-child{ text-align:left; color:var(--ink); }
+.vclcalc-app .vres-num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.vclcalc-app .vres-var{ display:flex; align-items:center; gap:7px; }
+.vclcalc-app .vres-var .vres-vno{ display:inline-block; min-width:46px; }
+.vclcalc-app .vres-var small{ color:var(--ink-faint); font-size:11px; }
+.vclcalc-app .vres-subnote{ color:var(--ink-faint); font-size:10.5px; font-family:var(--mono); }
+
+.vclcalc-app .vres-tbl tfoot td{ padding:9px 15px; font-weight:600; color:var(--ink); border-top:1px solid var(--line-strong); text-align:right; background:#fff; }
+.vclcalc-app .vres-tbl tfoot td:first-child{ text-align:left; }
+.vclcalc-app .vres-fnote{ font-weight:400; font-family:var(--mono); font-size:10.5px; }
+.vclcalc-app .vres-fnote--grp{ color:var(--accent-deep); }
+.vclcalc-app .vres-fnote--cap{ color:var(--amber); }
+.vclcalc-app .vres-capraw{ text-decoration:line-through; color:var(--ink-faint); font-weight:400; font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px; margin-right:8px; }
+
+.vclcalc-app .vres-grand{ display:flex; justify-content:space-between; align-items:center; border:1.5px solid var(--accent); background:var(--accent-soft); border-radius:12px; padding:13px 16px; }
+.vclcalc-app .vres-grand-l{ font-size:15px; font-weight:600; color:var(--accent-deep); }
+.vclcalc-app .vres-grand-r{ font-family:var(--serif); font-size:19px; font-weight:600; color:var(--accent-deep); font-variant-numeric:tabular-nums; }
+
+@media print{
+  .vclcalc-app .vres-curtoggle{ display:none; }
+}
