@@ -346,9 +346,6 @@ const appState = {
   // Which result-card status chips (cap / grouping / local currency) are expanded
   // (keyed "cc|kind") -- survives re-renders of the result step.
   resultChipOpen: {},
-  // Result step: 'eur' or 'local' -- the EUR/local-currency toggle above the
-  // "Fees by country" list (only shown when a foreign-currency country is present).
-  resultCurrencyMode: 'eur',
   results: null
 };
 
@@ -1210,149 +1207,129 @@ function computeResult() {
   appState.results = { countries: countryResults, grandTotal };
 }
 
-// Per-country breakdown for the result table: one line per variation (ordered
-// II > IB > IA), with a per-strength split (Base fee + per-additional-strength).
-// All values come straight from the fee engine via sub-runs of
-// computeCountryResult, so the displayed lines always reconcile with the country
-// total, whatever the country's grouping/cap rules are:
-//   - grouping / no special mechanic: each line is the MARGINAL cost of adding
-//     that variation (lead at full rate, further variations at the grouped rate);
-//     the marginals telescope to the real combined total for any grouping style.
-//   - cap: each line is the full standalone single-variation fee (so the lines
-//     show the uncapped amounts); rawEur is their sum, which the footer then caps
-//     down to the real (capped) total.
-function computeCountryBreakdown(cc, full) {
-  const cfg = ensureCountryConfig(cc);
-  const counts = appState.globalCounts;
-  const s = cfg.strengths;
-  const cr = full || computeCountryResult(cc, cfg, counts);
-
-  const order = ['II', 'IB', 'IA'];
-  const instances = [];
-  order.forEach(t => { for (let i = 0; i < (counts[t] || 0); i++) instances.push(t); });
-  const labelFor = t => { const r = resolveRow(cc, cfg.role, t, cfg.specialByType[t]); return (r && r.special) ? r.special : ''; };
-  const totalFor = (cnts, str) => (computeCountryResult(cc, Object.assign({}, cfg, { strengths: str }), cnts).total || 0);
-
-  // Full standalone single-variation fee per present type (uncapped, ungrouped) and its
-  // 1st-strength base -- used both for the raw (before-cap) sum and to decide the mechanic.
-  const fullByType = {}, baseByType = {};
-  order.forEach(t => {
-    if ((counts[t] || 0) > 0) {
-      const one = { IA: 0, IB: 0, II: 0 }; one[t] = 1;
-      fullByType[t] = totalFor(one, s);
-      baseByType[t] = s > 1 ? totalFor(one, 1) : fullByType[t];
-    }
-  });
-  const rawFull = order.reduce((a, t) => a + (fullByType[t] || 0) * (counts[t] || 0), 0);
-
-  // Mechanic: a cap fired -> 'cap'; otherwise, if the combined total comes out below the
-  // sum of the full standalone fees there is a grouping benefit (reduced rate and/or
-  // subsumption) -> 'grouping'; if the total equals the raw sum, no special mechanic.
-  const capFired = cr.groupCapValue !== null || cr.items.some(it => it.capValue !== null);
-  const mechanic = capFired ? 'cap' : (cr.total < rawFull - 0.01 ? 'grouping' : 'none');
-
-  const lines = [];
-  if (mechanic === 'cap') {
-    // Each variation at its full standalone fee (the "uncapped" per-variation amount);
-    // the footer caps their sum (rawFull) down to the real total.
-    instances.forEach(t => {
-      const lt = fullByType[t], bs = baseByType[t];
-      lines.push({ type: t, label: labelFor(t), base: bs, perAdd: s > 1 ? (lt - bs) / (s - 1) : 0, lineTotal: lt, noExtra: false });
-    });
-  } else {
-    // Marginal cost of each variation, added one at a time in II > IB > IA order (lead at
-    // full rate, further/subsumed variations at the reduced or zero marginal). Sums exactly
-    // to the real total. A zero-cost variation that follows a charged one is flagged so the
-    // row can say "no extra fee".
-    let prevS = 0, prev1 = 0, seenCharged = false; const run = { IA: 0, IB: 0, II: 0 };
-    instances.forEach(t => {
-      run[t]++;
-      const cnts = { IA: run.IA, IB: run.IB, II: run.II };
-      const totS = totalFor(cnts, s);
-      const tot1 = s > 1 ? totalFor(cnts, 1) : totS;
-      const lt = totS - prevS;
-      const bs = s > 1 ? (tot1 - prev1) : lt;
-      const noExtra = Math.abs(lt) < 0.005 && seenCharged;
-      lines.push({ type: t, label: labelFor(t), base: bs, perAdd: s > 1 ? (lt - bs) / (s - 1) : 0, lineTotal: lt, noExtra });
-      if (Math.abs(lt) > 0.005) seenCharged = true;
-      prevS = totS; prev1 = tot1;
-    });
-  }
-  return { mechanic, lines, rawEur: rawFull };
-}
-
 // ---- Step 3: result ----
 function renderStepResult() {
   const res = appState.results;
-  const mode = appState.resultCurrencyMode || 'eur';
 
-  const countryCards = res.countries.map((cr) => {
-    if (!cr.hasData) {
-      return `
-      <div class="vres-cty">
-        <div class="vres-top">
-          <div>
-            <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
-            <div class="vres-meta"><b>${roleLabel(cr.role)}</b></div>
-          </div>
-          <div class="vres-total"><span class="vres-amt">–</span></div>
-        </div>
-      </div>`;
+  const countryRows = res.countries.map((cr) => {
+
+    const itemLines = cr.items.map(it => {
+      const r = it.row;
+      // Coloured type pill instead of the written-out "Type IA" (card design 2026-07-23);
+      // the special label alone follows the count -- rows without one show just the count.
+      const label = r.special ? `${r.special}` : '';
+      const countLabel = `${it.count}×`;
+      const displayAmtValue = (it.capValue !== null && it.rawSumSingle > it.singleTotal + 0.01)
+        ? it.rawSumSingle   // show the uncapped raw amount when per-type cap fired
+        : (it.singleTotal !== null ? it.singleTotal : it.total);
+      const displayAmt = fmtEUR(displayAmtValue);
+
+      const lineStart = `${typePillHTML(r.type)}<span class="bd-item-label">${countLabel}${label ? ' ' + label : ''}</span>`;
+      return { html: `<span class="bd-meta bd-item-line">${lineStart}<span class="bd-item-amount">${displayAmt}</span></span>`, lineStart, eurValue: displayAmtValue };
+    });
+    const itemLinesHtml = itemLines.map(l => l.html).join('');
+
+    // ── Cap annotation: one per country ──
+    // Priority: group cap (sum of all types exceeds country ceiling) takes
+    // precedence and replaces per-type caps, since it is the binding rule.
+    const firedCaps = cr.items.filter(it => it.capValue !== null).map(it => it.capValue);
+    let capNote = '';
+    if (cr.groupCapValue !== null) {
+      // Group cap: show the cap value and the uncapped sum so the user sees the difference
+      capNote = `<div class="fee-note fee-note--cap"><span class="fn-label">Cap fee applied (total before cap: ${fmtEUR(cr.sumOfSingles)}):</span><span class="fn-amount">${fmtEUR(cr.groupCapValue)}</span></div>`;
+    } else if (firedCaps.length > 0) {
+      capNote = `<div class="fee-note fee-note--cap"><span class="fn-label">Cap fee applied:</span><span class="fn-amount">${fmtEUR(Math.max(...firedCaps))}</span></div>`;
     }
 
-    const bd = computeCountryBreakdown(cr.cc, cr);
-    const useLocal = mode === 'local' && cr.currency && cr.fxRate != null;
-    const m = eurVal => useLocal ? fmtLocalCurrency(eurVal * cr.fxRate, cr.currency) : fmtEUR(eurVal);
+    // ── Grouping annotation: one per country ──
+    // If grouping fired for more than one item, show the highest type's
+    // rate (Type II > Type IB > Type IA), matching how the fee itself is
+    // determined by the highest type present.
+    const firedGrouping = cr.items.filter(it => it.groupingFee !== null);
+    const topGrouping = firedGrouping.reduce((best, it) =>
+      (!best || TYPE_PRIORITY[it.row.type] > TYPE_PRIORITY[best.row.type]) ? it : best, null);
+    // The amount shown is the row's real total (already correctly includes
+    // any per-additional-strength surcharge) — not the raw K rate, which
+    // only covers the 1st strength. When there's more than one strength,
+    // the label spells out the breakdown instead of just naming the rate.
+    let groupNote = '';
+    if (topGrouping) {
+      const hasBreakdown = cr.strengths > 1 && topGrouping.groupingBase !== null && topGrouping.groupingPerAdditional !== null && Math.abs(topGrouping.groupingPerAdditional) > 0.01;
+      const label = hasBreakdown
+        ? `Grouping fee applied (${fmtEUR(topGrouping.groupingBase)} for the 1st strength + ${fmtEUR(topGrouping.groupingPerAdditional)} for each additional strength):`
+        : 'Grouping fee applied:';
+      groupNote = `<div class="fee-note fee-note--group"><span class="fn-label">${label}</span><span class="fn-amount">${fmtEUR(topGrouping.total)}</span></div>`;
+    }
 
-    // Header caption: exchange rate (local view) or "EUR equivalent" (foreign country shown in EUR).
-    let caption = '';
-    if (useLocal) caption = `<span class="vres-eq">${fmtRate(cr.fxRate, cr.currency)}</span>`;
-    else if (cr.currency && cr.fxRate != null) caption = `<span class="vres-eq">EUR equivalent</span>`;
+    // Local currency block: heading, FX rate, each variation line converted to
+    // local currency (mirrors the EUR lines above 1:1), then the total — right-aligned.
+    const hasLocal = cr.hasData && cr.currency && cr.fxRate != null && cr.totalLocal != null;
+    const localItemLines = hasLocal ? itemLines.map(l => {
+      const localValue = (l.eurValue !== null && l.eurValue !== undefined) ? l.eurValue * cr.fxRate : null;
+      const localAmt = localValue !== null ? fmtLocalCurrency(localValue, cr.currency) : '–';
+      return `<span class="bd-meta bd-item-line">${l.lineStart}<span class="bd-item-amount">${localAmt}</span></span>`;
+    }).join('') : '';
+    const localBlock = hasLocal ? `
+      <div class="local-currency-row">
+        <div class="lc-header">
+          <span class="lc-title">Fees in local currency</span>
+          <span class="lc-rate">${fmtRate(cr.fxRate, cr.currency)}</span>
+        </div>
+        <div class="lc-items">${localItemLines}</div>
+        <div class="lc-total">
+          <span class="lc-total-label">Total</span>
+          <span class="lc-amount">${fmtLocalCurrency(cr.totalLocal, cr.currency)}</span>
+        </div>
+      </div>` : '';
 
-    // Subtle mechanic badge in the header, sized like the country-code badge next to it.
-    let mtag = '';
-    if (bd.mechanic === 'grouping') mtag = `<span class="vres-mtag vres-mtag--grp">Grouping fee</span>`;
-    else if (bd.mechanic === 'cap') mtag = `<span class="vres-mtag vres-mtag--cap">Cap fee</span>`;
-
-    // One row per variation (Var 1..N), with base fee and per-additional-strength surcharge.
-    const rowsHtml = bd.lines.map((l, i) => {
-      const perAdd = Math.abs(l.perAdd) > 0.005 ? m(l.perAdd) : '–';
-      const zeroNote = l.noExtra ? ` <small class="vres-subnote">· no extra fee</small>` : '';
-      return `<tr>
-        <td><span class="vres-var">${typePillHTML(l.type)}<span class="vres-vno">Var ${i + 1}</span><small>${l.label || ''}</small>${zeroNote}</span></td>
-        <td class="vres-num">${m(l.base)}</td>
-        <td class="vres-num">${perAdd}</td>
-        <td class="vres-num">${m(l.lineTotal)}</td>
-      </tr>`;
+    // ── Status chips (2026-07-23, mockup B): cap / grouping / local currency become
+    // small toggle buttons at the card's foot -- plain markers without amounts (user
+    // decision), all in the grouping chip's gold. The detail they reveal is the
+    // unchanged note / local-currency block, wrapped in .rdetail; open state lives in
+    // appState.resultChipOpen so it survives re-renders. Print always shows details.
+    const chipDefs = [];
+    if (capNote) chipDefs.push({ kind: 'cap', label: 'Cap fee', detail: capNote });
+    if (groupNote) chipDefs.push({ kind: 'group', label: 'Grouping fee', detail: groupNote });
+    if (localBlock) chipDefs.push({ kind: 'fx', label: 'Fees in local currency', detail: localBlock });
+    const chipRow = chipDefs.length ? `
+      <div class="result-chiprow">
+        ${chipDefs.map(c => {
+          const key = cr.cc + '|' + c.kind;
+          const open = !!appState.resultChipOpen[key];
+          return `<button type="button" class="rchip" data-rchip="${escapeHtml(key)}"><span class="rchip__car">${open ? '&#9660;' : '&#9654;'}</span> ${c.label}</button>`;
+        }).join('')}
+      </div>` : '';
+    const detailBlocks = chipDefs.map(c => {
+      const key = cr.cc + '|' + c.kind;
+      const open = !!appState.resultChipOpen[key];
+      return `<div class="rdetail${open ? ' open' : ''}" data-rdetail="${escapeHtml(key)}">${c.detail}</div>`;
     }).join('');
 
-    // Footer: always "Country subtotal" (white); the mechanic is a subtle note beside it.
-    // A cap shows the raw (uncapped) sum struck through before the capped subtotal.
-    let note = '';
-    if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">· Grouping fee applies</span>`;
-    else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">· Cap fee applies</span>`;
-    const amtCell = bd.mechanic === 'cap'
-      ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(cr.total)}</span>`
-      : `<span class="vres-num">${m(cr.total)}</span>`;
+    // EUR total column
+    const eurLabel = (cr.currency && cr.fxRate) ? 'EUR equivalent' : '';
+    const amountBlock = cr.hasData
+      ? `<div class="bd-amount-col">
+           ${eurLabel ? `<span class="bd-meta" style="text-align:right;display:block;margin-bottom:2px;">${eurLabel}</span>` : ''}
+           <span class="bd-amount">${fmtEUR(cr.total)}</span>
+         </div>`
+      : `<span class="bd-amount">–</span>`;
 
     return `
-      <div class="vres-cty">
-        <div class="vres-top">
-          <div>
-            <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span>${mtag}</div>
-            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> · <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b></div>
+      <div class="breakdown-row">
+        <div class="bd-top">
+          <div class="bd-left">
+            <span class="bd-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></span>
+            <span class="bd-meta"><b>${roleLabel(cr.role)}</b> · <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b></span>
           </div>
-          <div class="vres-total">${caption}<span class="vres-amt">${m(cr.total)}</span></div>
+          ${amountBlock}
         </div>
-        <table class="vres-tbl">
-          <thead><tr><th>Variation</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-          <tfoot><tr><td colspan="3">Country subtotal${note}</td><td>${amtCell}</td></tr></tfoot>
-        </table>
-      </div>`;
-  }).join('');
-
-  const anyForeign = res.countries.some(cr => cr.hasData && cr.currency && cr.fxRate != null);
+        <div class="bd-items">${itemLinesHtml}</div>
+        ${chipRow}
+        ${detailBlocks}
+      </div>
+    `;
+  // Insert a divider element between rows (not after the last one)
+  }).join('<div class="breakdown-divider"></div>');
 
   const anySubsumed = res.countries.some(cr => cr.items.some(it => it.subsumed));
   const anyNoData = res.countries.some(cr => !cr.hasData);
@@ -1369,19 +1346,19 @@ function renderStepResult() {
       <div class="rp-sub">${res.countries.map(cr=>cr.cc).join(' · ')}</div>
     </div>
 
-    <div class="panel" style="margin-bottom:18px;">
-      <div class="vres-panelhead">
-        <h2 class="bd-heading" style="margin:0;">Fees by country</h2>
-        ${anyForeign ? `
-        <div class="vres-curtoggle" role="group" aria-label="Currency">
-          <button type="button" class="vres-ct${mode==='eur'?' on':''}" data-cmode="eur">EUR</button>
-          <button type="button" class="vres-ct${mode==='local'?' on':''}" data-cmode="local">Local currency</button>
-        </div>` : ''}
-      </div>
-      ${countryCards}
-      <div class="vres-grand">
-        <span class="vres-grand-l">Total${anyForeign ? ' (EUR)' : ''}</span>
-        <span class="vres-grand-r">${fmtEUR(res.grandTotal)}</span>
+    <div class="panel result-breakdown-wrap" style="margin-bottom:18px;">
+      <h2 class="bd-heading" style="margin-bottom:14px;">Fees by country</h2>
+      <div class="breakdown">${countryRows}
+        <div class="breakdown-row total-row">
+          <div class="bd-top">
+            <div class="bd-left">
+              <span class="bd-name">Total</span>
+            </div>
+            <div class="bd-amount-col">
+              <span class="bd-amount">${fmtEUR(res.grandTotal)}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1420,11 +1397,16 @@ function renderStepResult() {
 
   document.getElementById('vclcalc-back3').addEventListener('click', () => setStep(2));
 
-  // Currency toggle (EUR / local currency): re-render the result step in the chosen mode.
-  contentEl.querySelectorAll('[data-cmode]').forEach(btn => {
+  // Status-chip toggles: flip the stored state and the DOM directly (no re-render,
+  // so open changelog/HA panels are left alone).
+  contentEl.querySelectorAll('[data-rchip]').forEach(btn => {
     btn.addEventListener('click', () => {
-      appState.resultCurrencyMode = btn.dataset.cmode;
-      renderStepResult();
+      const key = btn.dataset.rchip;
+      const open = (appState.resultChipOpen[key] = !appState.resultChipOpen[key]);
+      const detail = contentEl.querySelector(`[data-rdetail="${key}"]`);
+      if (detail) detail.classList.toggle('open', open);
+      const car = btn.querySelector('.rchip__car');
+      if (car) car.innerHTML = open ? '&#9660;' : '&#9654;';
     });
   });
 
@@ -1472,7 +1454,6 @@ function renderStepResult() {
     appState.globalCounts = { IA: 0, IB: 0, II: 0 };
     appState.prefillNote = null; // the counts it described are gone -- it would now be a lie
     appState.results = null;
-    appState.resultCurrencyMode = 'eur';
     setStep(0);
   });
 }
