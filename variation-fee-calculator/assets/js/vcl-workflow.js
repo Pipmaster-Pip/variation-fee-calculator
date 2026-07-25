@@ -55,6 +55,9 @@
     // per-line picks for every participating authority (keyed "cc|role").
     worksharingLeadSpecial: null,
     wsSpecials: {},
+    // Single-variation pricing (Station D, non-worksharing): per-line fee-category picks
+    // (e.g. DE Type II "simple" vs "complex"), keyed "cc|role".
+    specials: {},
   };
 
   let container = null;
@@ -210,6 +213,20 @@
     if (stored && opts.indexOf(stored) !== -1) return stored;
     return defaultSpecial(cc, role, opts);
   }
+  // Non-worksharing fee-category options (e.g. DE Type II "simple"/"complex"): the published
+  // labels minus the "… - worksharing" variants, which belong to the worksharing path only.
+  function nonWsOptionsFor(cc, role) {
+    return specialOptionsFor(cc, role).filter((s) => !isWorksharingSpecial(s));
+  }
+  // The effective pick for a single (non-worksharing) line: the stored choice if still on
+  // offer, otherwise defaultSpecial (first option where "no pick" is not a real alternative,
+  // e.g. DK/ES/DE-II with no plain standard row -- so display and pricing stay in sync).
+  function specialFor(cc, role) {
+    const opts = nonWsOptionsFor(cc, role);
+    const stored = state.specials[wsSpecialKey(cc, role)];
+    if (stored && opts.indexOf(stored) !== -1) return stored;
+    return defaultSpecial(cc, role, opts);
+  }
   // Same rule for the lead's own pick.
   function leadSpecial() {
     if (!state.worksharingLead) return null;
@@ -251,7 +268,10 @@
   // type wherever the label is not published).
   function procPricedCountries(p) {
     const list = procCountries(p);
-    if (!wsActive()) return list;
+    if (!wsActive()) return list.map((x) => {
+      const s = specialFor(x.cc, x.role);
+      return s ? { cc: x.cc, role: x.role, strengths: x.strengths, special: { IA: s, IB: s, II: s } } : x;
+    });
     return list.filter((x) => x.cc !== state.worksharingLead).map((x) => {
       const role = wsPricingRole(x.role);
       const s = wsSpecialFor(x.cc, role);
@@ -390,7 +410,7 @@
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
     state.procedure = newProcedure(); state.submission = { grouping: false, worksharing: false };
     state.grouping = []; state.worksharing = []; state.worksharingLead = null;
-    state.worksharingLeadSpecial = null; state.wsSpecials = {};
+    state.worksharingLeadSpecial = null; state.wsSpecials = {}; state.specials = {};
     state.submissionDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
     state.strengthsDefault = 1; state.strengthsOverrides = {};
     state.summaryShowVariations = false;
@@ -1043,17 +1063,30 @@
         });
         card.appendChild(grid);
       } else {
+        // Single-variation view: same column grid as worksharing (Country · Role · Fee
+        // category · Strengths · Fee) so authorities that distinguish variants (e.g. DE
+        // Type II simple/complex) get a picker; the rest collapse to a static "Standard".
+        const grid = el("div", "vcl-wf-fee-grid");
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h", "Country"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h", "Role"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h", "Fee category"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h is-c", "Strengths"));
+        grid.appendChild(el("div", "vcl-wf-fee-grid__h is-r", "Fee"));
         ccAll.forEach((x) => {
           const cr = r.countries[k++];
-          const line = el("div", "vcl-wf-fee-line");
           const name = (cd.nameOf[x.cc] || x.cc);
           const roleShort = { RMS: "RMS", CMS: "CMS", national: "national", EMA: "EMA" }[x.role] || x.role;
-          const strengthsNote = (x.strengths > 1) ? ` <span class="vcl-wf-fee-line__role">×${x.strengths} strengths</span>` : "";
-          line.appendChild(el("span", "vcl-wf-fee-line__c",
-            `${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span> <span class="vcl-wf-fee-line__role">${escapeHtml(roleShort)}</span>${strengthsNote}`));
-          line.appendChild(el("span", "vcl-wf-fee-line__amt", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
-          card.appendChild(line);
+          grid.appendChild(el("div", "vcl-wf-fee-line__c", `${escapeHtml(name)} <span class="vcl-wf-fee-line__cc">${escapeHtml(x.cc)}</span>`));
+          grid.appendChild(el("div", "vcl-wf-fee-line__role", escapeHtml(roleShort)));
+          grid.appendChild(buildFeeCategoryCell(x.cc, x.role, x.strengths, specialFor(x.cc, x.role), (v) => {
+            if (v) state.specials[wsSpecialKey(x.cc, x.role)] = v;
+            else delete state.specials[wsSpecialKey(x.cc, x.role)];
+            rerender();
+          }, nonWsOptionsFor(x.cc, x.role)));
+          grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(x.strengths)));
+          grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", cr.hasData ? fmtEUR(cr.total) : "no fee data"));
         });
+        card.appendChild(grid);
       }
       body.appendChild(card);
     });
@@ -1102,8 +1135,8 @@
   // one choice, or (b) every choice prices identically with the current counts/strengths
   // (e.g. ES's "full" vs "abbreviated" IB applications carry the same fee). Data-driven:
   // should the Excel ever price them apart, the dropdown reappears on the next regen.
-  function buildFeeCategoryCell(cc, role, strengths, current, onPick) {
-    const opts = wsOptionsFor(cc, role);
+  function buildFeeCategoryCell(cc, role, strengths, current, onPick, opts) {
+    opts = opts || wsOptionsFor(cc, role);
     const withStd = hasStandardRow(cc, role);
     const choices = (withStd ? [null] : []).concat(opts);
     let collapse = choices.length <= 1;
@@ -1596,9 +1629,9 @@
       const sd = state.submissionDate;
       const eopD = sd ? addDays(sd, sch.subToEop) : null;
       if (sd) {
-        midHtml += '<div class="vcl-wf-tl-dates">Submission <strong>' + escapeHtml(fmtDate(addDays(sd, 0))) + '</strong> &rarr; EOP <strong>' + escapeHtml(fmtDate(eopD)) + '</strong> <span class="vcl-wf-tl-dates__muted">&middot; ' + sch.subToEop + ' d</span></div>';
+        midHtml += '<div class="vcl-wf-tl-dates">Submission <strong>' + escapeHtml(fmtDate(addDays(sd, 0))) + '</strong> &rarr; EOP <strong>' + escapeHtml(fmtDate(eopD)) + '</strong> <span class="vcl-wf-tl-dates__muted">&middot; ' + sch.subToEop + ' d (' + fmtMonths(sch.subToEop) + ' months)</span></div>';
       } else {
-        midHtml += '<div class="vcl-wf-tl-dates vcl-wf-tl-dates--muted">Sub &rarr; EOP &asymp; ' + sch.subToEop + ' d &mdash; add a date in step C</div>';
+        midHtml += '<div class="vcl-wf-tl-dates vcl-wf-tl-dates--muted">Sub &rarr; EOP &asymp; ' + sch.subToEop + ' d (' + fmtMonths(sch.subToEop) + ' months) &mdash; add a date in step C</div>';
       }
       midHtml += '<div class="vcl-wf-tl vcl-wf-tl--mini">'
         + seg2("prep", 0, sch.dSub, p) + seg2("val", sch.dSub, sch.validationDays, p)
