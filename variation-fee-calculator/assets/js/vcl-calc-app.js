@@ -1308,11 +1308,8 @@ function renderStepResult() {
     if (useLocal) caption = `<span class="vres-eq">${fmtRate(cr.fxRate, cr.currency)}</span>`;
     else if (cr.currency) caption = `<span class="vres-eq">EUR equivalent</span>`;
 
-    // Subtle mechanic badge in the header, sized like the country-code badge next to it.
-    let mtag = '';
-    if (bd.mechanic === 'grouping') mtag = `<span class="vres-mtag vres-mtag--grp">Grouping fee</span>`;
-    else if (bd.mechanic === 'cap') mtag = `<span class="vres-mtag vres-mtag--cap">Cap fee</span>`;
-
+    // The mechanic (grouping / cap) is shown only as the subtle footer note below, to keep
+    // the header calm -- no badge next to the country code.
     const inclLabel = bd.mechanic === 'grouping' ? 'included in grouped fee' : 'no extra fee';
 
     // One row per variation type; rows with more than one variation expand to the individual ones.
@@ -1353,7 +1350,7 @@ function renderStepResult() {
       <div class="vres-cty">
         <div class="vres-top">
           <div>
-            <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span>${mtag}</div>
+            <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
             <div class="vres-meta"><b>${roleLabel(cr.role)}</b> · <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b></div>
           </div>
           <div class="vres-total">${caption}<span class="vres-amt">${m(cr.total)}</span></div>

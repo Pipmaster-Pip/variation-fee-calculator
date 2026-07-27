@@ -974,8 +974,11 @@
 .vclcalc-app .vres-tbl thead th:first-child{ text-align:left; }
 .vclcalc-app .vres-tbl tbody td{ padding:8px 15px; border-bottom:1px solid #f0ece3; border-top:0; color:var(--ink-soft); text-align:right; vertical-align:top; }
 .vclcalc-app .vres-tbl tbody td:first-child{ text-align:left; color:var(--ink); }
+/* Numeric columns get a fixed width so the first (Variation) column keeps the rest --
+   enough room for "Type IB … · included in grouped fee" to stay on one line. */
+.vclcalc-app .vres-tbl th:not(:first-child), .vclcalc-app .vres-tbl td:not(:first-child){ width:150px; white-space:nowrap; }
 .vclcalc-app .vres-num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
-.vclcalc-app .vres-var{ display:flex; align-items:center; gap:7px; }
+.vclcalc-app .vres-var{ display:flex; align-items:center; gap:7px; flex-wrap:nowrap; white-space:nowrap; }
 .vclcalc-app .vres-cnt{ font-family:var(--mono); font-weight:600; color:var(--ink-soft); }
 .vclcalc-app .vres-var small{ color:var(--ink-faint); font-size:11px; }
 .vclcalc-app .vres-vno{ display:inline-block; min-width:46px; color:var(--ink-soft); }
