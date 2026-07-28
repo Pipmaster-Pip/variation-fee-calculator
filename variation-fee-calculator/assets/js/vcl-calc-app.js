@@ -1242,13 +1242,17 @@ function computeCountryBreakdown(cc, full) {
 
   const types = [];
   if (mechanic === 'cap') {
-    // Each type priced on its own; the footer caps their sum down to the real total.
+    // Each type shows its FULL (uncapped) fee for its variation count -- what those variations
+    // would cost on their own -- so the reader sees the real per-type amounts. The footer then
+    // caps their sum down to the country's actual (capped) total, which covers all variations.
+    // Uses each single-type run's pre-cap P+Q+R (rawSumSingle) instead of the capped S.
+    const rawFor = (cnts, str) => { const it = computeCountryResult(cc, Object.assign({}, cfg, { strengths: str }), cnts).items[0]; return it ? (it.rawSumSingle || 0) : 0; };
     order.forEach(t => {
       const cnt = counts[t] || 0;
       const vars = []; let pvS = 0, pv1 = 0;
       for (let k = 1; k <= cnt; k++) {
         const only = { IA: 0, IB: 0, II: 0 }; only[t] = k;
-        const tS = totalFor(only, s), t1 = s > 1 ? totalFor(only, 1) : tS;
+        const tS = rawFor(only, s), t1 = s > 1 ? rawFor(only, 1) : tS;
         const line = clamp0(tS - pvS);
         vars.push(mkVar(s > 1 ? clamp0(t1 - pv1) : line, line));
         pvS = tS; pv1 = t1;
@@ -1355,7 +1359,7 @@ function renderStepResult() {
           </div>
           <div class="vres-total">${caption}<span class="vres-amt">${m(cr.total)}</span></div>
         </div>
-        <table class="vres-tbl">
+        <table class="vres-tbl${bd.mechanic !== 'none' ? ' vres-tbl--indicative' : ''}">
           <thead><tr><th>Variation</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
           <tbody>${rowsHtml}</tbody>
           <tfoot><tr><td colspan="3">Country subtotal${note}</td><td>${amtCell}</td></tr></tfoot>

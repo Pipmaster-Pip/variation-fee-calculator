@@ -978,6 +978,9 @@
    enough room for "Type IB … · included in grouped fee" to stay on one line. */
 .vclcalc-app .vres-tbl th:not(:first-child), .vclcalc-app .vres-tbl td:not(:first-child){ width:150px; white-space:nowrap; }
 .vclcalc-app .vres-num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+/* When a grouping or cap fee applies, the per-variation amounts are only indicative --
+   the binding number is the country subtotal below -- so grey them out. */
+.vclcalc-app .vres-tbl--indicative tbody td.vres-num{ color:var(--ink-faint); }
 .vclcalc-app .vres-var{ display:flex; align-items:center; gap:7px; flex-wrap:nowrap; white-space:nowrap; }
 .vclcalc-app .vres-cnt{ font-family:var(--mono); font-weight:600; color:var(--ink-soft); }
 .vclcalc-app .vres-var small{ color:var(--ink-faint); font-size:11px; }
@@ -997,7 +1000,9 @@
 .vclcalc-app .vres-fnote{ font-weight:400; font-family:var(--mono); font-size:10.5px; }
 .vclcalc-app .vres-fnote--grp{ color:var(--accent-deep); }
 .vclcalc-app .vres-fnote--cap{ color:var(--amber); }
-.vclcalc-app .vres-capraw{ text-decoration:line-through; color:var(--ink-faint); font-weight:400; font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px; margin-right:8px; }
+/* Cap footer: raw sum struck through, stacked above the capped total so it stays
+   right-aligned inside the column and never overflows past the table edge. */
+.vclcalc-app .vres-capraw{ display:block; text-align:right; text-decoration:line-through; color:var(--ink-faint); font-weight:400; font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px; margin-bottom:1px; }
 
 .vclcalc-app .vres-grand{ display:flex; justify-content:space-between; align-items:center; border:1.5px solid var(--accent); background:var(--accent-soft); border-radius:12px; padding:13px 16px; }
 .vclcalc-app .vres-grand-l{ font-size:15px; font-weight:600; color:var(--accent-deep); }
