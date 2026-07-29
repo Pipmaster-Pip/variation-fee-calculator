@@ -1234,11 +1234,14 @@ function computeCountryBreakdown(cc, full) {
   const clamp0 = x => (x < 0 ? 0 : x);
   const mkVar = (base, line) => ({ base, perAdd: (s > 1 && line > 0.005) ? clamp0((line - base) / (s - 1)) : null, line });
 
-  // Raw sum of the full standalone single-variation fees -- used only to decide the mechanic.
-  let rawSingles = 0;
-  order.forEach(t => { const one = { IA: 0, IB: 0, II: 0 }; one[t] = 1; rawSingles += totalFor(one, s) * (counts[t] || 0); });
   const capFired = cr.groupCapValue !== null || cr.items.some(it => it.capValue !== null);
-  const mechanic = capFired ? 'cap' : (cr.total < rawSingles - 0.01 ? 'grouping' : 'none');
+  // "grouping" is a genuine grouping FEE only when the country's Excel formula actually has
+  // a count-gated column-K branch (it.groupingFee, set in computeCountryResult) -- i.e. BE/DK/UK.
+  // It is NOT enough that combining happens to be cheaper: subsumption/discount effects (DE, CZ,
+  // IS, LT, RO ...) also make the combined total drop, but those are not grouping fees and must
+  // not be labelled as such.
+  const realGrouping = cr.items.some(it => it.groupingFee !== null);
+  const mechanic = capFired ? 'cap' : (realGrouping ? 'grouping' : 'none');
 
   const types = [];
   if (mechanic === 'cap') {
@@ -1259,6 +1262,17 @@ function computeCountryBreakdown(cc, full) {
       }
       const line = vars.reduce((a, v) => a + v.line, 0), base = vars.reduce((a, v) => a + v.base, 0);
       types.push({ type: t, special: labelFor(t), count: cnt, base, perAdd: (s > 1 && Math.abs(line - base) > 0.005) ? (line - base) / (s - 1) : null, line, incl: false, vars });
+    });
+  } else if (mechanic === 'grouping') {
+    // Genuine grouping fee (BE/DK/UK): a single flat fee for the whole group that is not
+    // attributable to any one type. Every type line shows "included in grouped fee" (0);
+    // the country subtotal (cr.total) is the one place that carries the actual fee -- so
+    // it never clings to Type II, and DK/UK's per-strength breakdown stays in the export note.
+    order.forEach(t => {
+      const cnt = counts[t] || 0;
+      const vars = [];
+      for (let k = 1; k <= cnt; k++) vars.push(mkVar(0, 0));
+      types.push({ type: t, special: labelFor(t), count: cnt, base: 0, perAdd: null, line: 0, incl: true, vars });
     });
   } else {
     // Marginal contribution of each type in turn (II -> +IB -> +IA), split by variation.
