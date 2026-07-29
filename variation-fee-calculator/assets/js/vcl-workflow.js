@@ -656,6 +656,19 @@
     if (multiProcedureMode()) {
       buildWorksharingLead(body, sgActive() ? "Super-Grouping RMS (lead)" : "Worksharing RMS (lead)");
       buildExtraProcedureList(body, state.submission.mode);
+
+      // Chapter-C variation(s) shared across >=2 RMS cannot be Super-Grouped -- surface a
+      // non-blocking warning naming the conflicting variation(s) and RMS (Task 3 logic).
+      var conflicts = superGroupingConflicts();
+      if (conflicts.length) {
+        var rms = conflicts[0].rmsList.join(" und ");
+        var names = conflicts.map(function (c) { return c.code ? (c.code + (c.title ? " (" + c.title + ")" : "")) : "Type IA (Kapitel C)"; }).join(", ");
+        var warn = el("div", "vcl-wf-warn");
+        warn.innerHTML =
+          '<div class="vcl-wf-warn__title">Kapitel-C-Änderung über zwei verschiedene RMS</div>' +
+          '<div class="vcl-wf-warn__body">Die Kapitel-C-Variation(en) <b>' + escapeHtml(names) + '</b> können nicht über die RMS <b>' + escapeHtml(rms) + '</b> zusammen gebündelt werden. Entweder die C-Änderung aus dem Super-Grouping herausnehmen oder getrennt pro RMS einreichen. Kapitel E und Q bleiben unberührt.</div>';
+        body.appendChild(warn);
+      }
     }
   }
 
