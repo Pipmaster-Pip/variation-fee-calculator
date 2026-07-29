@@ -141,13 +141,26 @@ function vcl_register_assets() {
 		$workflow_style_ver
 	);
 
+	// Super-Grouping / Annual Update pure-logic module (window.VCL_SG_LOGIC). No dependencies;
+	// registered before vcl-workflow so its global is ready by the time that script runs.
+	$sg_logic_file = VFC_PLUGIN_DIR . 'assets/js/vcl-sg-logic.js';
+	$sg_logic_ver  = file_exists( $sg_logic_file ) ? filemtime( $sg_logic_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-sg-logic',
+		VFC_PLUGIN_URL . 'assets/js/vcl-sg-logic.js',
+		array(),
+		$sg_logic_ver,
+		true
+	);
+
 	$workflow_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workflow.js';
 	$workflow_app_ver  = file_exists( $workflow_app_file ) ? filemtime( $workflow_app_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-workflow',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
-		array( 'vcl-data', 'vcl-workload', 'vcl-calc-app' ),
+		array( 'vcl-sg-logic', 'vcl-data', 'vcl-workload', 'vcl-calc-app' ),
 		$workflow_app_ver,
 		true
 	);
