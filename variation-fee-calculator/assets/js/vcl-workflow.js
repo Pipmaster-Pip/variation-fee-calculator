@@ -1506,8 +1506,29 @@
     if (ra !== null) children.push(kv("RA workload", [new TextRun("~ " + Math.ceil(ra) + " h")]));
     if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
 
-    // ---- Variations table (Letter-of-Intent columns) ----
-    children.push(new Paragraph({ text: ws ? "Variations (for the Letter of Intent)" : "Variations", heading: HeadingLevel.HEADING_2, spacing: sp({ before: 200 }) }));
+    // ---- Annual Update / Super-Grouping block (absent for Worksharing and no-mode-selected) ----
+    if (annualUpdateActive()) {
+      children.push(new Paragraph({ text: sgActive() ? "Super-Grouping" : "Annual Update", heading: HeadingLevel.HEADING_2, spacing: sp({ before: 200 }) }));
+      children.push(kv("Modus", [new TextRun(sgActive() ? "Super-Grouping (Type IA)" : "Annual Update (Type IA)")]));
+      children.push(kv("Frühestes Umsetzungsdatum", [new TextRun(state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—")]));
+      const auDl = annualUpdateDeadline();
+      children.push(kv("Früheste Einreichung", [new TextRun("ab Umsetzung — heute bereits möglich")]));
+      children.push(kv("Späteste Einreichung", [new TextRun(auDl ? fmtDate(auDl) + " (Umsetzung + 12 Monate)" : "—")]));
+
+      if (sgActive()) {
+        const auLines = allProcedures().map((p) => procDetail(p));
+        children.push(kv("Zulassungen / Verfahren", [new TextRun(auLines.join("; "))]));
+        const auConf = superGroupingConflicts();
+        if (auConf.length) {
+          const auRms = auConf[0].rmsList.join(" und ");
+          const auNames = auConf.map((c) => c.code || "Type IA (Kapitel C)").join(", ");
+          children.push(kv("Hinweis Kapitel C", [new TextRun("Kapitel-C-Variation(en) " + auNames + " nicht über RMS " + auRms + " gemeinsam bündelbar — herausnehmen oder pro RMS getrennt einreichen.")]));
+        }
+      }
+    }
+
+    // ---- Variations table (Letter-of-Intent columns; doubles as the Super-Grouping LoI) ----
+    children.push(new Paragraph({ text: sgActive() ? "Letter of Intent" : (ws ? "Variations (for the Letter of Intent)" : "Variations"), heading: HeadingLevel.HEADING_2, spacing: sp({ before: 200 }) }));
     const border = { style: BorderStyle.SINGLE, size: 4, color: "9A9A9A" };
     function cell(text, opts) {
       opts = opts || {};
