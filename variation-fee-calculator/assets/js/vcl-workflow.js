@@ -901,6 +901,30 @@
     const sch = workflowSchedule();
     if (!sch) {
       body.appendChild(el("div", "vcl-wf-placeholder", "A Type IA is not submitted individually — it runs on the Annual Update window (first implementation date +9 to +12 months), not on a submission–assessment–closure clock."));
+
+      // Annual Update / Super-Grouping: earliest implementation date drives the annual-update
+      // deadline (implementation + 12 calendar months, month-end clamped -- see computeAnnualUpdateDeadline).
+      if (annualUpdateActive()) {
+        body.appendChild(flabel("Frühestes Umsetzungsdatum (Implementation Date)", 14));
+        const iwrap = el("div", "vcl-wf-field");
+        const idate = document.createElement("input");
+        idate.type = "date"; idate.className = "vcl-wf-select"; idate.value = state.earliestImplDate;
+        idate.addEventListener("change", () => { state.earliestImplDate = idate.value; rerender(); });
+        iwrap.appendChild(idate); body.appendChild(iwrap);
+
+        const dl = annualUpdateDeadline();
+        const list = el("div", "vcl-wf-tl-list");
+        const dlRow = (label, value, strong) => {
+          const line = el("div", "vcl-wf-tl-row" + (strong ? " is-strong" : ""));
+          line.innerHTML = `<span class="vcl-wf-tl-row__l">${escapeHtml(label)}</span>`
+            + `<span class="vcl-wf-tl-row__d">${escapeHtml(value)}</span>`;
+          list.appendChild(line);
+        };
+        dlRow("Frühestes Umsetzungsdatum", state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—");
+        dlRow("Früheste Einreichung", "ab Umsetzung — heute bereits möglich");
+        dlRow("Späteste Einreichung", dl ? (fmtDate(dl) + " (Umsetzung + 12 Monate)") : "—", true);
+        body.appendChild(list);
+      }
       return;
     }
 
