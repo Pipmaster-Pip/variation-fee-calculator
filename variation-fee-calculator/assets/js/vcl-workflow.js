@@ -632,14 +632,31 @@
     // one variation); only worksharing is chosen here.
     body.appendChild(flabel("Submission type", 18));
     const opts = el("div", "vcl-wf-opts");
-    const wsChip = el("button", "vcl-wf-opt" + (wsActive() ? " is-on" : ""), "Worksharing");
-    wsChip.type = "button";
-    wsChip.addEventListener("click", () => { state.submission.mode = wsActive() ? null : 'worksharing'; rerender(); });
-    opts.appendChild(wsChip);
-    body.appendChild(opts);
-    body.appendChild(el("p", "vcl-wf-hint", "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation in Identify."));
+    if (allVariationsAreIA()) {
+      // Type-IA-only: Super-Grouping (first) and Annual Update replace Worksharing.
+      const sgChip = el("button", "vcl-wf-opt" + (sgActive() ? " is-on" : ""), "Super-Grouping");
+      sgChip.type = "button";
+      sgChip.addEventListener("click", () => { state.submission.mode = sgActive() ? null : 'superGrouping'; rerender(); });
+      opts.appendChild(sgChip);
+      const auChip = el("button", "vcl-wf-opt" + (auActive() ? " is-on" : ""), "Annual Update");
+      auChip.type = "button";
+      auChip.addEventListener("click", () => { state.submission.mode = auActive() ? null : 'annualUpdate'; rerender(); });
+      opts.appendChild(auChip);
+      body.appendChild(opts);
+      body.appendChild(el("p", "vcl-wf-hint", "Available because every listed variation is Type IA — Worksharing is not offered here. Super-Grouping shares the same Type IA change(s) across several authorisations; Annual Update keeps them within this one."));
+    } else {
+      const wsChip = el("button", "vcl-wf-opt" + (wsActive() ? " is-on" : ""), "Worksharing");
+      wsChip.type = "button";
+      wsChip.addEventListener("click", () => { state.submission.mode = wsActive() ? null : 'worksharing'; rerender(); });
+      opts.appendChild(wsChip);
+      body.appendChild(opts);
+      body.appendChild(el("p", "vcl-wf-hint", "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation in Identify."));
+    }
 
-    if (wsActive()) { buildWorksharingLead(body); buildWorksharingList(body); }
+    if (multiProcedureMode()) {
+      buildWorksharingLead(body, sgActive() ? "Super-Grouping RMS (lead)" : "Worksharing RMS (lead)");
+      buildExtraProcedureList(body, state.submission.mode);
+    }
   }
 
   // Reusable procedure editor: kind (National/MRP-DCP/CP) + country-level selection.
@@ -793,11 +810,11 @@
   // Worksharing lead (Station B): one authority leads the whole worksharing. Free choice of any
   // authority (including the EMA); locks to the EMA automatically when a CP is part of it. The fee
   // category is chosen later, in Station D (Fees).
-  function buildWorksharingLead(host) {
+  function buildWorksharingLead(host, label) {
     const cd = countryData();
     const hasCP = worksharingHasCP();
     const wrap = el("div", "vcl-wf-field");
-    wrap.appendChild(flabel("Worksharing RMS (lead)", 12));
+    wrap.appendChild(flabel(label || "Worksharing RMS (lead)", 12));
     const sel = document.createElement("select");
     sel.className = "vcl-wf-select";
     sel.disabled = hasCP;
@@ -818,11 +835,13 @@
     host.appendChild(wrap);
   }
 
-  // Worksharing list: additional procedures (procedure 1 is the primary one above).
-  function buildWorksharingList(host) {
+  // Additional procedures (procedure 1 is the primary one above), shared between Worksharing
+  // and Super-Grouping -- only the panel title depends on which mode is active.
+  function buildExtraProcedureList(host, mode) {
+    const label = (mode === 'superGrouping') ? "super-grouping" : "worksharing";
     const panel = el("div", "vcl-wf-builder");
     const head = el("div", "vcl-wf-builder__head");
-    head.appendChild(el("span", null, "Additional procedures (worksharing)"));
+    head.appendChild(el("span", null, "Additional procedures (" + label + ")"));
     head.appendChild(el("span", "vcl-wf-count", String(state.worksharing.length)));
     panel.appendChild(head);
     panel.appendChild(el("p", "vcl-wf-hint", "The primary procedure above counts as procedure 1. Add every further procedure the change is shared into — each with its own countries."));
