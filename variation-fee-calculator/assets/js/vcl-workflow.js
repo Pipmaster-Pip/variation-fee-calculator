@@ -296,7 +296,7 @@
   }
   // The lead's one-off fee: a single engine country-result, or null while it can't be priced.
   function leadFees(counts) {
-    if (!wsActive() || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
+    if (!leadPricingActive() || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
     if (feeCountsTotal(counts) === 0) return null;
     const cc = state.worksharingLead;
     const s = leadSpecial();
@@ -318,7 +318,7 @@
   // type wherever the label is not published).
   function procPricedCountries(p) {
     const list = procCountries(p);
-    if (!wsActive()) return list.map((x) => {
+    if (!leadPricingActive()) return list.map((x) => {
       const s = specialFor(x.cc, x.role);
       return s ? { cc: x.cc, role: x.role, strengths: x.strengths, special: { IA: s, IB: s, II: s } } : x;
     });
@@ -340,16 +340,16 @@
     let total = 0;
     let any = false;
     allProcedures().forEach((p) => { const r = procFees(p, counts); if (r) { total += r.grandTotal; if (procCountries(p).length) any = true; } });
-    if (wsActive()) { const lf = leadFees(counts); if (lf) { total += lf.total || 0; any = true; } }
+    if (leadPricingActive()) { const lf = leadFees(counts); if (lf) { total += lf.total || 0; any = true; } }
     return any ? total : null;
   }
 
   // Unique selected countries across all procedures (keyed by cc, strengths is per product/cc).
   function selectedCcs() {
     const seen = {}; const out = [];
-    // In a worksharing the lead is a fee-payer of its own (even when it sits in none of the
-    // procedures), so it must show up here too -- e.g. for the strengths list.
-    if (wsActive()) { seen[state.worksharingLead] = 1; out.push({ cc: state.worksharingLead, role: leadPricingRole() }); }
+    // In a worksharing (or super-grouping) the lead is a fee-payer of its own (even when it
+    // sits in none of the procedures), so it must show up here too -- e.g. for the strengths list.
+    if (leadPricingActive()) { seen[state.worksharingLead] = 1; out.push({ cc: state.worksharingLead, role: leadPricingRole() }); }
     allProcedures().forEach((p) => procCountries(p).forEach((x) => { if (!seen[x.cc]) { seen[x.cc] = 1; out.push({ cc: x.cc, role: x.role }); } }));
     return out;
   }
@@ -1088,13 +1088,16 @@
 
     buildStrengths(body);
 
-    const ws = wsActive();
-    const lead = leadFees(counts); // null unless the worksharing lead can be priced
+    // "ws" here means "lead-priced layout" -- worksharing or super-grouping both price
+    // through the shared lead-once/exclude-lead path (leadPricingActive()); which one is
+    // active only changes the labels below (sgActive()).
+    const ws = leadPricingActive();
+    const lead = leadFees(counts); // null unless the lead authority can be priced
     const procs = allProcedures();
     let grand = 0;
     let anyCountries = false;
 
-    // Worksharing: the lead's one-off fee sits in its own box, above the procedures.
+    // Worksharing / Super-Grouping: the lead's one-off fee sits in its own box, above the procedures.
     if (ws) {
       buildWorksharingLeadBox(body, lead);
       if (lead) { grand += lead.total || 0; anyCountries = true; }
@@ -1140,7 +1143,7 @@
           grid.appendChild(el("div", "vcl-wf-fee-line__role", escapeHtml(roleShort)));
           if (isLeadLine) {
             // Double-counting guard: the lead is priced once, in the lead box above.
-            grid.appendChild(el("div", "vcl-wf-fee-line__note", "worksharing lead — priced above"));
+            grid.appendChild(el("div", "vcl-wf-fee-line__note", (sgActive() ? "super-grouping lead" : "worksharing lead") + " — priced above"));
             grid.appendChild(el("div", "vcl-wf-fee-grid__str", "—"));
             grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", fmtEUR(0)));
           } else {
@@ -1194,14 +1197,16 @@
     buildSummaryCard(body, grand, anyCountries);
   }
 
-  // The worksharing lead's one-off fee (Station D): the lead authority is charged exactly
-  // once, here, with its own special-case pick -- and shown as a zero line wherever it also
-  // appears inside a procedure below.
+  // The lead's one-off fee (Station D): the lead authority is charged exactly once, here,
+  // with its own special-case pick -- and shown as a zero line wherever it also appears
+  // inside a procedure below. Shared by Worksharing and Super-Grouping (leadPricingActive());
+  // only the label text below distinguishes which mode is active (sgActive()).
   function buildWorksharingLeadBox(host, lead) {
+    const modeLabel = sgActive() ? "Super-Grouping" : "Worksharing";
     const box = el("div", "vcl-wf-ws-lead");
-    box.appendChild(el("div", "vcl-wf-ws-lead__head", "Worksharing RMS (lead)"));
+    box.appendChild(el("div", "vcl-wf-ws-lead__head", modeLabel + " RMS (lead)"));
     if (!state.worksharingLead) {
-      box.appendChild(el("p", "vcl-wf-hint", "Pick the lead authority in step B (Procedure) — its one-off worksharing fee will appear here."));
+      box.appendChild(el("p", "vcl-wf-hint", "Pick the lead authority in step B (Procedure) — its one-off " + modeLabel.toLowerCase() + " fee will appear here."));
       host.appendChild(box);
       return;
     }
@@ -1213,13 +1218,13 @@
     const grid = el("div", "vcl-wf-fee-grid");
     grid.appendChild(el("div", "vcl-wf-fee-line__c",
       `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span>${worksharingHasCP() ? ' <span class="vcl-wf-fee-line__role">auto (CP)</span>' : ""}`));
-    grid.appendChild(el("div", "vcl-wf-fee-line__role", "WS Lead"));
+    grid.appendChild(el("div", "vcl-wf-fee-line__role", sgActive() ? "SG Lead" : "WS Lead"));
     grid.appendChild(buildFeeCategoryCell(cc, leadPricingRole(), strengthsFor(cc), leadSpecial(),
       (v) => { state.worksharingLeadSpecial = v; rerender(); }));
     grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(strengthsFor(cc))));
     grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", (lead && lead.hasData) ? fmtEUR(lead.total) : "no fee data"));
     box.appendChild(grid);
-    box.appendChild(el("p", "vcl-wf-hint", "The lead is charged once, here — its worksharing fee category where published, otherwise the standard one. In its own procedure below it is not charged again."));
+    box.appendChild(el("p", "vcl-wf-hint", "The lead is charged once, here — its " + modeLabel.toLowerCase() + " fee category where published, otherwise the standard one. In its own procedure below it is not charged again."));
     host.appendChild(box);
   }
 
@@ -1762,8 +1767,9 @@
     } else if (state.submission.mode === 'worksharing' && allVariationsAreIA()) {
       state.submission.mode = null;
     }
-    // Worksharing lead: a Centralised procedure (EMA) auto-leads the worksharing (the field locks).
-    if (wsActive() && worksharingHasCP()) state.worksharingLead = countryData().ema;
+    // Lead authority: a Centralised procedure (EMA) auto-leads a worksharing or super-grouping
+    // (the field locks) -- same rule for both modes since both price via the shared lead path.
+    if (leadPricingActive() && worksharingHasCP()) state.worksharingLead = countryData().ema;
     container.innerHTML = "";
     const root = el("div", "vcl-wf");
     const head = el("div", "vcl-wf-head");
