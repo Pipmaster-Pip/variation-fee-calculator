@@ -38,12 +38,14 @@
     activeSubstance: null, // 'biologic' | 'chemical'
     // Station B
     procedure: newProcedure(),        // the primary procedure ("procedure 1")
-    submission: { grouping: false, worksharing: false },
+    // mode: null | 'worksharing' | 'annualUpdate' | 'superGrouping'
+    submission: { grouping: false, mode: null },
     grouping: [],                      // additional variations: [{ code, variantId, type }]
     worksharing: [],                   // additional procedures: [newProcedure(), ...]
     worksharingLead: null,             // cc of the authority leading the worksharing (auto = EMA when a CP is involved)
     // Station C
     submissionDate: "",
+    earliestImplDate: "",              // earliest implementation date across the grouped variations (Annual Update deadline calc)
     iiSub: "60",                       // Type II sub-procedure: 30 | 60 | 90 (days)
     clockStopFraction: 1,              // 0..1 across the clock-stop min..max
     // Strengths (Station D): a global default, with per-country overrides only where it matters.
@@ -138,7 +140,7 @@
   function feeCountsTotal(c) { return c.IA + c.IB + c.II; }
   function allProcedures() {
     const list = [state.procedure];
-    if (state.submission.worksharing) state.worksharing.forEach((p) => list.push(p));
+    if (multiProcedureMode()) state.worksharing.forEach((p) => list.push(p));
     return list;
   }
   // A Centralised procedure (CP/EMA) taking part in a worksharing automatically leads it.
@@ -148,9 +150,57 @@
   // Worksharing is priced through the "… - worksharing" special-case rows the fee data
   // already carries (Type II today, Type IB as soon as the Excel lists them); the engine
   // (VCLCALC.computeFees) takes `special` per country and type, so nothing below touches
-  // the engine. Pricing switches to worksharing once the user has turned Worksharing on
-  // AND picked the lead authority in Station B.
-  function wsActive() { return state.submission.worksharing && !!state.worksharingLead; }
+  // the engine. Pricing switches to worksharing once state.submission.mode is 'worksharing'.
+  //
+  // state.submission.mode: null | 'worksharing' | 'annualUpdate' | 'superGrouping'. AU and SG
+  // both require an all-Type-IA submission (guarded in rerender()); worksharing requires the
+  // opposite (not all-IA). leadPricingActive()/multiProcedureMode() widen the old worksharing-only
+  // gates to also cover Super-Grouping, which shares the same "one lead + several procedures" shape.
+  function wsActive() { return state.submission.mode === 'worksharing'; }
+  function auActive() { return state.submission.mode === 'annualUpdate'; }
+  function sgActive() { return state.submission.mode === 'superGrouping'; }
+  function leadPricingActive() { return wsActive() || sgActive(); }
+  function multiProcedureMode() { return wsActive() || sgActive(); }
+  function annualUpdateActive() { return auActive() || sgActive(); }
+
+  function allVariationsAreIA() {
+    return VCL_SG_LOGIC.computeAllVariationsAreIA(
+      currentType(),
+      state.grouping.map(function (g) { return g.type; })
+    );
+  }
+
+  // Base + grouped variations, each annotated with its classification chapter (E/Q/C/M).
+  function variationsWithChapter() {
+    var out = [];
+    var pushOne = function (code, title, type) {
+      var chapter = null;
+      if (code) {
+        var e = (DATA.ENTRIES || []).filter(function (x) { return x.code === code; })[0];
+        chapter = e ? e.chapter : null;
+      }
+      out.push({ code: code || null, title: title || '', type: type || null, chapter: chapter });
+    };
+    var v = pickedVariant(), e = pickedEntry();
+    if (v) pushOne(e ? e.code : null, e ? e.title : '', v.type);
+    else if (currentType()) pushOne(null, '', currentType());
+    state.grouping.forEach(function (g) {
+      if (!g.type) return;
+      var ge = g.code ? (DATA.ENTRIES || []).filter(function (x) { return x.code === g.code; })[0] : null;
+      pushOne(g.code || null, ge ? ge.title : '', g.type);
+    });
+    return out;
+  }
+
+  function superGroupingConflicts() {
+    if (!sgActive()) return [];
+    var procs = allProcedures().map(function (p) { return { kind: p.kind, rms: p.rms }; });
+    return VCL_SG_LOGIC.computeSuperGroupingConflicts(variationsWithChapter(), procs);
+  }
+
+  function annualUpdateDeadline() {
+    return VCL_SG_LOGIC.computeAnnualUpdateDeadline(state.earliestImplDate);
+  }
   function feeRows() { return (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || []; }
   // The variation types actually being priced (from the IA/IB/II tally) -- the fee-category
   // choices below are drawn from exactly these types' rows, so an IB worksharing shows IB
@@ -332,7 +382,7 @@
   }
   function worksharingKinds() {
     const k = { national: 0, mrpdcp: 0 };
-    if (state.submission.worksharing) state.worksharing.forEach((p) => { if (p.kind === "national") k.national++; else if (p.kind === "mrpdcp") k.mrpdcp++; });
+    if (multiProcedureMode()) state.worksharing.forEach((p) => { if (p.kind === "national") k.national++; else if (p.kind === "mrpdcp") k.mrpdcp++; });
     return k;
   }
   function raEffort() {
@@ -341,7 +391,7 @@
     return window.VCL_WORKLOAD.raHours({
       type: t, substance: state.activeSubstance, procedure: state.procedure.kind,
       cmsCount: state.procedure.kind === "mrpdcp" ? state.procedure.cms.length : 0,
-      grouping: state.submission.grouping, worksharing: state.submission.worksharing,
+      grouping: state.submission.grouping, worksharing: multiProcedureMode(),
       groupingCounts: groupingBuckets(), worksharingProcs: worksharingKinds(),
     });
   }
@@ -351,7 +401,7 @@
     return window.VCL_WORKLOAD.schedule({
       type: t, iiSub: state.iiSub, procedure: state.procedure.kind,
       cmsCount: state.procedure.kind === "mrpdcp" ? state.procedure.cms.length : 0,
-      shared: state.submission.grouping || state.submission.worksharing,
+      shared: state.submission.grouping || multiProcedureMode(),
       clockStopFraction: state.clockStopFraction,
     });
   }
@@ -408,10 +458,10 @@
     state.station = "A";
     state.reached = { A: true, B: false, C: false, D: false };
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
-    state.procedure = newProcedure(); state.submission = { grouping: false, worksharing: false };
+    state.procedure = newProcedure(); state.submission = { grouping: false, mode: null };
     state.grouping = []; state.worksharing = []; state.worksharingLead = null;
     state.worksharingLeadSpecial = null; state.wsSpecials = {}; state.specials = {};
-    state.submissionDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
+    state.submissionDate = ""; state.earliestImplDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
     state.strengthsDefault = 1; state.strengthsOverrides = {};
     state.summaryShowVariations = false;
     rerender();
@@ -582,14 +632,14 @@
     // one variation); only worksharing is chosen here.
     body.appendChild(flabel("Submission type", 18));
     const opts = el("div", "vcl-wf-opts");
-    const wsChip = el("button", "vcl-wf-opt" + (state.submission.worksharing ? " is-on" : ""), "Worksharing");
+    const wsChip = el("button", "vcl-wf-opt" + (wsActive() ? " is-on" : ""), "Worksharing");
     wsChip.type = "button";
-    wsChip.addEventListener("click", () => { state.submission.worksharing = !state.submission.worksharing; rerender(); });
+    wsChip.addEventListener("click", () => { state.submission.mode = wsActive() ? null : 'worksharing'; rerender(); });
     opts.appendChild(wsChip);
     body.appendChild(opts);
     body.appendChild(el("p", "vcl-wf-hint", "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation in Identify."));
 
-    if (state.submission.worksharing) { buildWorksharingLead(body); buildWorksharingList(body); }
+    if (wsActive()) { buildWorksharingLead(body); buildWorksharingList(body); }
   }
 
   // Reusable procedure editor: kind (National/MRP-DCP/CP) + country-level selection.
@@ -1002,7 +1052,7 @@
     let anyCountries = false;
 
     // Worksharing: the lead's one-off fee sits in its own box, above the procedures.
-    if (state.submission.worksharing) {
+    if (ws) {
       buildWorksharingLeadBox(body, lead);
       if (lead) { grand += lead.total || 0; anyCountries = true; }
     }
@@ -1604,7 +1654,7 @@
     }
     // Procedure: in a worksharing, "Worksharing" + the lead replace the procedure chip (and
     // the old "N procedures" count); otherwise the primary procedure shows as before.
-    if (state.submission.worksharing) {
+    if (wsActive()) {
       chips.appendChild(el("span", "vcl-wf-chip", "Worksharing"));
       if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", "WS-Lead-RMS: " + escapeHtml(state.worksharingLead)));
     } else if (procComplete(state.procedure)) {
@@ -1663,8 +1713,14 @@
     // listed in Identify. Derived here so every downstream reader (fees, timeline,
     // RA workload, summary, live preview) stays correct without a manual toggle.
     state.submission.grouping = state.grouping.some((g) => g.type);
+    // Mode consistency: AU/SG require Type-IA-only; Worksharing requires NOT all-IA.
+    if ((state.submission.mode === 'annualUpdate' || state.submission.mode === 'superGrouping') && !allVariationsAreIA()) {
+      state.submission.mode = null;
+    } else if (state.submission.mode === 'worksharing' && allVariationsAreIA()) {
+      state.submission.mode = null;
+    }
     // Worksharing lead: a Centralised procedure (EMA) auto-leads the worksharing (the field locks).
-    if (state.submission.worksharing && worksharingHasCP()) state.worksharingLead = countryData().ema;
+    if (wsActive() && worksharingHasCP()) state.worksharingLead = countryData().ema;
     container.innerHTML = "";
     const root = el("div", "vcl-wf");
     const head = el("div", "vcl-wf-head");
