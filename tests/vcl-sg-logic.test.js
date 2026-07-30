@@ -1,6 +1,6 @@
 'use strict';
 var assert = require('assert');
-var L = require('../assets/js/vcl-sg-logic.js');
+var L = require('../variation-fee-calculator/assets/js/vcl-sg-logic.js');
 
 var total = 0, failed = 0;
 function t(name, fn) {
