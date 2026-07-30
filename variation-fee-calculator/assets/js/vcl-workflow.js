@@ -672,12 +672,12 @@
       // non-blocking warning naming the conflicting variation(s) and RMS (Task 3 logic).
       var conflicts = superGroupingConflicts();
       if (conflicts.length) {
-        var rms = conflicts[0].rmsList.join(" und ");
-        var names = conflicts.map(function (c) { return c.code ? (c.code + (c.title ? " (" + c.title + ")" : "")) : "Type IA (Kapitel C)"; }).join(", ");
+        var rms = conflicts[0].rmsList.join(" and ");
+        var names = conflicts.map(function (c) { return c.code ? (c.code + (c.title ? " (" + c.title + ")" : "")) : "Type IA (Chapter C)"; }).join(", ");
         var warn = el("div", "vcl-wf-warn");
         warn.innerHTML =
-          '<div class="vcl-wf-warn__title">Kapitel-C-Änderung über zwei verschiedene RMS</div>' +
-          '<div class="vcl-wf-warn__body">Die Kapitel-C-Variation(en) <b>' + escapeHtml(names) + '</b> können nicht über die RMS <b>' + escapeHtml(rms) + '</b> zusammen gebündelt werden. Entweder die C-Änderung aus dem Super-Grouping herausnehmen oder getrennt pro RMS einreichen. Kapitel E und Q bleiben unberührt.</div>';
+          '<div class="vcl-wf-warn__title">Chapter C change across two different RMS</div>' +
+          '<div class="vcl-wf-warn__body">The Chapter C variation(s) <b>' + escapeHtml(names) + '</b> cannot be bundled together across the RMS <b>' + escapeHtml(rms) + '</b>. Either remove the Chapter C change from the Super-Grouping, or submit it separately per RMS. Chapters E and Q are unaffected.</div>';
         body.appendChild(warn);
       }
     }
@@ -930,30 +930,36 @@
       // mode-dependent earliest filing date (annualUpdateEarliestDate()) and the shared
       // latest deadline (annualUpdateDeadline(), implementation + 12 calendar months).
       if (annualUpdateActive()) {
-        body.appendChild(flabel("Frühestes Umsetzungsdatum (Implementation Date)", 14));
+        body.appendChild(flabel("Earliest implementation date", 14));
         const iwrap = el("div", "vcl-wf-field");
         const idate = document.createElement("input");
         idate.type = "date"; idate.className = "vcl-wf-select"; idate.value = state.earliestImplDate;
+        // The change has already been implemented in practice, so the date cannot be in the future.
+        const today = new Date();
+        idate.max = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
         idate.addEventListener("change", () => { state.earliestImplDate = idate.value; rerender(); });
         iwrap.appendChild(idate); body.appendChild(iwrap);
 
         const earliest = annualUpdateEarliestDate();
         const dl = annualUpdateDeadline();
+        const earliestMonths = (WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9;
+        const latestMonths = (WD.annualUpdate && WD.annualUpdate.latestMonths) || 12;
         const list = el("div", "vcl-wf-tl-list");
+        list.style.marginTop = "12px"; // breathing room below the date input
         const dlRow = (label, value, strong) => {
           const line = el("div", "vcl-wf-tl-row" + (strong ? " is-strong" : ""));
           line.innerHTML = `<span class="vcl-wf-tl-row__l">${escapeHtml(label)}</span>`
             + `<span class="vcl-wf-tl-row__d">${escapeHtml(value)}</span>`;
           list.appendChild(line);
         };
-        dlRow("Frühestes Umsetzungsdatum", state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—");
+        dlRow("Earliest implementation date", state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—");
         dlRow(
-          "Früheste Einreichung",
+          "Earliest submission",
           sgActive()
-            ? "ab Umsetzung — heute bereits möglich"
-            : (earliest ? (fmtDate(earliest) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9) + " Monate)") : "—")
+            ? "from implementation — possible today"
+            : (earliest ? (fmtDate(earliest) + " (implementation + " + earliestMonths + " months)") : "—")
         );
-        dlRow("Späteste Einreichung", dl ? (fmtDate(dl) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.latestMonths) || 12) + " Monate)") : "—", true);
+        dlRow("Latest submission", dl ? (fmtDate(dl) + " (implementation + " + latestMonths + " months)") : "—", true);
         body.appendChild(list);
       }
       return;
@@ -1417,6 +1423,20 @@
       card.appendChild(plist);
     }
 
+    // 3b) Annual Update / Super-Grouping filing window (mode + implementation-driven dates).
+    if (annualUpdateActive()) {
+      line("Mode", `<span class="vcl-wf-sum__tag">${sgActive() ? "Super-Grouping" : "Annual Update"}</span>`);
+      const auEarliest = annualUpdateEarliestDate();
+      const auDl = annualUpdateDeadline();
+      const auEarlyM = (WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9;
+      const auLateM = (WD.annualUpdate && WD.annualUpdate.latestMonths) || 12;
+      line("Implementation date", escapeHtml(state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—"));
+      line("Earliest submission", escapeHtml(sgActive()
+        ? "from implementation — possible today"
+        : (auEarliest ? (fmtDate(auEarliest) + " (implementation + " + auEarlyM + " months)") : "—")));
+      line("Latest submission", escapeHtml(auDl ? (fmtDate(auDl) + " (implementation + " + auLateM + " months)") : "—"));
+    }
+
     // 4) Timeline / RA effort / fees.
     const sch = workflowSchedule();
     if (sch) {
@@ -1532,25 +1552,25 @@
     // ---- Annual Update / Super-Grouping block (absent for Worksharing and no-mode-selected) ----
     if (annualUpdateActive()) {
       children.push(new Paragraph({ text: sgActive() ? "Super-Grouping" : "Annual Update", heading: HeadingLevel.HEADING_2, spacing: sp({ before: 200 }) }));
-      children.push(kv("Modus", [new TextRun(sgActive() ? "Super-Grouping (Type IA)" : "Annual Update (Type IA)")]));
-      children.push(kv("Frühestes Umsetzungsdatum", [new TextRun(state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—")]));
+      children.push(kv("Mode", [new TextRun(sgActive() ? "Super-Grouping (Type IA)" : "Annual Update (Type IA)")]));
+      children.push(kv("Implementation date", [new TextRun(state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—")]));
       const auEarliest = annualUpdateEarliestDate();
       const auDl = annualUpdateDeadline();
-      children.push(kv("Früheste Einreichung", [new TextRun(
+      children.push(kv("Earliest submission", [new TextRun(
         sgActive()
-          ? "ab Umsetzung — heute bereits möglich"
-          : (auEarliest ? (fmtDate(auEarliest) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9) + " Monate)") : "—")
+          ? "from implementation — possible today"
+          : (auEarliest ? (fmtDate(auEarliest) + " (implementation + " + ((WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9) + " months)") : "—")
       )]));
-      children.push(kv("Späteste Einreichung", [new TextRun(auDl ? fmtDate(auDl) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.latestMonths) || 12) + " Monate)" : "—")]));
+      children.push(kv("Latest submission", [new TextRun(auDl ? fmtDate(auDl) + " (implementation + " + ((WD.annualUpdate && WD.annualUpdate.latestMonths) || 12) + " months)" : "—")]));
 
       if (sgActive()) {
         const auLines = allProcedures().map((p) => procDetail(p));
-        children.push(kv("Zulassungen / Verfahren", [new TextRun(auLines.join("; "))]));
+        children.push(kv("Authorisations / procedures", [new TextRun(auLines.join("; "))]));
         const auConf = superGroupingConflicts();
         if (auConf.length) {
-          const auRms = auConf[0].rmsList.join(" und ");
-          const auNames = auConf.map((c) => c.code || "Type IA (Kapitel C)").join(", ");
-          children.push(kv("Hinweis Kapitel C", [new TextRun("Kapitel-C-Variation(en) " + auNames + " nicht über RMS " + auRms + " gemeinsam bündelbar — herausnehmen oder pro RMS getrennt einreichen.")]));
+          const auRms = auConf[0].rmsList.join(" and ");
+          const auNames = auConf.map((c) => c.code || "Type IA (Chapter C)").join(", ");
+          children.push(kv("Chapter C note", [new TextRun("Chapter C variation(s) " + auNames + " cannot be bundled together across RMS " + auRms + " — remove them or submit separately per RMS.")]));
         }
       }
     }
@@ -1767,8 +1787,10 @@
     if (multiProcedureMode()) {
       chips.appendChild(el("span", "vcl-wf-chip", sgActive() ? "Super-Grouping" : "Worksharing"));
       if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", (sgActive() ? "SG-Lead-RMS: " : "WS-Lead-RMS: ") + escapeHtml(state.worksharingLead)));
-    } else if (procComplete(state.procedure)) {
-      chips.appendChild(el("span", "vcl-wf-chip", escapeHtml(procLabel(state.procedure))));
+    } else {
+      // Annual Update is single-procedure: show its own chip alongside the procedure chip.
+      if (auActive()) chips.appendChild(el("span", "vcl-wf-chip", "Annual Update"));
+      if (procComplete(state.procedure)) chips.appendChild(el("span", "vcl-wf-chip", escapeHtml(procLabel(state.procedure))));
     }
     if (!chips.children.length) chips.appendChild(el("span", "vcl-wf-hint", "Your choices will appear here as you go."));
     live.appendChild(chips);
