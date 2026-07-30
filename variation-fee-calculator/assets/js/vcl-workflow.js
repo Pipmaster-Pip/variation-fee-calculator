@@ -139,6 +139,16 @@
     return c;
   }
   function feeCountsTotal(c) { return c.IA + c.IB + c.II; }
+  // Highest-severity type across the whole submission (base + grouping): a grouped bundle is
+  // procedurally governed by its most complex member (IA < IB < II), so the live-preview's
+  // "no classification code picked" badge must track this, not just the base's own type.
+  function highestType() {
+    const c = feeCounts();
+    if (c.II) return "II";
+    if (c.IB) return "IB";
+    if (c.IA) return "IA";
+    return null;
+  }
   function allProcedures() {
     const list = [state.procedure];
     if (multiProcedureMode()) state.worksharing.forEach((p) => list.push(p));
@@ -1814,7 +1824,8 @@
       const e = pickedEntry();
       chips.appendChild(el("span", "vcl-wf-chip", `${escapeHtml(e.code)} <span class="${typeBadgeClass(variant.type)}">${escapeHtml(variant.type)}</span>`));
     } else if (state.typeOnly) {
-      chips.appendChild(el("span", "vcl-wf-chip", `<span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span>`));
+      const ht = highestType() || state.typeOnly;
+      chips.appendChild(el("span", "vcl-wf-chip", `<span class="${typeBadgeClass(ht)}">${escapeHtml(ht)}</span>`));
     }
     // Grouping: a type tally of ALL variations -- including the base one, so the chip reads
     // as the whole submission (replaces the old bare "N variations" count).
