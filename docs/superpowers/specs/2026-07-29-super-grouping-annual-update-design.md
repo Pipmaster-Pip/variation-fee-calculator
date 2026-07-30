@@ -171,7 +171,28 @@ Keine neue Export-Bibliothek; die vorhandenen `kv()`/`cell()`/Border-Muster werd
 ## 13. Offene Punkte (kein Blocker, bei Umsetzung zu klären)
 
 - **SG-Gebührenkategorien:** Prüfen, ob die Fee-Schedule SG-spezifische Zeilen kennt; falls nicht, WS-/Standardzeilen mit Fallback nutzen.
-- **Lead-Rolle im CP-Fall:** ob bei einem CP im Super-Grouping der Lead automatisch die EMA ist (wie WS es andeutet) — an bestehender WS-Logik ausrichten.
+- ~~**Lead-Rolle im CP-Fall:** ob bei einem CP im Super-Grouping der Lead automatisch die EMA ist (wie WS es andeutet) — an bestehender WS-Logik ausrichten.~~ Geklärt, siehe §14 (Lead-Verhalten bei CP war bereits korrekt über `buildWorksharingLead()`/`worksharingHasCP()`; neu ist nur die Misch-Sperre der Verfahrensarten).
+
+## 14. Addendum (2026-07-30): CP-Exklusivität in Super-Grouping
+
+**Anlass:** Live-Review deckte auf, dass Super-Grouping heute jede Kombination aus `national`/`mrpdcp`/`cp` in `state.worksharing[]` zulässt. Regulatorisch korrekt ist: **entweder** beliebig viele `national`+`mrpdcp`-Verfahren gemischt, **oder** beliebig viele `cp`-Verfahren — niemals `cp` zusammen mit `national`/`mrpdcp`. Gilt **ausschließlich für Super-Grouping**; Worksharing bleibt unverändert (keine bestehende Regression).
+
+**Neue reine Funktion** (Ergänzung zu §5, in `vcl-sg-logic.js`, gleiches Dual-Mode-Pattern wie `computeDistinctRms`/`computeSuperGroupingConflicts`):
+
+```
+computeAllowedProcedureKinds(allProcedures, currentProcedure) → ('national'|'mrpdcp'|'cp')[]
+```
+
+Betrachtet alle Verfahren in `allProcedures` außer `currentProcedure` (Ausschluss per Referenz). Ist unter den übrigen mindestens eines mit `kind === 'cp'` → Rückgabe `['cp']`. Ist unter den übrigen mindestens eines mit `kind === 'national'` oder `'mrpdcp'` → Rückgabe `['national','mrpdcp']`. Liste der übrigen leer (erstes Verfahren der Gruppe) → Rückgabe aller drei Kinds (freie Wahl).
+
+**UI-Durchsetzung (harte Blockade, kein Warn-Banner):** In `procEditor()` (vcl-workflow.js:687–726) wird bei `sgActive()` der jeweils nicht erlaubte Kind-Chip `disabled` gerendert, mit Tooltip („Not allowed together with CP in Super-Grouping" bzw. „Not allowed together with national/MRP-DCP procedures in Super-Grouping"). Greift symmetrisch für das Basisverfahren (Station B) **und** jedes Zusatzverfahren in der SG-Liste — ein invalider Zustand kann so gar nicht erst entstehen. Bei Worksharing (`wsActive()`) bleibt `procEditor()` unverändert (alle drei Chips immer wählbar).
+
+**Kein Einfluss auf bestehende Lead-/Fee-Logik:** `buildWorksharingLead()`/`worksharingHasCP()` (vcl-workflow.js:148, 837–860) erzwingen bei `cp` bereits automatisch EMA als Lead — das funktioniert für Multi-CP-Gruppen unverändert korrekt, da jedes `cp`-Verfahren `hasCP=true` auslöst. `distinctRmsSet()`/`superGroupingConflicts()` (Kapitel-C-Prüfung) bleiben unverändert, da CP ohnehin nie in die RMS-Menge einfließt (kein `p.rms`).
+
+**Erfolgskriterien (Ergänzung zu §12):**
+8. In Super-Grouping ist der `cp`-Chip deaktiviert, sobald bereits ein `national`- oder `mrpdcp`-Verfahren in der Gruppe ist — und umgekehrt sind `national`/`mrpdcp`-Chips deaktiviert, sobald bereits ein `cp`-Verfahren in der Gruppe ist. Beim ersten Verfahren der Gruppe sind alle drei Kinds wählbar.
+9. Mehrere `cp`-Verfahren lassen sich problemlos zu einer Super-Grouping-Gruppe kombinieren (Lead automatisch EMA).
+10. Worksharing zeigt keinerlei Änderung im Verfahrens-Picker (Regressionscheck).
 
 ---
 
