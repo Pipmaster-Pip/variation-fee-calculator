@@ -17,10 +17,13 @@
   // Annual Update, Super-Grouping, and Worksharing are EU-law multi-country submission
   // constructs (Art. 7(2)(b) / Art. 20 VO (EG) 1234/2008), open only to EU member states plus
   // Iceland and Norway (EEA/EFTA, full MRP/DCP participants). CH and RS are non-EU/EEA
-  // national-only jurisdictions with no MRP/DCP role at all. The UK left the EU (Brexit) and
-  // can no longer take part in any EU multi-country procedure -- it remains valid ONLY as a CMS
-  // in MRP/DCP (a role this list never touches) and for the standalone single-country Fee
-  // Calculator (a separate tool/file, unaffected by this list).
+  // national-only jurisdictions with no MRP/DCP role at all. The UK left the EU (Brexit) and has
+  // had no MRP/DCP standing in EU law since the Windsor Framework's medicines provisions took
+  // effect (2025-01-01) -- its "CMS" role in the fee dataset is a pre-Windsor legacy artefact,
+  // out of scope to remove here (the dataset is frozen -- see Global Constraints), but this list
+  // also excludes it from the CMS picker below in AU/SG/WS. UK/CH/RS remain fully valid for the
+  // standalone single-country Fee Calculator (a separate tool/file, unaffected by this list) and
+  // for a plain single-procedure submission (mode null) here.
   const NON_EU_PROCEDURE_COUNTRIES = ["CH", "RS", "UK"];
 
   const STATIONS = [
@@ -93,6 +96,7 @@
       leadEligible: all.filter((c) => NON_EU_PROCEDURE_COUNTRIES.indexOf(c.cc) === -1),
       rms: all.filter((c) => c.roles.indexOf("RMS") !== -1).map((c) => c.cc),
       cms: all.filter((c) => c.roles.indexOf("CMS") !== -1).map((c) => c.cc),
+      cmsEU: all.filter((c) => c.roles.indexOf("CMS") !== -1 && NON_EU_PROCEDURE_COUNTRIES.indexOf(c.cc) === -1).map((c) => c.cc),
       ema: (all.find((c) => c.roles.indexOf("EMA") !== -1) || {}).cc || null,
     };
     return COUNTRIES;
@@ -740,7 +744,10 @@
       }));
       const cmsLabel = flabel("CMS (Concerned Member States)", 10); host.appendChild(cmsLabel);
       const grid = el("div", "vcl-wf-cgrid");
-      cd.cms.forEach((cc) => {
+      // Same EU/EEA restriction as the "National" picker above -- AU/SG/WS are EU-only
+      // procedures; a plain single-procedure MRP/DCP submission keeps the full CMS list.
+      const cmsList = (auActive() || multiProcedureMode()) ? cd.cmsEU : cd.cms;
+      cmsList.forEach((cc) => {
         const isRms = p.rms === cc;
         const on = p.cms.indexOf(cc) !== -1;
         // Composite codes ("DE - BfArM") render as the base code plus a tiny authority
@@ -1938,6 +1945,7 @@
     if (auActive() || multiProcedureMode()) {
       allProcedures().forEach((p) => {
         if (p.kind === "national" && p.nat && NON_EU_PROCEDURE_COUNTRIES.indexOf(p.nat) !== -1) p.nat = null;
+        if (p.kind === "mrpdcp" && p.cms.length) p.cms = p.cms.filter((cc) => NON_EU_PROCEDURE_COUNTRIES.indexOf(cc) === -1);
       });
       if (state.worksharingLead && NON_EU_PROCEDURE_COUNTRIES.indexOf(state.worksharingLead) !== -1) state.worksharingLead = null;
     }
