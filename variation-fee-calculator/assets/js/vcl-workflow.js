@@ -14,6 +14,15 @@
   const ENTRIES = DATA.ENTRIES || [];
   const WD = window.VCL_WORKLOAD_DATA || {};
 
+  // Annual Update, Super-Grouping, and Worksharing are EU-law multi-country submission
+  // constructs (Art. 7(2)(b) / Art. 20 VO (EG) 1234/2008), open only to EU member states plus
+  // Iceland and Norway (EEA/EFTA, full MRP/DCP participants). CH and RS are non-EU/EEA
+  // national-only jurisdictions with no MRP/DCP role at all. The UK left the EU (Brexit) and
+  // can no longer take part in any EU multi-country procedure -- it remains valid ONLY as a CMS
+  // in MRP/DCP (a role this list never touches) and for the standalone single-country Fee
+  // Calculator (a separate tool/file, unaffected by this list).
+  const NON_EU_PROCEDURE_COUNTRIES = ["CH", "RS", "UK"];
+
   const STATIONS = [
     { key: "A", label: "Identify" },
     { key: "B", label: "Procedure" },
@@ -75,10 +84,13 @@
     const all = (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [];
     const nameOf = {};
     all.forEach((c) => { nameOf[c.cc] = c.name; });
+    const national = all.filter((c) => c.roles.indexOf("national") !== -1).map((c) => c.cc);
     COUNTRIES = {
       all: all,
       nameOf: nameOf,
-      national: all.filter((c) => c.roles.indexOf("national") !== -1).map((c) => c.cc),
+      national: national,
+      nationalEU: national.filter((cc) => NON_EU_PROCEDURE_COUNTRIES.indexOf(cc) === -1),
+      leadEligible: all.filter((c) => NON_EU_PROCEDURE_COUNTRIES.indexOf(c.cc) === -1),
       rms: all.filter((c) => c.roles.indexOf("RMS") !== -1).map((c) => c.cc),
       cms: all.filter((c) => c.roles.indexOf("CMS") !== -1).map((c) => c.cc),
       ema: (all.find((c) => c.roles.indexOf("EMA") !== -1) || {}).cc || null,
@@ -718,7 +730,10 @@
 
     const cd = countryData();
     if (p.kind === "national") {
-      host.appendChild(countrySelect("Country", cd.national, p.nat, (cc) => { p.nat = cc; rerender(); }));
+      // AU/WS/SG are EU-only procedures (NON_EU_PROCEDURE_COUNTRIES); a plain single-procedure
+      // submission (mode null) keeps the full national list.
+      const natList = (auActive() || multiProcedureMode()) ? cd.nationalEU : cd.national;
+      host.appendChild(countrySelect("Country", natList, p.nat, (cc) => { p.nat = cc; rerender(); }));
     } else if (p.kind === "mrpdcp") {
       host.appendChild(countrySelect("RMS (Reference Member State)", cd.rms, p.rms, (cc) => {
         p.rms = cc; p.cms = p.cms.filter((x) => x !== cc); rerender();
@@ -866,7 +881,7 @@
     const opt0 = document.createElement("option");
     opt0.value = ""; opt0.textContent = "— select —";
     sel.appendChild(opt0);
-    cd.all.forEach((c) => {
+    cd.leadEligible.forEach((c) => {
       const o = document.createElement("option");
       o.value = c.cc; o.textContent = (c.name || c.cc) + " (" + c.cc + ")";
       if (state.worksharingLead === c.cc) o.selected = true;
@@ -1915,6 +1930,16 @@
     if (sgActive()) {
       const baseFamily = VCL_SG_LOGIC.computeAllowedProcedureKinds([state.procedure], {});
       state.worksharing = state.worksharing.filter((p) => baseFamily.indexOf(p.kind) !== -1);
+    }
+    // AU/WS/SG are EU-only procedures: a "national" country or lead authority picked before the
+    // mode was active (or before NON_EU_PROCEDURE_COUNTRIES existed) can otherwise survive as a
+    // stale, no-longer-selectable value. Reset idempotently every render -- once already
+    // consistent, this is a no-op.
+    if (auActive() || multiProcedureMode()) {
+      allProcedures().forEach((p) => {
+        if (p.kind === "national" && p.nat && NON_EU_PROCEDURE_COUNTRIES.indexOf(p.nat) !== -1) p.nat = null;
+      });
+      if (state.worksharingLead && NON_EU_PROCEDURE_COUNTRIES.indexOf(state.worksharingLead) !== -1) state.worksharingLead = null;
     }
     // Lead authority: a Centralised procedure (EMA) auto-leads a worksharing or super-grouping
     // (the field locks) -- same rule for both modes since both price via the shared lead path.
