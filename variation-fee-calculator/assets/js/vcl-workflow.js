@@ -865,8 +865,12 @@
     sel.addEventListener("change", () => { state.worksharingLead = sel.value || null; rerender(); });
     wrap.appendChild(sel);
     wrap.appendChild(el("p", "vcl-wf-hint", hasCP
-      ? "Automatically the EMA, because a Centralised procedure (CP) is part of the worksharing."
-      : "Any authority can lead the worksharing — including the EMA. The fee category is set later, in Fees."));
+      ? (sgActive()
+          ? "Automatically the EMA — this Super-Grouping consists of Centralised procedures."
+          : "Automatically the EMA, because a Centralised procedure (CP) is part of the worksharing.")
+      : (sgActive()
+          ? "Any authority can lead the Super-Grouping — including the EMA. The fee category is set later, in Fees."
+          : "Any authority can lead the worksharing — including the EMA. The fee category is set later, in Fees.")));
     host.appendChild(wrap);
   }
 
@@ -1826,7 +1830,7 @@
     // the old "N procedures" count); otherwise the primary procedure shows as before.
     if (multiProcedureMode()) {
       chips.appendChild(el("span", "vcl-wf-chip", sgActive() ? "Super-Grouping" : "Worksharing"));
-      if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", (sgActive() ? "SG-Lead-RMS: " : "WS-Lead-RMS: ") + escapeHtml(state.worksharingLead)));
+      if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", (sgActive() ? "SG Lead: " : "WS-Lead-RMS: ") + escapeHtml(state.worksharingLead)));
     } else {
       // Annual Update is single-procedure: show its own chip alongside the procedure chip.
       if (auActive()) chips.appendChild(el("span", "vcl-wf-chip", "Annual Update"));
@@ -1890,6 +1894,16 @@
       state.submission.mode = null;
     } else if (state.submission.mode === 'worksharing' && allVariationsAreIA()) {
       state.submission.mode = null;
+    }
+    // Super-Grouping requires every procedure to share one family (CP-only, or national/mrpdcp).
+    // A mixed list can be built legally under Worksharing (any mix is allowed there) and survive
+    // an intermediate mode=null, landing here still mixed when the user switches into
+    // Super-Grouping. Resolve to the base procedure's family every render (idempotent once
+    // already consistent) -- the base procedure was configured first, so it wins; incompatible
+    // extras are dropped.
+    if (sgActive()) {
+      const baseFamily = VCL_SG_LOGIC.computeAllowedProcedureKinds([state.procedure], {});
+      state.worksharing = state.worksharing.filter((p) => baseFamily.indexOf(p.kind) !== -1);
     }
     // Lead authority: a Centralised procedure (EMA) auto-leads a worksharing or super-grouping
     // (the field locks) -- same rule for both modes since both price via the shared lead path.
