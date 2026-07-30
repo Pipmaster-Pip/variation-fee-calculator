@@ -34,6 +34,18 @@ t('deadline: leap-day 2028-02-29 -> 2029-02-28 (clamped)', function () {
 t('deadline: empty -> null', function () {
   assert.strictEqual(L.computeAnnualUpdateDeadline(''), null);
 });
+t('deadline: 9 months, 2026-03-15 -> 2026-12-15 (Annual Update earliest bound)', function () {
+  var d = L.computeAnnualUpdateDeadline('2026-03-15', 9);
+  assert.strictEqual(d.getFullYear(), 2026);
+  assert.strictEqual(d.getMonth(), 11); // December = 11
+  assert.strictEqual(d.getDate(), 15);
+});
+t('deadline: 9 months, month-end clamp, 2026-05-31 -> 2027-02-28', function () {
+  var d = L.computeAnnualUpdateDeadline('2026-05-31', 9);
+  assert.strictEqual(d.getFullYear(), 2027);
+  assert.strictEqual(d.getMonth(), 1); // February = 1
+  assert.strictEqual(d.getDate(), 28);
+});
 
 t('distinctRms: only mrpdcp rms, unique + sorted', function () {
   assert.deepStrictEqual(

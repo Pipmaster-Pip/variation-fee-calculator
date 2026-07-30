@@ -11,16 +11,22 @@
     return types.every(function (t) { return t === 'IA'; });
   }
 
-  // Implementation date + 12 calendar months. '' -> null. Month-end is clamped
-  // (e.g. 2028-02-29 -> 2029-02-28) so the day never rolls into the next month.
-  function computeAnnualUpdateDeadline(isoDateStr) {
+  // Implementation date + N calendar months (default 12). '' -> null. Month-end is clamped
+  // (e.g. +12 months from 2028-02-29 -> 2029-02-28) so the day never rolls into the next month.
+  // `months` lets callers compute both Annual Update's 9-month earliest bound and the shared
+  // 12-month latest bound from the same arithmetic.
+  function computeAnnualUpdateDeadline(isoDateStr, months) {
     if (!isoDateStr) return null;
     var parts = String(isoDateStr).split('-');
     if (parts.length !== 3) return null;
     var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
     if (!y || !m || !d) return null;
-    var target = new Date(y + 1, m - 1, d);
-    if (target.getMonth() !== (m - 1)) target = new Date(y + 1, m, 0); // clamp to last day of intended month
+    var n = (months === undefined || months === null) ? 12 : months;
+    var totalMonth0 = (m - 1) + n;
+    var targetYear = y + Math.floor(totalMonth0 / 12);
+    var targetMonth0 = ((totalMonth0 % 12) + 12) % 12;
+    var target = new Date(targetYear, targetMonth0, d);
+    if (target.getMonth() !== targetMonth0) target = new Date(targetYear, targetMonth0 + 1, 0); // clamp to last day of intended month
     return target;
   }
 

@@ -12,6 +12,7 @@
 
   const DATA = window.VCL_DATA || {};
   const ENTRIES = DATA.ENTRIES || [];
+  const WD = window.VCL_WORKLOAD_DATA || {};
 
   const STATIONS = [
     { key: "A", label: "Identify" },
@@ -198,8 +199,19 @@
     return VCL_SG_LOGIC.computeSuperGroupingConflicts(variationsWithChapter(), procs);
   }
 
+  // Latest permitted filing: implementation date + WD.annualUpdate.latestMonths (12).
+  // Shared by both Annual Update and Super-Grouping.
   function annualUpdateDeadline() {
-    return VCL_SG_LOGIC.computeAnnualUpdateDeadline(state.earliestImplDate);
+    var months = (WD.annualUpdate && WD.annualUpdate.latestMonths) || 12;
+    return VCL_SG_LOGIC.computeAnnualUpdateDeadline(state.earliestImplDate, months);
+  }
+  // Earliest permitted filing: mode-dependent. Annual Update follows the classical
+  // "+WD.annualUpdate.earliestMonths (9) to +12 months" window; Super-Grouping may be
+  // filed any time from the implementation date itself (no earliest-bound computation needed).
+  function annualUpdateEarliestDate() {
+    if (sgActive()) return (state.earliestImplDate ? new Date(state.earliestImplDate) : null);
+    var months = (WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9;
+    return VCL_SG_LOGIC.computeAnnualUpdateDeadline(state.earliestImplDate, months);
   }
   function feeRows() { return (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || []; }
   // The variation types actually being priced (from the IA/IB/II tally) -- the fee-category
@@ -232,11 +244,10 @@
     return feeRows().some((r) => r.cc === cc && r.role === role && types.indexOf(r.type) !== -1
       && (!r.special || /^standard$/i.test(r.special)));
   }
-  // ⚠️ OPEN QUESTION (role mapping): does the RMS of an MRP/DCP inside a worksharing pay its
-  // RMS fee, or the worksharing-CMS fee when it is not the lead? Tendency: "WS-CMS", to be
-  // confirmed against real data. Until then RMS stays RMS -- flip the constant to "CMS" and
-  // every lookup below (dropdown options and pricing) follows from this single spot.
-  const WS_RMS_PRICES_AS = "RMS";
+  // A non-lead RMS of an MRP/DCP inside a Worksharing or Super-Grouping pays its
+  // worksharing-CMS fee, not its standalone RMS fee (confirmed decision). Every lookup
+  // below (dropdown options and pricing) follows from this single spot.
+  const WS_RMS_PRICES_AS = "CMS";
   function wsPricingRole(role) { return role === "RMS" ? WS_RMS_PRICES_AS : role; }
   function wsSpecialKey(cc, role) { return cc + "|" + role; }
   function isWorksharingSpecial(s) { return /worksharing/i.test(s || ""); }
@@ -296,7 +307,7 @@
   }
   // The lead's one-off fee: a single engine country-result, or null while it can't be priced.
   function leadFees(counts) {
-    if (!leadPricingActive() || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
+    if (!leadPricingActive() || !state.worksharingLead || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
     if (feeCountsTotal(counts) === 0) return null;
     const cc = state.worksharingLead;
     const s = leadSpecial();
@@ -349,7 +360,7 @@
     const seen = {}; const out = [];
     // In a worksharing (or super-grouping) the lead is a fee-payer of its own (even when it
     // sits in none of the procedures), so it must show up here too -- e.g. for the strengths list.
-    if (leadPricingActive()) { seen[state.worksharingLead] = 1; out.push({ cc: state.worksharingLead, role: leadPricingRole() }); }
+    if (leadPricingActive() && state.worksharingLead) { seen[state.worksharingLead] = 1; out.push({ cc: state.worksharingLead, role: leadPricingRole() }); }
     allProcedures().forEach((p) => procCountries(p).forEach((x) => { if (!seen[x.cc]) { seen[x.cc] = 1; out.push({ cc: x.cc, role: x.role }); } }));
     return out;
   }
@@ -913,10 +924,11 @@
 
     const sch = workflowSchedule();
     if (!sch) {
-      body.appendChild(el("div", "vcl-wf-placeholder", "A Type IA is not submitted individually — it runs on the Annual Update window (first implementation date +9 to +12 months), not on a submission–assessment–closure clock."));
+      body.appendChild(el("div", "vcl-wf-placeholder", "A Type IA is not submitted individually — it is bundled into an Annual Update or Super-Grouping filing (see the options below)."));
 
-      // Annual Update / Super-Grouping: earliest implementation date drives the annual-update
-      // deadline (implementation + 12 calendar months, month-end clamped -- see computeAnnualUpdateDeadline).
+      // Annual Update / Super-Grouping: earliest implementation date drives both the
+      // mode-dependent earliest filing date (annualUpdateEarliestDate()) and the shared
+      // latest deadline (annualUpdateDeadline(), implementation + 12 calendar months).
       if (annualUpdateActive()) {
         body.appendChild(flabel("Frühestes Umsetzungsdatum (Implementation Date)", 14));
         const iwrap = el("div", "vcl-wf-field");
@@ -925,6 +937,7 @@
         idate.addEventListener("change", () => { state.earliestImplDate = idate.value; rerender(); });
         iwrap.appendChild(idate); body.appendChild(iwrap);
 
+        const earliest = annualUpdateEarliestDate();
         const dl = annualUpdateDeadline();
         const list = el("div", "vcl-wf-tl-list");
         const dlRow = (label, value, strong) => {
@@ -934,8 +947,13 @@
           list.appendChild(line);
         };
         dlRow("Frühestes Umsetzungsdatum", state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—");
-        dlRow("Früheste Einreichung", "ab Umsetzung — heute bereits möglich");
-        dlRow("Späteste Einreichung", dl ? (fmtDate(dl) + " (Umsetzung + 12 Monate)") : "—", true);
+        dlRow(
+          "Früheste Einreichung",
+          sgActive()
+            ? "ab Umsetzung — heute bereits möglich"
+            : (earliest ? (fmtDate(earliest) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9) + " Monate)") : "—")
+        );
+        dlRow("Späteste Einreichung", dl ? (fmtDate(dl) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.latestMonths) || 12) + " Monate)") : "—", true);
         body.appendChild(list);
       }
       return;
@@ -1389,7 +1407,7 @@
       const leadBit = state.worksharingLead
         ? ` led by <strong>${escapeHtml(cd.nameOf[state.worksharingLead] || state.worksharingLead)}</strong> <span class="vcl-wf-sum__muted">·</span>`
         : "";
-      line("Procedures", `<span class="vcl-wf-sum__tag">Worksharing</span>${leadBit} ${procs.length} procedures`);
+      line("Procedures", `<span class="vcl-wf-sum__tag">${sgActive() ? "Super-Grouping" : "Worksharing"}</span>${leadBit} ${procs.length} procedures`);
       const plist = el("div", "vcl-wf-sum__plist");
       procs.forEach((p, i) => {
         const it = el("div", "vcl-wf-sum__pitem");
@@ -1422,9 +1440,11 @@
     if (summaryVariations().length) {
       const xwrap = el("div", "vcl-wf-xlink");
       const xbtn = el("button", "vcl-wf-xlink__btn",
-        wsActive()
-          ? "Export summary, classification codes and precise scopes to .docx for use in the WS Letter of Intent and eAF"
-          : "Export summary, classification codes and precise scopes to .docx for use in the eAF");
+        sgActive()
+          ? "Export summary, classification codes and precise scopes to .docx for use in the Super-Grouping Letter of Intent and eAF"
+          : wsActive()
+            ? "Export summary, classification codes and precise scopes to .docx for use in the WS Letter of Intent and eAF"
+            : "Export summary, classification codes and precise scopes to .docx for use in the eAF");
       xbtn.type = "button";
       xbtn.addEventListener("click", () => exportSummaryDocx(grand, anyCountries));
       xwrap.appendChild(xbtn);
@@ -1449,6 +1469,7 @@
     const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, LineRuleType } = window.docx;
     const meta = DATA.CLASSIFICATION_META || {};
     const ws = wsActive();
+    const multiProc = multiProcedureMode(); // true for Worksharing OR Super-Grouping -- drives the "list every procedure" branch below, independent of which one's label text is used
     const cd = countryData();
 
     // Document-wide look (matches the user's reference .docx 2026-07-24): 12 pt body
@@ -1462,11 +1483,12 @@
     const MONO = "Consolas";
 
     const children = [];
-    children.push(new Paragraph({ text: ws ? "Worksharing — Summary & Variations" : "Variation — Summary & Variations", heading: HeadingLevel.HEADING_1, spacing: sp() }));
+    children.push(new Paragraph({ text: sgActive() ? "Super-Grouping — Summary & Variations" : (ws ? "Worksharing — Summary & Variations" : "Variation — Summary & Variations"), heading: HeadingLevel.HEADING_1, spacing: sp() }));
 
     const metaBits = ["Generated " + new Date().toLocaleDateString()];
     if (meta.guidelineRef) metaBits.push("Classification Guideline " + meta.guidelineRef + (meta.applicableFrom ? ", applicable from " + meta.applicableFrom : ""));
     if (ws) metaBits.push("for use in the Worksharing Letter of Intent");
+    else if (sgActive()) metaBits.push("for use in the Super-Grouping Letter of Intent");
     children.push(new Paragraph({ children: [new TextRun({ text: metaBits.join(" · "), italics: true, color: "5B6572" })], spacing: sp({ after: 300 }) }));
 
     // ---- Summary block (mirrors the on-screen card) ----
@@ -1487,9 +1509,10 @@
     }
 
     const procs = allProcedures();
-    if (ws && procs.length > 1) {
+    if (multiProc && procs.length > 1) {
       const leadName = state.worksharingLead ? (cd.nameOf[state.worksharingLead] || state.worksharingLead) : null;
-      children.push(kv("Procedures", [new TextRun("Worksharing" + (leadName ? " led by " + leadName : "") + " · " + procs.length + " procedures")]));
+      const modeLabel = sgActive() ? "Super-Grouping" : "Worksharing";
+      children.push(kv("Procedures", [new TextRun(modeLabel + (leadName ? " led by " + leadName : "") + " · " + procs.length + " procedures")]));
       procs.forEach((p, i) => {
         children.push(new Paragraph({ children: [new TextRun({ text: (i + 1) + ". ", bold: true }), new TextRun(procDetail(p))], indent: { left: 360 }, spacing: sp({ after: 40 }) }));
       });
@@ -1511,9 +1534,14 @@
       children.push(new Paragraph({ text: sgActive() ? "Super-Grouping" : "Annual Update", heading: HeadingLevel.HEADING_2, spacing: sp({ before: 200 }) }));
       children.push(kv("Modus", [new TextRun(sgActive() ? "Super-Grouping (Type IA)" : "Annual Update (Type IA)")]));
       children.push(kv("Frühestes Umsetzungsdatum", [new TextRun(state.earliestImplDate ? fmtDate(new Date(state.earliestImplDate)) : "—")]));
+      const auEarliest = annualUpdateEarliestDate();
       const auDl = annualUpdateDeadline();
-      children.push(kv("Früheste Einreichung", [new TextRun("ab Umsetzung — heute bereits möglich")]));
-      children.push(kv("Späteste Einreichung", [new TextRun(auDl ? fmtDate(auDl) + " (Umsetzung + 12 Monate)" : "—")]));
+      children.push(kv("Früheste Einreichung", [new TextRun(
+        sgActive()
+          ? "ab Umsetzung — heute bereits möglich"
+          : (auEarliest ? (fmtDate(auEarliest) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9) + " Monate)") : "—")
+      )]));
+      children.push(kv("Späteste Einreichung", [new TextRun(auDl ? fmtDate(auDl) + " (Umsetzung + " + ((WD.annualUpdate && WD.annualUpdate.latestMonths) || 12) + " Monate)" : "—")]));
 
       if (sgActive()) {
         const auLines = allProcedures().map((p) => procDetail(p));
@@ -1736,9 +1764,9 @@
     }
     // Procedure: in a worksharing, "Worksharing" + the lead replace the procedure chip (and
     // the old "N procedures" count); otherwise the primary procedure shows as before.
-    if (wsActive()) {
-      chips.appendChild(el("span", "vcl-wf-chip", "Worksharing"));
-      if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", "WS-Lead-RMS: " + escapeHtml(state.worksharingLead)));
+    if (multiProcedureMode()) {
+      chips.appendChild(el("span", "vcl-wf-chip", sgActive() ? "Super-Grouping" : "Worksharing"));
+      if (state.worksharingLead) chips.appendChild(el("span", "vcl-wf-chip", (sgActive() ? "SG-Lead-RMS: " : "WS-Lead-RMS: ") + escapeHtml(state.worksharingLead)));
     } else if (procComplete(state.procedure)) {
       chips.appendChild(el("span", "vcl-wf-chip", escapeHtml(procLabel(state.procedure))));
     }
