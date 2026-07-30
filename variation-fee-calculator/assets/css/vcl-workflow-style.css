@@ -312,6 +312,7 @@
   font-weight: 600;
 }
 .vcl-app .vcl-wf-opt--sm { font-size: 12px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 5px; }
+.vcl-app .vcl-wf-opt.is-disabled { opacity: 0.35; cursor: default; }
 
 /* Direct type pick (no classification) under the search */
 .vcl-app .vcl-wf-quicktype {

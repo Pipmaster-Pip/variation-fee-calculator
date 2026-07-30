@@ -684,12 +684,23 @@
   }
 
   // Reusable procedure editor: kind (National/MRP-DCP/CP) + country-level selection.
+  // In Super-Grouping, CP cannot mix with national/mrpdcp (computeAllowedProcedureKinds);
+  // the incompatible kind chip(s) are disabled rather than shown as a later warning, so the
+  // invalid combination can never be created. Worksharing is unaffected (allowedKinds stays null).
   function procEditor(host, p, o) {
     const kinds = [{ k: "national", l: "National" }, { k: "mrpdcp", l: "MRP / DCP" }, { k: "cp", l: "CP" }];
+    const allowedKinds = sgActive() ? VCL_SG_LOGIC.computeAllowedProcedureKinds(allProcedures(), p) : null;
     const row = el("div", "vcl-wf-opts");
     kinds.forEach((it) => {
-      const chip = el("button", "vcl-wf-opt vcl-wf-opt--sm" + (p.kind === it.k ? " is-on" : ""), escapeHtml(it.l));
+      const isAllowed = !allowedKinds || allowedKinds.indexOf(it.k) !== -1;
+      const chip = el("button", "vcl-wf-opt vcl-wf-opt--sm" + (p.kind === it.k ? " is-on" : "") + (isAllowed ? "" : " is-disabled"), escapeHtml(it.l));
       chip.type = "button";
+      if (!isAllowed) {
+        chip.disabled = true;
+        chip.title = it.k === "cp"
+          ? "Not allowed together with national/MRP-DCP procedures in Super-Grouping"
+          : "Not allowed together with CP in Super-Grouping";
+      }
       chip.addEventListener("click", () => { p.kind = it.k; rerender(); });
       row.appendChild(chip);
     });
