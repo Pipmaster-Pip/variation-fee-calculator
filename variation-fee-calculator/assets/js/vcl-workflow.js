@@ -901,12 +901,16 @@
     body.appendChild(el("div", "vcl-wf-body__title", "Date & Timeline"));
     body.appendChild(el("div", "vcl-wf-body__sub", "When do you plan to submit, and how does the assessment clock run?"));
 
-    // Desired submission date.
-    body.appendChild(flabel("Desired initial submission date", 0));
-    const dwrap = el("div", "vcl-wf-field");
-    const date = document.createElement("input"); date.type = "date"; date.className = "vcl-wf-select"; date.value = state.submissionDate;
-    date.addEventListener("change", () => { state.submissionDate = date.value; rerender(); });
-    dwrap.appendChild(date); body.appendChild(dwrap);
+    // Desired submission date. In an Annual Update / Super-Grouping this input is not shown
+    // here -- it is rendered further down (as "Planned submission date") beneath the
+    // implementation-date block, constrained to the mode-dependent filing corridor.
+    if (!annualUpdateActive()) {
+      body.appendChild(flabel("Desired initial submission date", 0));
+      const dwrap = el("div", "vcl-wf-field");
+      const date = document.createElement("input"); date.type = "date"; date.className = "vcl-wf-select"; date.value = state.submissionDate;
+      date.addEventListener("change", () => { state.submissionDate = date.value; rerender(); });
+      dwrap.appendChild(date); body.appendChild(dwrap);
+    }
 
     const t = primaryType();
     // Type II sub-procedure.
@@ -961,6 +965,23 @@
         );
         dlRow("Latest submission", dl ? (fmtDate(dl) + " (implementation + " + latestMonths + " months)") : "—", true);
         body.appendChild(list);
+
+        // Planned submission date: must fall inside the mode-dependent corridor -- Annual
+        // Update: implementation +earliestMonths..+latestMonths; Super-Grouping: implementation
+        // date .. implementation +latestMonths. The corridor is only known once an
+        // implementation date is entered, so this field sits below the block above.
+        const toIso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        body.appendChild(flabel("Planned submission date", 18));
+        const swrap = el("div", "vcl-wf-field");
+        swrap.style.marginBottom = "12px"; // breathing room before the nav, analogous to the implementation-date block
+        const sdate = document.createElement("input");
+        sdate.type = "date"; sdate.className = "vcl-wf-select"; sdate.value = state.submissionDate;
+        if (earliest && dl) { sdate.min = toIso(earliest); sdate.max = toIso(dl); }
+        sdate.addEventListener("change", () => { state.submissionDate = sdate.value; rerender(); });
+        swrap.appendChild(sdate); body.appendChild(swrap);
+        if (!state.earliestImplDate) {
+          body.appendChild(el("p", "vcl-wf-hint", "Enter the implementation date first to set the submission window."));
+        }
       }
       return;
     }
