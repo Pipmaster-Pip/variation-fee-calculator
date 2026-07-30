@@ -896,7 +896,15 @@
 
     const add = el("button", "vcl-wf-add", "＋ Add procedure");
     add.type = "button";
-    add.addEventListener("click", () => { state.worksharing.push(newProcedure()); rerender(); });
+    add.addEventListener("click", () => {
+      const p = newProcedure();
+      if (sgActive()) {
+        const allowed = VCL_SG_LOGIC.computeAllowedProcedureKinds(allProcedures(), p);
+        if (allowed.indexOf(p.kind) === -1) p.kind = allowed[0];
+      }
+      state.worksharing.push(p);
+      rerender();
+    });
     panel.appendChild(add);
     host.appendChild(panel);
   }
