@@ -70,5 +70,30 @@ t('conflicts: only E/Q -> none', function () {
   assert.strictEqual(L.computeSuperGroupingConflicts([{ code: 'E.1', chapter: 'E' }, { code: 'Q.1', chapter: 'Q' }], [{ kind: 'mrpdcp', rms: 'FR' }, { kind: 'mrpdcp', rms: 'PL' }]).length, 0);
 });
 
+t('allowedKinds: no other procedures -> all three kinds', function () {
+  var p1 = { kind: 'national' };
+  assert.deepStrictEqual(L.computeAllowedProcedureKinds([p1], p1), ['national', 'mrpdcp', 'cp']);
+});
+t('allowedKinds: other procedure is cp -> only cp allowed', function () {
+  var p1 = { kind: 'cp' }, p2 = { kind: 'national' };
+  assert.deepStrictEqual(L.computeAllowedProcedureKinds([p1, p2], p2), ['cp']);
+});
+t('allowedKinds: other procedure is national -> national+mrpdcp allowed, cp excluded', function () {
+  var p1 = { kind: 'national' }, p2 = { kind: 'cp' };
+  assert.deepStrictEqual(L.computeAllowedProcedureKinds([p1, p2], p2), ['national', 'mrpdcp']);
+});
+t('allowedKinds: other procedure is mrpdcp -> national+mrpdcp allowed, cp excluded', function () {
+  var p1 = { kind: 'mrpdcp', rms: 'FR' }, p2 = { kind: 'cp' };
+  assert.deepStrictEqual(L.computeAllowedProcedureKinds([p1, p2], p2), ['national', 'mrpdcp']);
+});
+t('allowedKinds: multiple cp procedures group together fine', function () {
+  var p1 = { kind: 'cp' }, p2 = { kind: 'cp' }, p3 = { kind: 'cp' };
+  assert.deepStrictEqual(L.computeAllowedProcedureKinds([p1, p2, p3], p3), ['cp']);
+});
+t('allowedKinds: cp takes precedence over national/mrpdcp deterministically', function () {
+  var pCp = { kind: 'cp' }, pNat = { kind: 'national' }, pSelf = { kind: 'mrpdcp', rms: 'FR' };
+  assert.deepStrictEqual(L.computeAllowedProcedureKinds([pCp, pNat, pSelf], pSelf), ['cp']);
+});
+
 console.log('\n' + (total - failed) + '/' + total + ' passed');
 process.exit(failed ? 1 : 0);

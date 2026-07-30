@@ -49,11 +49,23 @@
       .map(function (v) { return { code: (v.code || null), title: (v.title || ''), chapter: 'C', rmsList: rms }; });
   }
 
+  // Which procedure kinds may be added to a Super-Grouping group, given the OTHER procedures
+  // already in it (currentProcedure is excluded by reference so it doesn't block its own choice).
+  // CP cannot mix with national/mrpdcp: if any other procedure is 'cp', only 'cp' remains
+  // selectable; if any other is 'national'/'mrpdcp', 'cp' is excluded. Empty group -> free choice.
+  function computeAllowedProcedureKinds(procedures, currentProcedure) {
+    var others = (procedures || []).filter(function (p) { return p && p !== currentProcedure; });
+    if (others.some(function (p) { return p.kind === 'cp'; })) return ['cp'];
+    if (others.some(function (p) { return p.kind === 'national' || p.kind === 'mrpdcp'; })) return ['national', 'mrpdcp'];
+    return ['national', 'mrpdcp', 'cp'];
+  }
+
   var api = {
     computeAllVariationsAreIA: computeAllVariationsAreIA,
     computeAnnualUpdateDeadline: computeAnnualUpdateDeadline,
     computeDistinctRms: computeDistinctRms,
-    computeSuperGroupingConflicts: computeSuperGroupingConflicts
+    computeSuperGroupingConflicts: computeSuperGroupingConflicts,
+    computeAllowedProcedureKinds: computeAllowedProcedureKinds
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
