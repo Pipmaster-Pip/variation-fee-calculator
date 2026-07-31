@@ -15,6 +15,8 @@
   const VCL_DATA = window.VCL_DATA || {};
   const WD = window.VCL_WORKLOAD_DATA;
   if (!WD) return;
+  const WLH = window.VCL_WORKLOAD_HOURS;
+  if (!WLH) return;
 
   const ENTRIES = VCL_DATA.ENTRIES || [];
 
@@ -42,7 +44,7 @@
   // TIMING or ASSESS is touched, or whenever a new workbook is linked on the settings page --
   // the panel prints it right next to the download link, so a stale date is visible to users.
   const F_META = {
-    lastChecked: "2026-07-18",
+    lastChecked: "2026-07-31",
     workbook: "Workload_RA_Stunden_Faktoren.xlsx",
   };
 
@@ -54,9 +56,9 @@
     cmsHoursPer: 1,
     submission: {
       worksharing: { factor: 1.2, perNational: 1, perMrpdcp: 2 },
-      grouping: { factor: 1.2, perIA: 1, perIB: 1, perII: 2 },
-      annualUpdate: { factor: 1.2, perIA: 5 },
-      superGrouping: { factor: 1.3 },
+      grouping: { factor: 1.2, perIA: 0.5, perIB: 1, perII: 2 },
+      annualUpdate: { factor: 1.2, perIA: 0.5 },
+      superGrouping: { factor: 1.2, perNational: 1, perMrpdcp: 1, perCp: 1 },
     },
     // Product Information (⑥): hours per ticked deliverable depend on the variation type (IA/IB/II);
     // only counted when "PI management in RA" gates them on. Source: workbook "Faktoren" H63:J66.
@@ -137,6 +139,9 @@
     groupingIB: 0,
     groupingII: 0,
     annualUpdateIaCount: 0,
+    superGroupingNational: 0,
+    superGroupingMrpdcp: 0,
+    superGroupingCp: 0,
     productInfo: { smpc: false, leaflet: false, labelling: false, mockups: false },
     piManagementInRA: false,
     methodOpen: false, // "How this estimate is built" panel -- survives rerender() by living here
@@ -225,19 +230,14 @@
     return (F.cmsHoursPer || 0) * state.cmsCountries.length;
   }
   function submissionAddHours() {
-    let h = 0;
-    const s = F.submission;
-    if (state.procOptions.worksharing) h += (s.worksharing.perNational || 0) * state.worksharingNational + (s.worksharing.perMrpdcp || 0) * state.worksharingMrpdcp;
-    if (state.procOptions.grouping) h += (s.grouping.perIA || 0) * state.groupingIA + (s.grouping.perIB || 0) * state.groupingIB + (s.grouping.perII || 0) * state.groupingII;
-    if (state.procOptions.annualUpdate) h += (s.annualUpdate.perIA || 0) * state.annualUpdateIaCount;
-    return h;
+    return WLH.computeSubmissionAddHours(state.procOptions, state, F.submission);
   }
   function submissionPending() {
     const s = F.submission;
     if (state.procOptions.worksharing && s.worksharing.factor == null && s.worksharing.perNational == null && s.worksharing.perMrpdcp == null) return true;
     if (state.procOptions.grouping && s.grouping.factor == null && s.grouping.perIA == null && s.grouping.perIB == null && s.grouping.perII == null) return true;
     if (state.procOptions.annualUpdate && s.annualUpdate.factor == null && s.annualUpdate.perIA == null) return true;
-    if (state.procOptions.superGrouping && s.superGrouping.factor == null) return true;
+    if (state.procOptions.superGrouping && s.superGrouping.factor == null && s.superGrouping.perNational == null && s.superGrouping.perMrpdcp == null && s.superGrouping.perCp == null) return true;
     return false;
   }
   // The workbook gives PI hours per Type IA/IB/II. IAIN counts as IA, "IB (unforeseen)" as IB.
