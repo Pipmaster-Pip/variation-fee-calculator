@@ -666,6 +666,13 @@
       if (allowed.indexOf("II") !== -1) subRow.appendChild(numberField("vcl-wl-grp-ii", "Other variations — Type II", state.groupingII, (v) => { state.groupingII = v; }, hoursPill(grp.perII))); else state.groupingII = 0;
     }
     if (state.procOptions.annualUpdate) subRow.appendChild(numberField("vcl-wl-au-count", "No. of Type IA", state.annualUpdateIaCount, (v) => { state.annualUpdateIaCount = v; }, hoursPill(au.perIA)));
+    if (state.procOptions.superGrouping) {
+      const kinds = WLH.computeSgCounterKinds(state.procedure);
+      const sg = F.submission.superGrouping;
+      if (kinds.indexOf("national") !== -1) subRow.appendChild(numberField("vcl-wl-sg-nat", "Other procedures — national", state.superGroupingNational, (v) => { state.superGroupingNational = v; }, hoursPill(sg.perNational))); else state.superGroupingNational = 0;
+      if (kinds.indexOf("mrpdcp") !== -1) subRow.appendChild(numberField("vcl-wl-sg-mrp", "Other procedures — MRP/DCP", state.superGroupingMrpdcp, (v) => { state.superGroupingMrpdcp = v; }, hoursPill(sg.perMrpdcp))); else state.superGroupingMrpdcp = 0;
+      if (kinds.indexOf("cp") !== -1) subRow.appendChild(numberField("vcl-wl-sg-cp", "Other procedures — CP", state.superGroupingCp, (v) => { state.superGroupingCp = v; }, hoursPill(sg.perCp))); else state.superGroupingCp = 0;
+    }
     if (subRow.children.length) section.appendChild(subRow);
   }
 
@@ -1134,6 +1141,9 @@
       { label: "Grouping · per Type IB", val: "+ " + s.grouping.perIB + " h", active: state.procOptions.grouping && state.groupingIB > 0 },
       { label: "Grouping · per Type II", val: "+ " + s.grouping.perII + " h", active: state.procOptions.grouping && state.groupingII > 0 },
       { label: "Annual Update · per Type IA", val: "+ " + s.annualUpdate.perIA + " h", active: state.procOptions.annualUpdate && state.annualUpdateIaCount > 0 },
+      { label: "Super-Grouping · per national procedure", val: "+ " + s.superGrouping.perNational + " h", active: state.procOptions.superGrouping && state.superGroupingNational > 0 },
+      { label: "Super-Grouping · per MRP/DCP procedure", val: "+ " + s.superGrouping.perMrpdcp + " h", active: state.procOptions.superGrouping && state.superGroupingMrpdcp > 0 },
+      { label: "Super-Grouping · per CP procedure", val: "+ " + s.superGrouping.perCp + " h", active: state.procOptions.superGrouping && state.superGroupingCp > 0 },
     ]));
 
     out.push(methodTable("+ Product information · " + methodTypeLabel(type) + " (hours per element)", PRODUCT_INFO.map((it) => ({
