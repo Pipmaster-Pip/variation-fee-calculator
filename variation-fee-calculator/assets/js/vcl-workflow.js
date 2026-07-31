@@ -46,6 +46,11 @@
     query: "",
     typeOnly: null,        // 'IA' | 'IB' | 'II' when the user skips the classification and just picks a type
     activeSubstance: null, // 'biologic' | 'chemical'
+    // Product information (Station A): gate + which documents this change touches.
+    piInRA: false,
+    piDocs: { smpc: false, leaflet: false, labelling: false, mockups: false },
+    // "How the RA hours are calculated" box open/closed (persists across stations).
+    methodOpen: false,
     // Station B
     procedure: newProcedure(),        // the primary procedure ("procedure 1")
     // mode: null | 'worksharing' | 'annualUpdate' | 'superGrouping'
@@ -408,6 +413,11 @@
     }
     return best;
   }
+  // Which type drives the PI per-document hours, bucketed to IA/IB/II (F.productInfo's keys) so
+  // IAIN / "IB (unforeseen)" map correctly. For a grouped, mixed-type submission this uses the
+  // HIGHEST type (primaryType), consistent with how the group's timeline and RA effort are derived.
+  // OPEN ITEM (see spec): if the domain rule turns out to be "per variation", change only this.
+  function piType() { return feeBucket(primaryType()); }
   function groupingBuckets() {
     const c = { IA: 0, IB: 0, II: 0 };
     if (state.submission.grouping) state.grouping.forEach((g) => { if (g.type) { const b = feeBucket(g.type); if (b) c[b]++; } });
@@ -435,6 +445,7 @@
       groupingCounts: groupingBuckets(), worksharingProcs: worksharingKinds(),
       annualUpdate: auActive(), annualUpdateIaCount: auActive() ? 1 + groupingBuckets().IA : 0,
       superGrouping: sgActive(), superGroupingProcs: sgProcKinds(),
+      piInRA: state.piInRA, productInfo: state.piDocs, piType: piType(),
     });
   }
   function workflowSchedule() {
@@ -500,6 +511,8 @@
     state.station = "A";
     state.reached = { A: true, B: false, C: false, D: false };
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
+    state.piInRA = false; state.piDocs = { smpc: false, leaflet: false, labelling: false, mockups: false };
+    state.methodOpen = false;
     state.procedure = newProcedure(); state.submission = { grouping: false, mode: null };
     state.grouping = []; state.worksharing = []; state.worksharingLead = null;
     state.worksharingLeadSpecial = null; state.wsSpecials = {}; state.specials = {};
@@ -543,7 +556,9 @@
     // 1) Active substance -- first, independent of the variation choice.
     buildSubstance(body);
 
-    // 2) The (base) variation.
+    // 2) The (base) variation. A section heading precedes the picker so the block reads as its own
+    // step after Active substance.
+    body.appendChild(el("div", "vcl-wf-flabel", "Variations"));
     if (state.typeOnly) {
       buildTypeOnlyHeader(body);
     } else {
@@ -568,6 +583,11 @@
     // 3) Further variations -- listed here too; more than one is treated as a
     // grouping automatically (no separate toggle -- that lives nowhere now).
     buildGroupingList(body);
+
+    // 4) Product information -- a property of the change itself (which documents it touches),
+    // known here at classification time, independent of procedure/countries. Only meaningful once
+    // a variation/type is set.
+    if (hasVariation()) buildProductInfo(body);
   }
 
   function buildSubstance(body) {
@@ -584,6 +604,41 @@
     // Same 16px rhythm as between the other Station A blocks -- without it the chips sit
     // flush on the variation box below.
     opts.style.marginBottom = "16px";
+    body.appendChild(opts);
+  }
+
+  // Station A: does RA prepare the product information for this change, and which documents does it
+  // touch? Gate defaults OFF (another department carries PI -> no RA hours). Chips reuse the green
+  // .vcl-wf-opt look; the per-document hours are shown only in the methodology box, never as pills.
+  function buildProductInfo(body) {
+    const head = el("div", "vcl-wf-flabel", "Product information");
+    head.style.marginTop = "16px";
+    body.appendChild(head);
+
+    const gate = el("label", "vcl-wf-switch" + (state.piInRA ? " is-on" : ""));
+    gate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
+      + '<span class="vcl-wf-switch__label">Product information managed in RA</span>';
+    gate.addEventListener("click", (e) => { e.preventDefault(); state.piInRA = !state.piInRA; rerender(); });
+    body.appendChild(gate);
+
+    if (!state.piInRA) {
+      body.appendChild(el("p", "vcl-wf-hint", "Off: another department prepares the product information — it adds no RA hours."));
+      return;
+    }
+
+    body.appendChild(el("p", "vcl-wf-hint", "Which documents does this change touch?"));
+    const opts = el("div", "vcl-wf-opts");
+    [
+      { key: "smpc", label: "SmPC" },
+      { key: "leaflet", label: "Package leaflet" },
+      { key: "labelling", label: "Labelling" },
+      { key: "mockups", label: "Mock-ups" },
+    ].forEach((o) => {
+      const chip = el("button", "vcl-wf-opt" + (state.piDocs[o.key] ? " is-on" : ""), escapeHtml(o.label));
+      chip.type = "button";
+      chip.addEventListener("click", () => { state.piDocs[o.key] = !state.piDocs[o.key]; rerender(); });
+      opts.appendChild(chip);
+    });
     body.appendChild(opts);
   }
 
@@ -1836,6 +1891,124 @@
   }
 
   // ---- Live preview (docked at the bottom) ----
+  // One factor table for the methodology box: a title and rows of {label, val, active}. The active
+  // row (the one that applies to the current case) is highlighted; the pink value chip reuses the
+  // Workload tool's look via .vcl-wf-meth-val.
+  function wfMethTable(title, rows, note) {
+    const wrap = el("div", "vcl-wf-meth-table");
+    if (title) wrap.appendChild(el("div", "vcl-wf-meth-table__title", escapeHtml(title)));
+    rows.forEach((r) => {
+      const row = el("div", "vcl-wf-meth-row" + (r.active ? " is-active" : ""));
+      row.innerHTML = '<span class="l">' + escapeHtml(r.label) + '</span>'
+        + '<span class="vcl-wf-meth-val">' + escapeHtml(String(r.val)) + '</span>';
+      wrap.appendChild(row);
+    });
+    if (note) wrap.appendChild(el("p", "vcl-wf-meth-note", escapeHtml(note)));
+    return wrap;
+  }
+
+  // "How the RA hours are calculated" -- a collapsible box under the live preview, available on
+  // every station. Reads factor VALUES from window.VCL_WORKLOAD.factors (single source) and the
+  // current Workflow state; content is filled in buildMethodPanel.
+  function buildMethodBox() {
+    const box = el("div", "vcl-wf-meth" + (state.methodOpen ? " is-open" : ""));
+    const bar = el("button", "vcl-wf-meth-bar");
+    bar.type = "button";
+    bar.innerHTML = '<span class="i" aria-hidden="true">i</span>'
+      + '<span class="t">How the RA hours are calculated</span>'
+      + '<span class="chev" aria-hidden="true">' + (state.methodOpen ? "&#9652;" : "&#9662;") + '</span>';
+    bar.addEventListener("click", () => { state.methodOpen = !state.methodOpen; rerender(); });
+    box.appendChild(bar);
+    if (state.methodOpen) box.appendChild(buildMethodPanel());
+    return box;
+  }
+
+  // Full methodology panel: the RA-hours factor tables (values from the shared F), the PI table for
+  // the current type, a "This case" resolution down to the live figure, and the source note. The
+  // rows that apply to the current case are highlighted; the rest show what would change.
+  function buildMethodPanel() {
+    const F = window.VCL_WORKLOAD && window.VCL_WORKLOAD.factors;
+    const META = (window.VCL_WORKLOAD && window.VCL_WORKLOAD.factorsMeta) || {};
+    const panel = el("div", "vcl-wf-meth-panel");
+    const inner = el("div", "vcl-wf-meth-inner");
+    panel.appendChild(inner);
+    if (!F) { inner.appendChild(el("p", "vcl-wf-meth-note", "Factor tables are not available.")); return panel; }
+
+    const tb = feeBucket(primaryType());                     // 'IA' | 'IB' | 'II' | null
+    const kind = state.procedure.kind;                       // 'national' | 'mrpdcp' | 'cp'
+    const cms = kind === "mrpdcp" ? state.procedure.cms.length : 0;
+    const large = cms > F.procedure.cmsThreshold;
+    const fx = (n) => "× " + fmtNum(n);
+
+    // Formula
+    inner.appendChild(el("div", "vcl-wf-meth-formula",
+      "RA hours = Base[type] × Procedure × Active substance × ∏ Submission factors"
+      + "<br>&nbsp;&nbsp;+ CMS × " + F.cmsHoursPer + " h + Σ grouped items + Σ Product information"));
+
+    // Base hours
+    inner.appendChild(wfMethTable("Base hours per variation type", [
+      { label: "Type IA", val: F.baseHours.IA + " h", active: tb === "IA" },
+      { label: "Type IB", val: F.baseHours.IB + " h", active: tb === "IB" },
+      { label: "Type II", val: F.baseHours.II + " h", active: tb === "II" },
+    ], "The starting point, before any factor is applied."));
+
+    // Procedure
+    inner.appendChild(wfMethTable("× Procedure", [
+      { label: "National", val: fx(F.procedure.national), active: kind === "national" },
+      { label: "Centralised (CP)", val: fx(F.procedure.cp), active: kind === "cp" },
+      { label: "MRP/DCP, ≤ " + F.procedure.cmsThreshold + " CMS", val: fx(F.procedure.mrpdcpSmall), active: kind === "mrpdcp" && !large },
+      { label: "MRP/DCP, > " + F.procedure.cmsThreshold + " CMS", val: fx(F.procedure.mrpdcpLarge), active: kind === "mrpdcp" && large },
+    ], "MRP/DCP also adds " + F.cmsHoursPer + " h per CMS on top."));
+
+    // Active substance
+    inner.appendChild(wfMethTable("× Active substance", [
+      { label: "Biologic", val: fx(F.activeSubstance.biologic), active: state.activeSubstance === "biologic" },
+      { label: "Chemically-synthesized API", val: fx(F.activeSubstance.chemical), active: state.activeSubstance === "chemical" },
+    ]));
+
+    // Submission factors
+    const s = F.submission;
+    inner.appendChild(wfMethTable("× Submission type", [
+      { label: "Worksharing", val: fx(s.worksharing.factor), active: wsActive() },
+      { label: "Grouping", val: fx(s.grouping.factor), active: state.submission.grouping && !(auActive() || sgActive()) },
+      { label: "Annual Update", val: fx(s.annualUpdate.factor), active: auActive() },
+      { label: "Super-Grouping", val: fx(s.superGrouping.factor), active: sgActive() },
+    ], "These multiply together when several apply at once."));
+
+    // Product information for the current type
+    const pt = piType();
+    const pi = F.productInfo;
+    inner.appendChild(wfMethTable("+ Product information · Type " + (pt || "—") + " (hours per document)", [
+      { label: "SmPC", val: "+ " + (pi.smpc[pt] || 0) + " h", active: state.piInRA && state.piDocs.smpc },
+      { label: "Package leaflet", val: "+ " + (pi.leaflet[pt] || 0) + " h", active: state.piInRA && state.piDocs.leaflet },
+      { label: "Labelling", val: "+ " + (pi.labelling[pt] || 0) + " h", active: state.piInRA && state.piDocs.labelling },
+      { label: "Mock-ups", val: "+ " + (pi.mockups[pt] || 0) + " h", active: state.piInRA && state.piDocs.mockups },
+    ], "Only counted when “Product information managed in RA” is on. Hours scale with the variation type."));
+
+    // This case -> the same figure the live preview shows
+    const ra = raEffort();
+    if (ra !== null) {
+      inner.appendChild(el("div", "vcl-wf-meth-h", "This case"));
+      inner.appendChild(wfMethTable("", [
+        { label: "= RA workload (rounded up)", val: Math.ceil(ra) + " h", active: true },
+      ], "Matches the live preview above. The highlighted rows show which values drive it."));
+    }
+
+    // Source / provenance
+    const src = el("div", "vcl-wf-meth-src");
+    src.innerHTML = "<strong>Source:</strong> " + escapeHtml(META.workbook || "factor workbook")
+      + " — sheet “Faktoren”. Last checked against it on <strong>" + escapeHtml(META.lastChecked || "—") + "</strong>.";
+    const excelUrl = (window.VCL_CONFIG && window.VCL_CONFIG.workloadExcelUrl) || "";
+    if (excelUrl) {
+      const a = document.createElement("a");
+      a.className = "vcl-wf-meth-dl"; a.href = excelUrl; a.target = "_blank"; a.rel = "noopener";
+      a.innerHTML = "⬇ Download the workbook (Excel)";
+      src.appendChild(a);
+    }
+    inner.appendChild(src);
+    return panel;
+  }
+
   function buildLive() {
     const live = el("div", "vcl-wf-live");
     live.appendChild(el("div", "vcl-wf-live__head",
@@ -1970,6 +2143,7 @@
     const live = buildLive();
     liveHost = live;
     root.appendChild(live);
+    root.appendChild(buildMethodBox());
     container.appendChild(root);
   }
 
