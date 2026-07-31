@@ -1891,22 +1891,6 @@
   }
 
   // ---- Live preview (docked at the bottom) ----
-  // One factor table for the methodology box: a title and rows of {label, val, active}. The active
-  // row (the one that applies to the current case) is highlighted; the pink value chip reuses the
-  // Workload tool's look via .vcl-wf-meth-val.
-  function wfMethTable(title, rows, note) {
-    const wrap = el("div", "vcl-wf-meth-table");
-    if (title) wrap.appendChild(el("div", "vcl-wf-meth-table__title", escapeHtml(title)));
-    rows.forEach((r) => {
-      const row = el("div", "vcl-wf-meth-row" + (r.active ? " is-active" : ""));
-      row.innerHTML = '<span class="l">' + escapeHtml(r.label) + '</span>'
-        + '<span class="vcl-wf-meth-val">' + escapeHtml(String(r.val)) + '</span>';
-      wrap.appendChild(row);
-    });
-    if (note) wrap.appendChild(el("p", "vcl-wf-meth-note", escapeHtml(note)));
-    return wrap;
-  }
-
   // "How the RA hours are calculated" -- a collapsible box under the live preview, available on
   // every station. Reads factor VALUES from window.VCL_WORKLOAD.factors (single source) and the
   // current Workflow state; content is filled in buildMethodPanel.
@@ -1923,9 +1907,17 @@
     return box;
   }
 
-  // Full methodology panel: the RA-hours factor tables (values from the shared F), the PI table for
-  // the current type, a "This case" resolution down to the live figure, and the source note. The
-  // rows that apply to the current case are highlighted; the rest show what would change.
+  // One methodology row: label + pink/green value pill.
+  function methRow(label, val, cls) {
+    const row = el("div", "vcl-wf-meth-row" + (cls ? " " + cls : ""));
+    row.innerHTML = '<span class="l">' + escapeHtml(label) + '</span>'
+      + '<span class="vcl-wf-meth-val">' + escapeHtml(val) + '</span>';
+    return row;
+  }
+
+  // Methodology panel, FILTERED: only the rows that actually move the number for the current case
+  // (neutral ×1.0 factors and +0 add-ons are hidden), ending in the total that matches the live
+  // preview. Values come from the shared factor table (window.VCL_WORKLOAD.factors).
   function buildMethodPanel() {
     const F = window.VCL_WORKLOAD && window.VCL_WORKLOAD.factors;
     const META = (window.VCL_WORKLOAD && window.VCL_WORKLOAD.factorsMeta) || {};
@@ -1938,63 +1930,59 @@
     const kind = state.procedure.kind;                       // 'national' | 'mrpdcp' | 'cp'
     const cms = kind === "mrpdcp" ? state.procedure.cms.length : 0;
     const large = cms > F.procedure.cmsThreshold;
-    const fx = (n) => "× " + fmtNum(n);
+    const s = F.submission;
+    const grouped = state.submission.grouping && !(auActive() || sgActive());
 
-    // Formula
     inner.appendChild(el("div", "vcl-wf-meth-formula",
       "RA hours = Base[type] × Procedure × Active substance × ∏ Submission factors"
       + "<br>&nbsp;&nbsp;+ CMS × " + F.cmsHoursPer + " h + Σ grouped items + Σ Product information"));
 
-    // Base hours
-    inner.appendChild(wfMethTable("Base hours per variation type", [
-      { label: "Type IA", val: F.baseHours.IA + " h", active: tb === "IA" },
-      { label: "Type IB", val: F.baseHours.IB + " h", active: tb === "IB" },
-      { label: "Type II", val: F.baseHours.II + " h", active: tb === "II" },
-    ], "The starting point, before any factor is applied."));
-
-    // Procedure
-    inner.appendChild(wfMethTable("× Procedure", [
-      { label: "National", val: fx(F.procedure.national), active: kind === "national" },
-      { label: "Centralised (CP)", val: fx(F.procedure.cp), active: kind === "cp" },
-      { label: "MRP/DCP, ≤ " + F.procedure.cmsThreshold + " CMS", val: fx(F.procedure.mrpdcpSmall), active: kind === "mrpdcp" && !large },
-      { label: "MRP/DCP, > " + F.procedure.cmsThreshold + " CMS", val: fx(F.procedure.mrpdcpLarge), active: kind === "mrpdcp" && large },
-    ], "MRP/DCP also adds " + F.cmsHoursPer + " h per CMS on top."));
-
-    // Active substance
-    inner.appendChild(wfMethTable("× Active substance", [
-      { label: "Biologic", val: fx(F.activeSubstance.biologic), active: state.activeSubstance === "biologic" },
-      { label: "Chemically-synthesized API", val: fx(F.activeSubstance.chemical), active: state.activeSubstance === "chemical" },
-    ]));
-
-    // Submission factors
-    const s = F.submission;
-    inner.appendChild(wfMethTable("× Submission type", [
-      { label: "Worksharing", val: fx(s.worksharing.factor), active: wsActive() },
-      { label: "Grouping", val: fx(s.grouping.factor), active: state.submission.grouping && !(auActive() || sgActive()) },
-      { label: "Annual Update", val: fx(s.annualUpdate.factor), active: auActive() },
-      { label: "Super-Grouping", val: fx(s.superGrouping.factor), active: sgActive() },
-    ], "These multiply together when several apply at once."));
-
-    // Product information for the current type
-    const pt = piType();
-    const pi = F.productInfo;
-    inner.appendChild(wfMethTable("+ Product information · Type " + (pt || "—") + " (hours per document)", [
-      { label: "SmPC", val: "+ " + (pi.smpc[pt] || 0) + " h", active: state.piInRA && state.piDocs.smpc },
-      { label: "Package leaflet", val: "+ " + (pi.leaflet[pt] || 0) + " h", active: state.piInRA && state.piDocs.leaflet },
-      { label: "Labelling", val: "+ " + (pi.labelling[pt] || 0) + " h", active: state.piInRA && state.piDocs.labelling },
-      { label: "Mock-ups", val: "+ " + (pi.mockups[pt] || 0) + " h", active: state.piInRA && state.piDocs.mockups },
-    ], "Only counted when “Product information managed in RA” is on. Hours scale with the variation type."));
-
-    // This case -> the same figure the live preview shows
-    const ra = raEffort();
-    if (ra !== null) {
-      inner.appendChild(el("div", "vcl-wf-meth-h", "This case"));
-      inner.appendChild(wfMethTable("", [
-        { label: "= RA workload (rounded up)", val: Math.ceil(ra) + " h", active: true },
-      ], "Matches the live preview above. The highlighted rows show which values drive it."));
+    const rows = [];
+    // Base -- always shown (the starting point).
+    if (tb) rows.push(["Base · Type " + tb, (F.baseHours[tb] || 0) + " h"]);
+    // Procedure factor (hidden when neutral ×1.0).
+    let pf = F.procedure.national, plabel = "National";
+    if (kind === "cp") { pf = F.procedure.cp; plabel = "Centralised (CP)"; }
+    else if (kind === "mrpdcp") { pf = large ? F.procedure.mrpdcpLarge : F.procedure.mrpdcpSmall; plabel = "MRP/DCP, " + (large ? "> " : "≤ ") + F.procedure.cmsThreshold + " CMS"; }
+    if (pf !== 1) rows.push(["× Procedure · " + plabel, "× " + fmtNum(pf)]);
+    // Active substance (only Biologic changes anything).
+    if (state.activeSubstance === "biologic") rows.push(["× Active substance · Biologic", "× " + fmtNum(F.activeSubstance.biologic)]);
+    // Submission factors (only the active mode).
+    if (wsActive()) rows.push(["× Submission · Worksharing", "× " + fmtNum(s.worksharing.factor)]);
+    if (grouped) rows.push(["× Submission · Grouping", "× " + fmtNum(s.grouping.factor)]);
+    if (auActive()) rows.push(["× Submission · Annual Update", "× " + fmtNum(s.annualUpdate.factor)]);
+    if (sgActive()) rows.push(["× Submission · Super-Grouping", "× " + fmtNum(s.superGrouping.factor)]);
+    // Add-ons (only non-zero).
+    if (kind === "mrpdcp" && cms > 0) rows.push(["+ Per CMS × " + cms, "+ " + fmtNum(F.cmsHoursPer * cms) + " h"]);
+    const wk = worksharingKinds();
+    if (wsActive() && wk.national > 0) rows.push(["+ Worksharing · per national × " + wk.national, "+ " + fmtNum(s.worksharing.perNational * wk.national) + " h"]);
+    if (wsActive() && wk.mrpdcp > 0) rows.push(["+ Worksharing · per MRP/DCP × " + wk.mrpdcp, "+ " + fmtNum(s.worksharing.perMrpdcp * wk.mrpdcp) + " h"]);
+    const gb = groupingBuckets();
+    if (grouped && gb.IA > 0) rows.push(["+ Grouping · Type IA × " + gb.IA, "+ " + fmtNum(s.grouping.perIA * gb.IA) + " h"]);
+    if (grouped && gb.IB > 0) rows.push(["+ Grouping · Type IB × " + gb.IB, "+ " + fmtNum(s.grouping.perIB * gb.IB) + " h"]);
+    if (grouped && gb.II > 0) rows.push(["+ Grouping · Type II × " + gb.II, "+ " + fmtNum(s.grouping.perII * gb.II) + " h"]);
+    if (auActive()) { const n = 1 + gb.IA; if (n > 0) rows.push(["+ Annual Update · per Type IA × " + n, "+ " + fmtNum(s.annualUpdate.perIA * n) + " h"]); }
+    if (sgActive()) {
+      const sp = sgProcKinds();
+      if (sp.national > 0) rows.push(["+ Super-Grouping · national × " + sp.national, "+ " + fmtNum(s.superGrouping.perNational * sp.national) + " h"]);
+      if (sp.mrpdcp > 0) rows.push(["+ Super-Grouping · MRP/DCP × " + sp.mrpdcp, "+ " + fmtNum(s.superGrouping.perMrpdcp * sp.mrpdcp) + " h"]);
+      if (sp.cp > 0) rows.push(["+ Super-Grouping · CP × " + sp.cp, "+ " + fmtNum(s.superGrouping.perCp * sp.cp) + " h"]);
+    }
+    // Product information (only ticked documents).
+    if (state.piInRA && tb) {
+      const pi = F.productInfo;
+      [["smpc", "SmPC"], ["leaflet", "Package leaflet"], ["labelling", "Labelling"], ["mockups", "Mock-ups"]].forEach((d) => {
+        if (state.piDocs[d[0]] && pi[d[0]]) rows.push(["+ Product information · " + d[1], "+ " + fmtNum(pi[d[0]][tb] || 0) + " h"]);
+      });
     }
 
-    // Source / provenance
+    rows.forEach((r) => inner.appendChild(methRow(r[0], r[1])));
+
+    const ra = raEffort();
+    if (ra !== null) inner.appendChild(methRow("= RA workload", Math.ceil(ra) + " h", "vcl-wf-meth-total"));
+
+    inner.appendChild(el("p", "vcl-wf-meth-note", "Only the entries that change the number for this case are shown."));
+
     const src = el("div", "vcl-wf-meth-src");
     src.innerHTML = "<strong>Source:</strong> " + escapeHtml(META.workbook || "factor workbook")
       + " — sheet “Faktoren”. Last checked against it on <strong>" + escapeHtml(META.lastChecked || "—") + "</strong>.";
