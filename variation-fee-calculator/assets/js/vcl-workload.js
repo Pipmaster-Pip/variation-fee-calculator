@@ -1315,7 +1315,9 @@
 
   // RA preparation hours for one (primary) procedure, mirroring computeRaHours() but from
   // explicit inputs. opts: { type, substance, procedure, cmsCount, grouping, worksharing,
-  // groupingCounts:{IA,IB,II}, worksharingProcs:{national,mrpdcp} }.
+  // annualUpdate, superGrouping, groupingCounts:{IA,IB,II}, worksharingProcs:{national,mrpdcp},
+  // superGroupingProcs:{national,mrpdcp,cp}, annualUpdateIaCount }. The per-item add-hours sum is
+  // delegated to the shared pure module so this API and the tool's own view never diverge.
   function raHoursFor(opts) {
     const o = opts || {};
     const base = F.baseHours[o.type] || 0;
@@ -1326,12 +1328,20 @@
     let sf = 1;
     if (o.grouping) sf *= F.submission.grouping.factor;
     if (o.worksharing) sf *= F.submission.worksharing.factor;
-    let add = 0;
-    if (o.procedure === "mrpdcp") add += (F.cmsHoursPer || 0) * (o.cmsCount || 0);
+    if (o.annualUpdate) sf *= F.submission.annualUpdate.factor;
+    if (o.superGrouping) sf *= F.submission.superGrouping.factor;
     const gc = o.groupingCounts || {};
-    if (o.grouping) add += (F.submission.grouping.perIA || 0) * (gc.IA || 0) + (F.submission.grouping.perIB || 0) * (gc.IB || 0) + (F.submission.grouping.perII || 0) * (gc.II || 0);
     const wp = o.worksharingProcs || {};
-    if (o.worksharing) add += (F.submission.worksharing.perNational || 0) * (wp.national || 0) + (F.submission.worksharing.perMrpdcp || 0) * (wp.mrpdcp || 0);
+    const sp = o.superGroupingProcs || {};
+    const procOptions = { worksharing: o.worksharing, grouping: o.grouping, annualUpdate: o.annualUpdate, superGrouping: o.superGrouping };
+    const counts = {
+      worksharingNational: wp.national || 0, worksharingMrpdcp: wp.mrpdcp || 0,
+      groupingIA: gc.IA || 0, groupingIB: gc.IB || 0, groupingII: gc.II || 0,
+      annualUpdateIaCount: o.annualUpdateIaCount || 0,
+      superGroupingNational: sp.national || 0, superGroupingMrpdcp: sp.mrpdcp || 0, superGroupingCp: sp.cp || 0,
+    };
+    let add = WLH.computeSubmissionAddHours(procOptions, counts, F.submission);
+    if (o.procedure === "mrpdcp") add += (F.cmsHoursPer || 0) * (o.cmsCount || 0);
     return base * (pf * af * sf) + add;
   }
 
