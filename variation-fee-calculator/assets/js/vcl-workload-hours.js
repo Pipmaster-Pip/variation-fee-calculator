@@ -38,9 +38,25 @@
     return procedure === 'cp' ? ['cp'] : ['national', 'mrpdcp'];
   }
 
+  // Product-information hours: per ticked deliverable, scaled by the variation type (IA/IB/II).
+  // Zero when PI is not managed in RA (gate off) or the factor table is missing. Values come from
+  // F.productInfo (passed in) so this stays pure and the factors keep their single source.
+  function computePiAddHours(piInRA, piDocs, type, productInfo) {
+    if (!piInRA || !productInfo) return 0;
+    piDocs = piDocs || {};
+    var keys = ['smpc', 'leaflet', 'labelling', 'mockups'];
+    var h = 0;
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (piDocs[k] && productInfo[k]) h += (productInfo[k][type] || 0);
+    }
+    return h;
+  }
+
   var api = {
     computeSubmissionAddHours: computeSubmissionAddHours,
-    computeSgCounterKinds: computeSgCounterKinds
+    computeSgCounterKinds: computeSgCounterKinds,
+    computePiAddHours: computePiAddHours
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -59,5 +59,30 @@ t('sgKinds: mrpdcp -> [national, mrpdcp]', function () {
   assert.deepStrictEqual(H.computeSgCounterKinds('mrpdcp'), ['national', 'mrpdcp']);
 });
 
+var PI = {
+  smpc:      { IA: 1, IB: 2, II: 4 },
+  leaflet:   { IA: 1, IB: 2, II: 4 },
+  labelling: { IA: 1, IB: 2, II: 4 },
+  mockups:   { IA: 1, IB: 2, II: 4 }
+};
+t('pi: gate off -> 0', function () {
+  assert.strictEqual(H.computePiAddHours(false, { smpc: true, leaflet: true }, 'II', PI), 0);
+});
+t('pi: II, SmPC + leaflet -> 8', function () {
+  assert.strictEqual(H.computePiAddHours(true, { smpc: true, leaflet: true }, 'II', PI), 8);
+});
+t('pi: IB, all four -> 8', function () {
+  assert.strictEqual(H.computePiAddHours(true, { smpc: true, leaflet: true, labelling: true, mockups: true }, 'IB', PI), 8);
+});
+t('pi: IA, SmPC only -> 1', function () {
+  assert.strictEqual(H.computePiAddHours(true, { smpc: true }, 'IA', PI), 1);
+});
+t('pi: nothing ticked -> 0', function () {
+  assert.strictEqual(H.computePiAddHours(true, {}, 'II', PI), 0);
+});
+t('pi: missing productInfo -> 0', function () {
+  assert.strictEqual(H.computePiAddHours(true, { smpc: true }, 'II', null), 0);
+});
+
 console.log('\n' + (total - failed) + '/' + total + ' passed');
 process.exit(failed ? 1 : 0);
