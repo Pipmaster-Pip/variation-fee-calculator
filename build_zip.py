@@ -38,6 +38,7 @@ FILES = [
     "assets/js/vcl-art5-data.js",
     "assets/js/vcl-workload.js",
     "assets/js/vcl-workload-data.js",
+    "assets/js/vcl-workload-hours.js",
     "assets/js/vcl-sg-logic.js",
     "assets/js/vcl-workflow.js",
     "assets/js/vcl-calc-app.js",

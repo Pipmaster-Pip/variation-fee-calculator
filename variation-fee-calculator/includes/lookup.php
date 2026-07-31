@@ -117,13 +117,26 @@ function vcl_register_assets() {
 		true
 	);
 
+	// Workload pure hour helpers (window.VCL_WORKLOAD_HOURS). No dependencies; registered
+	// before vcl-workload so its global is ready by the time that script runs.
+	$workload_hours_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workload-hours.js';
+	$workload_hours_ver  = file_exists( $workload_hours_file ) ? filemtime( $workload_hours_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-workload-hours',
+		VFC_PLUGIN_URL . 'assets/js/vcl-workload-hours.js',
+		array(),
+		$workload_hours_ver,
+		true
+	);
+
 	$workload_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workload.js';
 	$workload_app_ver  = file_exists( $workload_app_file ) ? filemtime( $workload_app_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-workload',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workload.js',
-		array( 'vcl-data', 'vcl-workload-data' ),
+		array( 'vcl-data', 'vcl-workload-data', 'vcl-workload-hours' ),
 		$workload_app_ver,
 		true
 	);
