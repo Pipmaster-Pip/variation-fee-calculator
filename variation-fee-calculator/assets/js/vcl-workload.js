@@ -1316,8 +1316,10 @@
   // RA preparation hours for one (primary) procedure, mirroring computeRaHours() but from
   // explicit inputs. opts: { type, substance, procedure, cmsCount, grouping, worksharing,
   // annualUpdate, superGrouping, groupingCounts:{IA,IB,II}, worksharingProcs:{national,mrpdcp},
-  // superGroupingProcs:{national,mrpdcp,cp}, annualUpdateIaCount }. The per-item add-hours sum is
-  // delegated to the shared pure module so this API and the tool's own view never diverge.
+  // superGroupingProcs:{national,mrpdcp,cp}, annualUpdateIaCount,
+  // piInRA, productInfo:{smpc,leaflet,labelling,mockups}, piType }. The per-item add-hours sum and
+  // the PI hours are delegated to the shared pure module so this API and the tool's own view never
+  // diverge. PI defaults to nothing when piInRA is falsy, so existing callers are unaffected.
   function raHoursFor(opts) {
     const o = opts || {};
     const base = F.baseHours[o.type] || 0;
@@ -1342,12 +1344,17 @@
     };
     let add = WLH.computeSubmissionAddHours(procOptions, counts, F.submission);
     if (o.procedure === "mrpdcp") add += (F.cmsHoursPer || 0) * (o.cmsCount || 0);
-    return base * (pf * af * sf) + add;
+    const pi = WLH.computePiAddHours(o.piInRA, o.productInfo, o.piType || o.type, F.productInfo);
+    return base * (pf * af * sf) + add + pi;
   }
 
   window.VCL_WORKLOAD = {
     render: function (container) { if (!container) return; mountedContainer = container; rerender(); },
     schedule: computeSchedule,
     raHours: raHoursFor,
+    // Read-only views of the factor table and its provenance, so the Guided Workflow can render its
+    // "How the RA hours are calculated" box from the same numbers (single source). Treat as read-only.
+    factors: F,
+    factorsMeta: F_META,
   };
 })();
