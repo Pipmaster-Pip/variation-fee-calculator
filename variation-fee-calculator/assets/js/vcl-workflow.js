@@ -418,14 +418,23 @@
     if (multiProcedureMode()) state.worksharing.forEach((p) => { if (p.kind === "national") k.national++; else if (p.kind === "mrpdcp") k.mrpdcp++; });
     return k;
   }
+  // Further Super-Grouping procedures counted by kind (incl. CP, unlike worksharingKinds). The
+  // primary procedure (state.procedure) is the base and is not counted here.
+  function sgProcKinds() {
+    const k = { national: 0, mrpdcp: 0, cp: 0 };
+    if (sgActive()) state.worksharing.forEach((p) => { if (k[p.kind] !== undefined) k[p.kind]++; });
+    return k;
+  }
   function raEffort() {
     const t = primaryType();
     if (!t || !window.VCL_WORKLOAD || !window.VCL_WORKLOAD.raHours) return null;
     return window.VCL_WORKLOAD.raHours({
       type: t, substance: state.activeSubstance, procedure: state.procedure.kind,
       cmsCount: state.procedure.kind === "mrpdcp" ? state.procedure.cms.length : 0,
-      grouping: state.submission.grouping, worksharing: multiProcedureMode(),
+      grouping: state.submission.grouping && !(auActive() || sgActive()), worksharing: wsActive(),
       groupingCounts: groupingBuckets(), worksharingProcs: worksharingKinds(),
+      annualUpdate: auActive(), annualUpdateIaCount: auActive() ? 1 + groupingBuckets().IA : 0,
+      superGrouping: sgActive(), superGroupingProcs: sgProcKinds(),
     });
   }
   function workflowSchedule() {
