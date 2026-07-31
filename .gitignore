@@ -16,3 +16,6 @@ variation-fee-calculator.zip
 # OS/editor cruft
 .DS_Store
 Thumbs.db
+
+# Brainstorming visual-companion scratch
+.superpowers/
