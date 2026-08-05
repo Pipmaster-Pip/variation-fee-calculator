@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Budget Planning — dev harness</title>
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-budget-style.css" />
+<style>
+  body { margin: 0; padding: 24px; background: #EFEFEC; font-family: -apple-system, sans-serif; }
+  .vclcalc-app { display: none; } /* real calculator markup kept only so vcl-calc-app.js has its DOM hooks */
+</style>
+</head>
+<body>
+  <div class="vcl-app">
+    <div class="layout">
+      <div class="budget-col" id="vcl-budgetCol"></div>
+      <div class="vclcalc-app" id="vclcalc-app">
+        <div class="rail" id="vclcalc-rail"></div>
+        <div id="vclcalc-stepContent"></div>
+        <div class="src"><div class="fx-status-row"><span id="vclcalc-fxStatus"></span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-app.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-budget.js"></script>
+  <script>
+    window.VCL_BUDGET.render(document.getElementById("vcl-budgetCol"));
+  </script>
+</body>
+</html>

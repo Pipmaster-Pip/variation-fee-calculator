@@ -1,0 +1,96 @@
+/* ============================================================================
+ * Budget Planning -- styles for the "Budget Planning" view of the Variation
+ * Toolbox. Own local class namespace (.vcl-bud-*), following the same
+ * precedent as the other per-view stylesheets (.vcl-wf-*, .vcl-tt-*, .vcl-wl-*).
+ * ============================================================================ */
+
+.vcl-app {
+  /* Reuses the hex value freed by today's standalone-Workload-tool removal
+     (was --workload in vcl-workload-style.css) under a name that matches this
+     tool instead -- no new colour added to the palette. */
+  --budget: #7A3350;
+  --budget-bg: #F5E9EE;
+  --budget-tint: rgba(122, 51, 80, 0.06);
+}
+
+.vcl-app .budget-col { grid-column: 2; grid-row: 1; padding: 28px 6px 40px 0; }
+
+.vcl-app .vcl-bud-header {
+  padding: 0 0 20px; margin-bottom: 24px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+}
+.vcl-app .vcl-bud-header h2 { font-family: "IBM Plex Serif", serif; font-weight: 600; font-size: 22px; margin: 0 0 6px; }
+.vcl-app .vcl-bud-header p { margin: 0; color: var(--muted); font-size: 14px; }
+.vcl-app .vcl-bud-header__actions { display: flex; align-items: center; gap: 10px; flex: none; }
+
+.vcl-app .vcl-bud-btn {
+  font-family: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 16px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.vcl-app .vcl-bud-btn:hover { border-color: var(--budget); }
+.vcl-app .vcl-bud-btn--primary { background: var(--budget); border-color: var(--budget); color: #fff; }
+.vcl-app .vcl-bud-btn--primary:hover { background: #612941; }
+.vcl-app .vcl-bud-btn--ghost { border-color: transparent; background: transparent; padding: 9px 10px; }
+.vcl-app .vcl-bud-btn--ghost:hover { background: var(--border-soft); border-color: transparent; }
+.vcl-app .vcl-bud-btn--small { font-size: 12px; padding: 6px 10px; }
+.vcl-app .vcl-bud-btn--danger:hover { border-color: var(--ii); color: var(--ii); }
+
+.vcl-app .vcl-bud-rollup { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
+.vcl-app .vcl-bud-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.vcl-app .vcl-bud-tile__label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
+.vcl-app .vcl-bud-tile__value { font-family: "IBM Plex Serif", serif; font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 0; line-height: 1.15; }
+.vcl-app .vcl-bud-tile__sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-tile--fte .vcl-bud-tile__value { color: var(--budget); }
+.vcl-app .vcl-bud-fte-input { width: 62px; font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.vcl-app .vcl-bud-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 26px; }
+.vcl-app .vcl-bud-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 12px; }
+.vcl-app .vcl-bud-panel h3 { font-size: 13px; margin: 0 0 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.vcl-app .vcl-bud-bdrow { display: grid; grid-template-columns: 90px 1fr 64px; align-items: center; gap: 10px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }
+.vcl-app .vcl-bud-bdrow:last-child { border-bottom: none; }
+.vcl-app .vcl-bud-bdbar { height: 7px; border-radius: 4px; background: var(--border-soft); overflow: hidden; }
+.vcl-app .vcl-bud-bdbar > span { display: block; height: 100%; background: var(--budget); border-radius: 4px; }
+.vcl-app .vcl-bud-bdval { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.vcl-app .vcl-bud-table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.vcl-app .vcl-bud-table-head h3 { font-size: 15px; margin: 0; font-weight: 600; font-family: "IBM Plex Serif", serif; }
+.vcl-app .vcl-bud-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.vcl-app table.vcl-bud-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 880px; }
+.vcl-app table.vcl-bud-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 10px 12px; background: var(--border-soft); white-space: nowrap; }
+.vcl-app table.vcl-bud-table td { padding: 10px 12px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
+.vcl-app table.vcl-bud-table tbody tr:hover { background: var(--budget-tint); }
+.vcl-app .vcl-bud-cc-chip { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--border-soft); color: var(--muted); margin: 1px 2px 1px 0; }
+.vcl-app .vcl-bud-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vcl-app .vcl-bud-hours-band { color: var(--ink-faint); font-size: 11.5px; }
+.vcl-app .vcl-bud-row-actions { display: flex; gap: 2px; white-space: nowrap; }
+.vcl-app .vcl-bud-warn { display: inline-flex; align-items: center; gap: 5px; color: var(--ib); font-size: 12px; font-weight: 600; }
+.vcl-app .vcl-bud-warn::before { content: "!"; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--ib-bg); font-size: 10px; }
+.vcl-app .vcl-bud-table tfoot td { padding: 11px 12px; font-weight: 600; border-top: 2px solid var(--border); background: var(--border-soft); font-variant-numeric: tabular-nums; }
+
+.vcl-app .vcl-bud-modal-overlay { position: fixed; inset: 0; background: rgba(20,25,32,.42); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
+.vcl-app .vcl-bud-modal { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; background: var(--panel); border-radius: 14px; padding: 24px 26px 22px; box-shadow: 0 12px 40px rgba(10,15,25,.28); }
+.vcl-app .vcl-bud-modal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.vcl-app .vcl-bud-modal__head h2 { font-family: "IBM Plex Serif", serif; font-size: 18px; margin: 0; font-weight: 600; }
+.vcl-app .vcl-bud-modal__sub { font-size: 12.5px; color: var(--muted); margin: 0 0 18px; }
+.vcl-app .vcl-bud-field { margin-bottom: 14px; }
+.vcl-app .vcl-bud-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.vcl-app .vcl-bud-field-label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 5px; }
+.vcl-app .vcl-bud-input, .vcl-app .vcl-bud-select { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--paper); color: var(--ink); }
+.vcl-app .vcl-bud-input:focus, .vcl-app .vcl-bud-select:focus { outline: none; border-color: var(--budget); }
+.vcl-app .vcl-bud-cc-checks { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; background: var(--paper); }
+.vcl-app .vcl-bud-cc-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 4px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border-soft); font-family: "IBM Plex Mono", monospace; cursor: pointer; }
+.vcl-app .vcl-bud-cc-check input { accent-color: var(--budget); }
+.vcl-app .vcl-bud-type-badge { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; }
+.vcl-app .vcl-bud-type-badge--ia { color: var(--ia); background: var(--ia-bg); }
+.vcl-app .vcl-bud-type-badge--ib { color: var(--ib); background: var(--ib-bg); }
+.vcl-app .vcl-bud-type-badge--ii { color: var(--ii); background: var(--ii-bg); }
+.vcl-app .vcl-bud-type-badge.is-active { border-color: currentColor; }
+.vcl-app .vcl-bud-search-results { border: 1px solid var(--border); border-radius: 7px; margin-top: 4px; max-height: 180px; overflow-y: auto; background: var(--panel); }
+.vcl-app .vcl-bud-search-result { display: block; width: 100%; text-align: left; padding: 8px 10px; font-size: 12.5px; border: none; background: none; cursor: pointer; border-bottom: 1px solid var(--border-soft); }
+.vcl-app .vcl-bud-search-result:hover { background: var(--budget-tint); }
+.vcl-app .vcl-bud-live-result { margin-top: 18px; border-top: 1px dashed var(--border); padding-top: 14px; display: flex; justify-content: space-between; align-items: baseline; }
+.vcl-app .vcl-bud-live-result .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.vcl-app .vcl-bud-live-result .val { font-family: "IBM Plex Serif", serif; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-live-result .val .band { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 400; color: var(--ink-faint); margin-left: 4px; }
+.vcl-app .vcl-bud-modal__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
