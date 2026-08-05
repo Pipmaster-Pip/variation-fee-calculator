@@ -229,6 +229,29 @@
     return Object.keys(seen);
   }
 
+  // Targeted update: rebuilds only the results host, leaving the search <input> (and its focus/
+  // caret) untouched. A full rerender() on every keystroke would recreate the input and drop focus.
+  function populateSearchResults(host) {
+    if (!host) return;
+    var d = modalState.draft;
+    host.innerHTML = "";
+    host.style.display = modalState.searchResults.length ? "" : "none";
+    modalState.searchResults.forEach(function (entry) {
+      var item = el("button", "vcl-bud-search-result", escapeHtml(entry.code + " — " + entry.title));
+      item.type = "button";
+      item.addEventListener("click", function () {
+        d.variationCode = entry.code;
+        d.variationLabel = entry.code + " — " + entry.title;
+        var types = typesForEntry(entry);
+        d.type = types[0] || d.type;
+        modalState.query = "";
+        modalState.searchResults = [];
+        rerender();
+      });
+      host.appendChild(item);
+    });
+  }
+
   function renderModal() {
     var d = modalState.draft;
     var overlay = el("div", "vcl-bud-modal-overlay");
@@ -261,27 +284,13 @@
     varInput.addEventListener("input", function () {
       modalState.query = varInput.value;
       modalState.searchResults = BUD.searchEntries(ENTRIES, modalState.query);
-      rerender();
+      populateSearchResults(document.getElementById("vcl-bud-search-results"));
     });
     varField.appendChild(varInput);
-    if (modalState.searchResults.length) {
-      var results = el("div", "vcl-bud-search-results");
-      modalState.searchResults.forEach(function (entry) {
-        var item = el("button", "vcl-bud-search-result", escapeHtml(entry.code + " — " + entry.title));
-        item.type = "button";
-        item.addEventListener("click", function () {
-          d.variationCode = entry.code;
-          d.variationLabel = entry.code + " — " + entry.title;
-          var types = typesForEntry(entry);
-          d.type = types[0] || d.type;
-          modalState.query = "";
-          modalState.searchResults = [];
-          rerender();
-        });
-        results.appendChild(item);
-      });
-      varField.appendChild(results);
-    }
+    var results = el("div", "vcl-bud-search-results");
+    results.id = "vcl-bud-search-results";
+    varField.appendChild(results);
+    populateSearchResults(results);
     if (d.variationCode) {
       var typesRow = el("div");
       typesRow.style.marginTop = "8px";
