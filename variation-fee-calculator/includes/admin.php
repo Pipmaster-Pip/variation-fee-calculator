@@ -63,7 +63,6 @@ function vcl_get_last_updated() {
 		'qa'             => '2026-07-17',
 		'art5'           => '2026-07-17',
 		'timetables'     => '2026-07-03',
-		'workload'       => '2026-07-13',
 	);
 	$saved = get_option( 'vcl_last_updated', array() );
 	if ( ! is_array( $saved ) ) {
@@ -87,7 +86,6 @@ function vcl_get_reference_text() {
 		'qa'             => 'CMDh/132/2009, Rev. 66 (June 2026)',
 		'art5'           => 'CMDh/172/2010, Rev. 17 (October 2025)',
 		'timetables'     => 'CMDh Best Practice Guide, Chapters 3–5',
-		'workload'       => 'Internal departmental process model — durations not yet confirmed',
 	);
 	$saved = get_option( 'vcl_reference_text', array() );
 	if ( ! is_array( $saved ) ) {
@@ -281,7 +279,7 @@ function vfc_render_admin_page() {
 			Feld leer lassen = kein Link.
 		</p>
 		<p>
-			<strong>Wichtig:</strong> Die Faktoren stehen im Code (<code>assets/js/vcl-workload.js</code>),
+			<strong>Wichtig:</strong> Die Faktoren stehen im Code (<code>assets/js/vcl-workload-hours-data.js</code>),
 			sie werden <em>nicht</em> aus dieser Datei gelesen. Wenn Du hier eine geänderte Mappe
 			verlinkst, müssen die Zahlen im Code nachgezogen und das Prüfdatum
 			(<code>F_META.lastChecked</code>) aktualisiert werden — sonst zeigt das Tool etwas
@@ -443,17 +441,6 @@ function vfc_render_admin_page() {
 						</p>
 					</td>
 				</tr>
-				<tr>
-					<th scope="row">Workload Planning</th>
-					<td>
-						<label for="vcl_reference_workload">Reference</label><br>
-						<input type="text" id="vcl_reference_workload" name="vcl_reference_text[workload]" value="<?php echo esc_attr( $vcl_refs['workload'] ); ?>" class="regular-text">
-						<p class="description" style="margin-top:8px;">
-							<label for="vcl_last_updated_workload">Last updated in Variation Toolbox</label><br>
-							<input type="date" id="vcl_last_updated_workload" name="vcl_last_updated[workload]" value="<?php echo esc_attr( $vcl_dates['workload'] ); ?>">
-						</p>
-					</td>
-				</tr>
 			</table>
 			<?php submit_button( 'Daten speichern' ); ?>
 		</form>
@@ -540,7 +527,7 @@ function vcl_handle_save_dates() {
 	$dates      = array();
 	$ref_input  = isset( $_POST['vcl_reference_text'] ) && is_array( $_POST['vcl_reference_text'] ) ? wp_unslash( $_POST['vcl_reference_text'] ) : array();
 	$refs       = array();
-	foreach ( array( 'classification', 'grouping', 'precisescope', 'qa', 'art5', 'timetables', 'workload' ) as $key ) {
+	foreach ( array( 'classification', 'grouping', 'precisescope', 'qa', 'art5', 'timetables' ) as $key ) {
 		$date_value = isset( $date_input[ $key ] ) ? sanitize_text_field( $date_input[ $key ] ) : '';
 		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_value ) ) {
 			$dates[ $key ] = $date_value;

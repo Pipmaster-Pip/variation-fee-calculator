@@ -3450,8 +3450,8 @@
   //
   // The address arrives from PHP split into user/domain (see vcl_get_contact_parts) and is only
   // ever joined here, at runtime -- so the served HTML never contains a literal address for a
-  // harvester to regex out. Exposed on window because vcl-workload.js needs the same link for
-  // its methodology panel, and there is exactly one place that knows how to build it.
+  // harvester to regex out. Exposed on window because the Guided Workflow (vcl-workflow.js) needs
+  // the same link for its methodology panel, and there is exactly one place that knows how to build it.
   // ==========================================================================================
   function contactAddress() {
     const c = (window.VCL_CONFIG && window.VCL_CONFIG.contact) || {};
