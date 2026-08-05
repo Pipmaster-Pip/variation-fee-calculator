@@ -524,7 +524,7 @@
   function addDays(dateStr, n) { const d = new Date(dateStr); if (isNaN(d.getTime())) return null; d.setDate(d.getDate() + n); return d; }
   function fmtDate(d) { return d ? (String(d.getDate()).padStart(2, "0") + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + d.getFullYear()) : "—"; }
 
-  // ---- shared data helpers (mirror the ones in vcl-workload.js) ----
+  // ---- shared data helpers (previously mirrored from the removed vcl-workload.js) ----
   function findEntry(code) { return ENTRIES.find((e) => e.code === code) || null; }
   function findVariant(entry, variantId) {
     if (!entry || !entry.variants || !entry.variants.length) return null;

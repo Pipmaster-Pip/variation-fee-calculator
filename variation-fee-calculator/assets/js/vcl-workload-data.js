@@ -5,18 +5,16 @@
 // =============================================================================================
 // SCOPE -- read before adding anything here.
 //
-// This file holds ONLY the numbers that vcl-workload.js reads from it: `meta`, `annualUpdate`
-// and `taskDurationDays`. It is deliberately NOT the home of the RA-hours factors, the timeline
-// day counts, or the department list -- those live in vcl-workload.js (`F`, `TIMING`, `ASSESS`,
-// `DEPARTMENTS`), transcribed from Workload_RA_Stunden_Faktoren.xlsx, and are surfaced to users
-// by the "How this estimate is built" panel.
+// This file holds ONLY the numbers the Guided Workflow (vcl-workflow.js) reads from it: `meta`,
+// `annualUpdate` and `taskDurationDays`. The standalone Workload Planning tool (vcl-workload.js)
+// that used to own the RA-hours factor table (`F`) and the department list (`DEPARTMENTS`) has
+// been removed; the timeline day counts `TIMING`/`ASSESS` now live in vcl-timeline.js.
 //
 // This file used to carry a second, older copy of some of those (raHoursByType, and a set of
 // validationPhaseDays/procedureClockDays) which disagreed with the live values -- RA base hours
 // of 3/6/12 against the real 10/12/15, national validation of 0 d against the real 14 d. Nothing
 // read them, so the tool was right and the file was wrong, but anyone reading the source got a
-// contradiction. They are gone. Keep exactly one home per number: if a value belongs to the
-// factor table, it goes in vcl-workload.js next to the rest of the table -- not here.
+// contradiction. They are gone. Keep exactly one home per number.
 //
 // The department task durations below ARE still placeholders: none of them has been confirmed
 // against real departmental timings. They currently feed only computeSchedule(), which is
