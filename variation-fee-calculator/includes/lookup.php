@@ -181,13 +181,24 @@ function vcl_register_assets() {
 		true
 	);
 
+	$timeline_file = VFC_PLUGIN_DIR . 'assets/js/vcl-timeline.js';
+	$timeline_ver  = file_exists( $timeline_file ) ? filemtime( $timeline_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-timeline',
+		VFC_PLUGIN_URL . 'assets/js/vcl-timeline.js',
+		array(),
+		$timeline_ver,
+		true
+	);
+
 	$workflow_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workflow.js';
 	$workflow_app_ver  = file_exists( $workflow_app_file ) ? filemtime( $workflow_app_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-workflow',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
-		array( 'vcl-sg-logic', 'vcl-data', 'vcl-workload', 'vcl-calc-app' ),
+		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-calc-app' ),
 		$workflow_app_ver,
 		true
 	);
@@ -256,6 +267,7 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_style( 'vcl-workflow-style' );
 	wp_enqueue_style( 'vcl-calc-style' );
 	wp_enqueue_script( 'vcl-app' );
+	wp_enqueue_script( 'vcl-timeline' );
 	wp_enqueue_script( 'vcl-workload' );
 	wp_enqueue_script( 'vcl-workflow' );
 	wp_enqueue_script( 'vcl-calc-app' );

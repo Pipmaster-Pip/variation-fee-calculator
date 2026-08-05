@@ -513,8 +513,8 @@
   }
   function workflowSchedule() {
     const t = primaryType();
-    if (!t || !window.VCL_WORKLOAD || !window.VCL_WORKLOAD.schedule) return null;
-    return window.VCL_WORKLOAD.schedule({
+    if (!t || !window.VCL_TIMELINE || !window.VCL_TIMELINE.schedule) return null;
+    return window.VCL_TIMELINE.schedule({
       type: t, iiSub: state.iiSub, procedure: state.procedure.kind,
       cmsCount: state.procedure.kind === "mrpdcp" ? state.procedure.cms.length : 0,
       shared: state.submission.grouping || multiProcedureMode(),
@@ -1989,8 +1989,8 @@
 
   // ---- Live preview (docked at the bottom) ----
   // "How the RA hours are calculated" -- a collapsible box under the live preview, available on
-  // every station. Reads factor VALUES from window.VCL_WORKLOAD.factors (single source) and the
-  // current Workflow state; content is filled in buildMethodPanel.
+  // every station. Reads the current Workflow state and the additive engine
+  // (window.VCL_WORKLOAD_HOURS + window.VCL_WORKLOAD_HD); content is filled in buildMethodPanel.
   function buildMethodBox() {
     const box = el("div", "vcl-wf-meth" + (state.methodOpen ? " is-open" : ""));
     const bar = el("button", "vcl-wf-meth-bar");
