@@ -136,6 +136,7 @@
     art5Col: document.getElementById("vcl-art5Col"),
     timetablesCol: document.getElementById("vcl-timetablesCol"),
     workflowCol: document.getElementById("vcl-workflowCol"),
+    budgetCol: document.getElementById("vcl-budgetCol"),
     calculatorCol: document.getElementById("vcl-calculatorCol"),
     calcHead: document.getElementById("vcl-calcHead"),
   };
@@ -194,8 +195,9 @@
     const isArt5 = state.view === "art5";
     const isTimetables = state.view === "timetables";
     const isWorkflow = state.view === "workflow";
+    const isBudget = state.view === "budget";
     const isCalculator = state.view === "calculator";
-    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkflow || isCalculator);
+    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkflow || isBudget || isCalculator);
     el.summaryCol.classList.toggle("hidden", !isSummary);
     el.groupingCol.classList.toggle("hidden", !isGrouping);
     el.preciseScopeCol.classList.toggle("hidden", !isPreciseScope);
@@ -203,6 +205,7 @@
     if (el.art5Col) el.art5Col.classList.toggle("hidden", !isArt5);
     el.timetablesCol.classList.toggle("hidden", !isTimetables);
     if (el.workflowCol) el.workflowCol.classList.toggle("hidden", !isWorkflow);
+    if (el.budgetCol) el.budgetCol.classList.toggle("hidden", !isBudget);
     if (el.calculatorCol) el.calculatorCol.classList.toggle("hidden", !isCalculator);
   }
 
@@ -2040,6 +2043,30 @@
     workflowDivider.className = "tabs-divider tabs-divider--flush";
     el.browseTree.appendChild(workflowDivider);
 
+    const budgetBtn = document.createElement("button");
+    budgetBtn.type = "button";
+    budgetBtn.className = "tab" + (state.view === "budget" ? " tab--active" : "");
+    budgetBtn.style.setProperty("--accent", "var(--budget)");
+    budgetBtn.style.setProperty("--tint", "var(--budget-tint)");
+    budgetBtn.style.setProperty("--tab-bg", "var(--budget-bg)");
+    budgetBtn.innerHTML = `
+      <span class="tab__code">Budget Planning</span>
+      <span class="tab__title">Plan next year's fees and RA effort across your portfolio.</span>
+    `;
+    budgetBtn.addEventListener("click", () => {
+      state.view = "budget";
+      state.classifyOpen = false;
+      state.guidanceOpen = false;
+      renderBrowse();
+      switchViewVisibility();
+      if (window.VCL_BUDGET) window.VCL_BUDGET.render(el.budgetCol);
+      jumpToTop();
+    });
+    el.browseTree.appendChild(budgetBtn);
+    const budgetDivider = document.createElement("div");
+    budgetDivider.className = "tabs-divider tabs-divider--flush";
+    el.browseTree.appendChild(budgetDivider);
+
     const totalQty = totalSelectedQty();
     // Summary only appears once there's actually something to summarize -- before the first
     // variation is selected, it would just be an empty page one click away for no reason.
@@ -3198,12 +3225,14 @@
     else if (dest === "qa") { state.view = "qa"; state.guidanceOpen = true; }
     else if (dest === "timetables") state.view = "timetables";
     else if (dest === "workflow") state.view = "workflow";
+    else if (dest === "budget") state.view = "budget";
     else state.view = "browse";
     renderBrowse();
     switchViewVisibility();
     if (dest === "timetables") renderTimetables();
     else if (dest === "qa") renderQA();
     else if (dest === "workflow") { if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol); }
+    else if (dest === "budget") { state.view = "budget"; if (window.VCL_BUDGET) window.VCL_BUDGET.render(el.budgetCol); }
     else if (dest === "calculator") fillCalcHead();
     else renderDetail();
     jumpToTop();
@@ -3222,6 +3251,7 @@
   const OVERVIEW_DESTINATIONS = [
     { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "The classic calculator for variation fees w/o worksharing." },
     { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Step by step from classification to fees with worksharing." },
+    { dest: "budget", label: "Budget Planning", color: "var(--budget)", desc: "Plan next year's fees and RA effort across your portfolio." },
     { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse the Classification Guideline by chapter E, Q, C, M, Art. 5." },
     { dest: "guidance", label: "Guidance on Variations", color: "var(--group)", desc: "Procedural guidance and Q&amp;A on variations." },
     { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "A visual representation of the timelines of variations." },

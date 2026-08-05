@@ -192,6 +192,38 @@ function vcl_register_assets() {
 		true
 	);
 
+	$budget_engine_file = VFC_PLUGIN_DIR . 'assets/js/vcl-budget-engine.js';
+	$budget_engine_ver  = file_exists( $budget_engine_file ) ? filemtime( $budget_engine_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-budget-engine',
+		VFC_PLUGIN_URL . 'assets/js/vcl-budget-engine.js',
+		array(),
+		$budget_engine_ver,
+		true
+	);
+
+	$budget_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-budget.js';
+	$budget_app_ver  = file_exists( $budget_app_file ) ? filemtime( $budget_app_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-budget',
+		VFC_PLUGIN_URL . 'assets/js/vcl-budget.js',
+		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-budget-engine' ),
+		$budget_app_ver,
+		true
+	);
+
+	$budget_style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-budget-style.css';
+	$budget_style_ver  = file_exists( $budget_style_file ) ? filemtime( $budget_style_file ) : VFC_VERSION;
+
+	wp_register_style(
+		'vcl-budget-style',
+		VFC_PLUGIN_URL . 'assets/css/vcl-budget-style.css',
+		array( 'vcl-style' ),
+		$budget_style_ver
+	);
+
 	// Fee Calculator embedded into the Guide -- self-contained vcl-calc-* assets
 	// (originally copied from the retired standalone calculator; prefixes renamed
 	// vfc- -> vclcalc-, own header dropped). The fee data (vcl-calc-data.js) is
@@ -255,10 +287,13 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_style( 'vcl-workload-style' );
 	wp_enqueue_style( 'vcl-workflow-style' );
 	wp_enqueue_style( 'vcl-calc-style' );
+	wp_enqueue_style( 'vcl-budget-style' );
 	wp_enqueue_script( 'vcl-app' );
 	wp_enqueue_script( 'vcl-timeline' );
 	wp_enqueue_script( 'vcl-workflow' );
 	wp_enqueue_script( 'vcl-calc-app' );
+	wp_enqueue_script( 'vcl-budget-engine' );
+	wp_enqueue_script( 'vcl-budget' );
 	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
 		'calculatorUrl' => $atts['calculator_url'],
 		// Admin-editable via the "Variation Toolbox" section on the plugin's settings
@@ -355,6 +390,8 @@ function vcl_shortcode( $atts ) {
 	  <div class="timetables-col hidden" id="vcl-timetablesCol"></div>
 
 	  <div class="workload-col hidden" id="vcl-workflowCol"></div>
+
+	  <div class="budget-col hidden" id="vcl-budgetCol"></div>
 
 	  <!-- Fee Calculator (embedded copy). The guide-style heading is rendered into
 	       vcl-calcHead by vcl-app.js; the .vclcalc-app block below is the copied
