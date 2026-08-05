@@ -450,6 +450,48 @@
     saveState();
     rerender();
   }
+
+  function exportExcel() {
+    if (typeof XLSX === "undefined") {
+      alert("Excel export library not loaded. Please check your internet connection and try again.");
+      return;
+    }
+    var rollup = BUD.computeRollup(state.lines, state.resultsById);
+
+    var wb = XLSX.utils.book_new();
+
+    var linesRows = [["Product", "Variation", "Type", "Procedure", "Countries", "Quarter", "Probability", "Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
+    state.lines.forEach(function (line) {
+      var r = state.resultsById[line.id];
+      var procLabel = line.procedure.kind === "mrpdcp" ? "MRP/DCP" : (line.procedure.kind === "cp" ? "CP" : "National");
+      var ccs = BUD.lineCountries(line).map(function (c) { return c.cc; }).join(", ");
+      linesRows.push([
+        line.product || "", line.variationLabel || "", line.type || "", procLabel, ccs,
+        line.quarter || "", line.probability, r.fee,
+        Math.round(r.hours.min), Math.round(r.hours.max), Math.round(r.hours.expected),
+      ]);
+    });
+    var wsLines = XLSX.utils.aoa_to_sheet(linesRows);
+    XLSX.utils.book_append_sheet(wb, wsLines, "Plan lines");
+
+    var rollupRows = [
+      ["Annual fees (EUR)", rollup.totals.fee],
+      ["Annual RA hours (expected)", Math.round(rollup.totals.hoursExpected)],
+      ["Annual RA hours (min)", Math.round(rollup.totals.hoursMin)],
+      ["Annual RA hours (max)", Math.round(rollup.totals.hoursMax)],
+      ["FTE required", BUD.computeFte(rollup.totals.hoursExpected, state.hoursPerHead).toFixed(2)],
+      ["Hours per head per year", state.hoursPerHead],
+      [], ["By market", "Fee (EUR)"],
+    ].concat(rollup.byMarket.map(function (r) { return [r.key, r.value]; }))
+     .concat([[], ["By product", "Fee (EUR)"]])
+     .concat(rollup.byProduct.map(function (r) { return [r.key, r.value]; }));
+    var wsRollup = XLSX.utils.aoa_to_sheet(rollupRows);
+    XLSX.utils.book_append_sheet(wb, wsRollup, "Rollup");
+
+    var dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, "budget-plan-" + dateStr + ".xlsx");
+  }
+
   function onTableClick(evt) {
     var btn = evt.target.closest("button[data-act]");
     if (!btn) return;
