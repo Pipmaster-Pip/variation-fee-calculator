@@ -134,11 +134,40 @@ var store = fakeStorage();
 eq(BUD.loadPlan(store), BUD.defaultPlan(), "loadPlan: empty storage returns defaultPlan()");
 var plan = { version: 1, hoursPerHead: 1600, lines: [line1] };
 eq(BUD.savePlan(store, plan), true, "savePlan: succeeds against working storage");
-eq(BUD.loadPlan(store), plan, "loadPlan: round-trips what savePlan wrote");
+// loadPlan() now runs every line through normalizeLine(), so the round-trip is compared against
+// the normalized shape (line1 is a valid but partial line -- missing variationCode/piDocs/quarter/
+// etc -- normalizeLine backfills those from newLine() while preserving id/product/type/procedure).
+var normalizedPlan = { version: 1, hoursPerHead: 1600, lines: [BUD.normalizeLine(line1)] };
+eq(BUD.loadPlan(store), normalizedPlan, "loadPlan: round-trips what savePlan wrote (lines normalized)");
 eq(BUD.loadPlan(throwingStorage()), BUD.defaultPlan(), "loadPlan: falls back to defaultPlan() when storage throws");
 eq(BUD.savePlan(throwingStorage(), plan), false, "savePlan: returns false when storage throws");
 eq(BUD.loadPlan({ getItem: function () { return "not json"; } }), BUD.defaultPlan(),
   "loadPlan: falls back to defaultPlan() on unparsable JSON");
+
+// --- 10. normalizeLine(): a malformed persisted line (missing `procedure`, or `procedure`
+//         present but missing `kind`) recovers to a safe, processable shape instead of crashing
+//         downstream code that dereferences line.procedure.kind (final-review finding 3).
+var malformed1 = { id: "bad1" }; // procedure missing entirely
+var norm1 = BUD.normalizeLine(malformed1);
+eq(typeof norm1.procedure.kind, "string", "normalizeLine: missing procedure gets a valid kind");
+eq(BUD.lineCountries(norm1), [], "normalizeLine: lineCountries() doesn't throw on the recovered line");
+var rNorm1 = BUD.computeLineResult(norm1, engines);
+eq(rNorm1.complete, false, "normalizeLine: recovered line is safely 'incomplete', not a crash");
+
+var malformed2 = { id: "bad2", procedure: { nat: "DE" } }; // procedure present, missing kind
+var norm2 = BUD.normalizeLine(malformed2);
+eq(typeof norm2.procedure.kind, "string", "normalizeLine: procedure without kind gets a valid kind");
+BUD.computeLineResult(norm2, engines); // must not throw
+
+var badStore = fakeStorage();
+badStore.setItem(BUD.STORAGE_KEY, JSON.stringify({
+  version: 1, hoursPerHead: 1500,
+  lines: [malformed1, { id: "ok", procedure: { kind: "national", nat: "FR" }, type: "IB" }],
+}));
+var recovered = BUD.loadPlan(badStore);
+eq(recovered.lines.length, 2, "loadPlan: keeps every line from a malformed plan (none dropped)");
+eq(typeof recovered.lines[0].procedure.kind, "string", "loadPlan: normalizes the malformed line's procedure.kind");
+recovered.lines.forEach(function (l) { BUD.computeLineResult(l, engines); }); // must not throw
 
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);

@@ -137,12 +137,49 @@
 
   function defaultPlan() { return { version: 1, hoursPerHead: 1500, lines: [] }; }
 
+  // Fills in every top-level field newLine() would set, from whatever a persisted line already
+  // has -- so a malformed/partial line (e.g. missing `procedure`, or `procedure` without `kind`)
+  // never causes vcl-budget.js to dereference undefined later (line.procedure.kind, etc). Shallow
+  // merge only: nested procedure/piDocs/modules/submission shapes are type-checked at the
+  // top level, not deep-validated field by field (see spec's "malformed persisted plan" note).
+  function normalizeLine(raw, fallbackId) {
+    raw = (raw && typeof raw === "object") ? raw : {};
+    var id = (typeof raw.id === "string" && raw.id) || fallbackId ||
+      ("line-recovered-" + Date.now() + "-" + Math.floor(Math.random() * 100000));
+    var base = newLine(id);
+    var rawProc = (raw.procedure && typeof raw.procedure === "object") ? raw.procedure : {};
+    var procedure = {
+      kind: (typeof rawProc.kind === "string") ? rawProc.kind : base.procedure.kind,
+      nat: rawProc.nat !== undefined ? rawProc.nat : base.procedure.nat,
+      rms: rawProc.rms !== undefined ? rawProc.rms : base.procedure.rms,
+      cms: Array.isArray(rawProc.cms) ? rawProc.cms : base.procedure.cms,
+    };
+    if (rawProc.ema !== undefined) procedure.ema = rawProc.ema;
+    return {
+      id: id,
+      product: typeof raw.product === "string" ? raw.product : base.product,
+      variationCode: (typeof raw.variationCode === "string" || raw.variationCode === null) ? raw.variationCode : base.variationCode,
+      variationLabel: typeof raw.variationLabel === "string" ? raw.variationLabel : base.variationLabel,
+      type: (typeof raw.type === "string" || raw.type === null) ? raw.type : base.type,
+      procedure: procedure,
+      activeSubstance: raw.activeSubstance !== undefined ? raw.activeSubstance : base.activeSubstance,
+      piDocs: (raw.piDocs && typeof raw.piDocs === "object") ? raw.piDocs : base.piDocs,
+      modules: (raw.modules && typeof raw.modules === "object") ? raw.modules : base.modules,
+      submission: (raw.submission && typeof raw.submission === "object") ? raw.submission : base.submission,
+      quarter: (typeof raw.quarter === "string" || raw.quarter === null) ? raw.quarter : base.quarter,
+      probability: typeof raw.probability === "number" ? raw.probability : base.probability,
+    };
+  }
+
   function loadPlan(storage) {
     try {
       var raw = storage && storage.getItem(STORAGE_KEY);
       if (!raw) return defaultPlan();
       var parsed = JSON.parse(raw);
       if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.lines)) return defaultPlan();
+      parsed.lines = parsed.lines.map(function (line, i) {
+        return normalizeLine(line, "line-recovered-" + i);
+      });
       return parsed;
     } catch (e) {
       return defaultPlan();
@@ -167,6 +204,7 @@
     computeFte: computeFte,
     searchEntries: searchEntries,
     defaultPlan: defaultPlan,
+    normalizeLine: normalizeLine,
     loadPlan: loadPlan,
     savePlan: savePlan,
     STORAGE_KEY: STORAGE_KEY,

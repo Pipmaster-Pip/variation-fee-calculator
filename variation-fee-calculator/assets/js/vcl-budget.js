@@ -23,6 +23,15 @@
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, query, searchResults }
 
+  // Per-line result cache, keyed by line id, kept current by the mutation points below
+  // (applyModal/duplicateLine/deleteLine) rather than rebuilt wholesale on every render -- see
+  // spec's "Very large plans (50+ lines)" edge case. This is the only "recompute everything"
+  // pass; every other update touches just the one line that changed.
+  function recomputeLine(line) {
+    state.resultsById[line.id] = BUD.computeLineResult(line, engines());
+  }
+  state.lines.forEach(recomputeLine);
+
   function openModalFor(id) {
     var existing = id && state.lines.find(function (l) { return l.id === id; });
     modalState = {
@@ -38,6 +47,7 @@
     var idx = state.lines.findIndex(function (l) { return l.id === modalState.draft.id; });
     if (idx === -1) state.lines.push(modalState.draft);
     else state.lines[idx] = modalState.draft;
+    recomputeLine(modalState.draft);
     modalState = null;
     saveState();
     rerender();
@@ -47,14 +57,6 @@
     var ok = BUD.savePlan(window.localStorage, { version: 1, hoursPerHead: state.hoursPerHead, lines: state.lines });
     if (!ok && state.storageOk) { state.storageOk = false; rerender(); }
     else if (ok && !state.storageOk) { state.storageOk = true; }
-  }
-
-  function recomputeResults() {
-    var eng = engines();
-    state.resultsById = {};
-    state.lines.forEach(function (line) {
-      state.resultsById[line.id] = BUD.computeLineResult(line, eng);
-    });
   }
 
   function el(tag, cls, html) {
@@ -70,6 +72,17 @@
   }
   function fmtEUR(v) {
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
+  }
+  // The real dataset's type vocabulary (IA, IAIN, IB, "IB (unforeseen)", II) is wider than the
+  // 3-value badge CSS (--ia/--ib/--ii). Bucket into those three rather than lowercasing the raw
+  // type as the class suffix (mirrors vcl-app.js:233 typeBadgeClass's startsWith bucketing) --
+  // the badge TEXT still shows the full raw type string, only the CSS class is bucketed.
+  function typeBucketClass(type) {
+    var t = String(type || "");
+    if (t.indexOf("IA") === 0) return "ia";
+    if (t.indexOf("IB") === 0) return "ib";
+    if (t.indexOf("II") === 0) return "ii";
+    return "";
   }
 
   function renderRollupTiles(rollup) {
@@ -126,7 +139,7 @@
     return panel;
   }
 
-  function renderTable() {
+  function renderTable(rollup) {
     var wrap = el("div");
     var head = el("div", "vcl-bud-table-head");
     head.appendChild(el("h3", null, "Plan lines"));
@@ -150,7 +163,7 @@
         return '<span class="vcl-bud-cc-chip">' + escapeHtml(c.cc) + "</span>";
       }).join("");
       var typeBadge = line.type
-        ? '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + line.type.toLowerCase() + '">' + escapeHtml(line.type) + "</span>"
+        ? '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(line.type) + '">' + escapeHtml(line.type) + "</span>"
         : "—";
       var feeCell = r.complete
         ? '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(r.fee)) + "</td>"
@@ -176,6 +189,20 @@
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
+
+    // Footer row with column totals -- spec-mandated (docs/superpowers/specs/2026-08-05-budget-
+    // planning-design.md); the CSS (.vcl-bud-table tfoot td) has been shipping unused until now.
+    // Sums come from the rollup the caller already computed, not a second recompute here.
+    var tfoot = el("tfoot");
+    var totalTr = el("tr");
+    totalTr.innerHTML =
+      '<td colspan="6">Total</td>' +
+      '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(rollup.totals.fee)) + "</td>" +
+      '<td class="vcl-bud-num">' + Math.round(rollup.totals.hoursExpected) + " h</td>" +
+      "<td></td>";
+    tfoot.appendChild(totalTr);
+    table.appendChild(tfoot);
+
     tableWrap.appendChild(table);
     wrap.appendChild(tableWrap);
     return wrap;
@@ -183,7 +210,6 @@
 
   function rerender() {
     if (!container) return;
-    recomputeResults();
     var rollup = BUD.computeRollup(state.lines, state.resultsById);
 
     container.innerHTML = "";
@@ -197,6 +223,7 @@
     header.appendChild(left);
     var actions = el("div", "vcl-bud-header__actions");
     actions.innerHTML =
+      '<button type="button" class="vcl-bud-btn vcl-bud-btn--ghost" data-act="clear-plan">Clear plan</button>' +
       '<button type="button" class="vcl-bud-btn" data-act="export">⭳ Export to Excel</button>' +
       '<button type="button" class="vcl-bud-btn vcl-bud-btn--primary" data-act="new-line">+ New line</button>';
     header.appendChild(actions);
@@ -209,7 +236,7 @@
     breakdown.appendChild(renderBreakdownPanel("By product", rollup.byProduct, rollup.totals.fee));
     container.appendChild(breakdown);
 
-    container.appendChild(renderTable());
+    container.appendChild(renderTable(rollup));
 
     if (modalState) container.appendChild(renderModal());
   }
@@ -297,7 +324,7 @@
       var entry = ENTRIES.find(function (e) { return e.code === d.variationCode; });
       var availableTypes = entry ? typesForEntry(entry) : ["IA", "IB", "II"];
       availableTypes.forEach(function (t) {
-        var badge = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + t.toLowerCase() + (t === d.type ? " is-active" : ""), escapeHtml(t));
+        var badge = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + typeBucketClass(t) + (t === d.type ? " is-active" : ""), escapeHtml(t));
         badge.addEventListener("click", function () { d.type = t; rerender(); });
         typesRow.appendChild(badge);
         typesRow.appendChild(document.createTextNode(" "));
@@ -385,12 +412,16 @@
     var qCol = el("div");
     qCol.appendChild(el("label", "vcl-bud-field-label", "Quarter"));
     var qSelect = el("select", "vcl-bud-select");
+    var qPlaceholder = el("option", null, "—");
+    qPlaceholder.value = "";
+    if (!d.quarter) qPlaceholder.selected = true;
+    qSelect.appendChild(qPlaceholder);
     ["Q1", "Q2", "Q3", "Q4"].forEach(function (q) {
       var opt = el("option", null, q); opt.value = q;
       if (d.quarter === q) opt.selected = true;
       qSelect.appendChild(opt);
     });
-    qSelect.addEventListener("change", function () { d.quarter = qSelect.value; });
+    qSelect.addEventListener("change", function () { d.quarter = qSelect.value || null; });
     qCol.appendChild(qSelect);
     qpRow.appendChild(qCol);
 
@@ -442,11 +473,19 @@
     copy.id = "line-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
     var idx = state.lines.indexOf(src);
     state.lines.splice(idx + 1, 0, copy);
+    recomputeLine(copy);
     saveState();
     rerender();
   }
   function deleteLine(id) {
     state.lines = state.lines.filter(function (l) { return l.id !== id; });
+    delete state.resultsById[id];
+    saveState();
+    rerender();
+  }
+  function clearPlan() {
+    state.lines = [];
+    state.resultsById = {};
     saveState();
     rerender();
   }
@@ -506,6 +545,7 @@
     if (!btn) return;
     if (btn.dataset.act === "new-line") openModalFor(null);
     if (btn.dataset.act === "export") exportExcel(); // Task 6
+    if (btn.dataset.act === "clear-plan") clearPlan();
   }
 
   window.VCL_BUDGET = {
