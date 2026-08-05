@@ -18,22 +18,15 @@
     };
   }
 
-  // Demo seed so the very first render (before Task 4 wires localStorage) shows real, styled
-  // numbers instead of an empty shell. Replaced by the persisted plan in Task 4.
-  function demoLines() {
-    var l1 = BUD.newLine("demo-1");
-    l1.product = "Product A"; l1.type = "IB";
-    l1.procedure = { kind: "mrpdcp", rms: "DE", cms: ["FR", "ES"] };
-    l1.quarter = "Q2";
-    var l2 = BUD.newLine("demo-2");
-    l2.product = "Product B"; l2.type = "IA";
-    l2.procedure = { kind: "national", nat: "DE" };
-    l2.quarter = "Q1";
-    return [l1, l2];
-  }
-
-  var state = { lines: demoLines(), hoursPerHead: 1500, resultsById: {} };
+  var plan = BUD.loadPlan(window.localStorage);
+  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true };
   var container = null;
+
+  function saveState() {
+    var ok = BUD.savePlan(window.localStorage, { version: 1, hoursPerHead: state.hoursPerHead, lines: state.lines });
+    if (!ok && state.storageOk) { state.storageOk = false; rerender(); }
+    else if (ok && !state.storageOk) { state.storageOk = true; }
+  }
 
   function recomputeResults() {
     var eng = engines();
@@ -85,6 +78,7 @@
     fteInput.addEventListener("change", function () {
       var v = parseInt(fteInput.value, 10);
       state.hoursPerHead = (v > 0) ? v : state.hoursPerHead;
+      saveState();
       rerender();
     });
     sub.appendChild(fteInput);
@@ -172,6 +166,9 @@
     var rollup = BUD.computeRollup(state.lines, state.resultsById);
 
     container.innerHTML = "";
+    if (!state.storageOk) {
+      container.appendChild(el("div", "vcl-bud-warn", "Your plan isn't being saved in this browser."));
+    }
     var header = el("div", "vcl-bud-header");
     var left = el("div");
     left.appendChild(el("h2", null, "Budget Planning"));
@@ -194,9 +191,36 @@
     container.appendChild(renderTable());
   }
 
+  function duplicateLine(id) {
+    var src = state.lines.find(function (l) { return l.id === id; });
+    if (!src) return;
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.id = "line-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    var idx = state.lines.indexOf(src);
+    state.lines.splice(idx + 1, 0, copy);
+    saveState();
+    rerender();
+  }
+  function deleteLine(id) {
+    state.lines = state.lines.filter(function (l) { return l.id !== id; });
+    saveState();
+    rerender();
+  }
+  function onTableClick(evt) {
+    var btn = evt.target.closest("button[data-act]");
+    if (!btn) return;
+    var tr = btn.closest("tr[data-line-id]");
+    var id = tr && tr.dataset.lineId;
+    if (btn.dataset.act === "duplicate" && id) duplicateLine(id);
+    if (btn.dataset.act === "delete" && id) deleteLine(id);
+    // "edit" is wired in Task 5.
+  }
+
   window.VCL_BUDGET = {
     render: function (col) {
       container = col;
+      container.removeEventListener("click", onTableClick);
+      container.addEventListener("click", onTableClick);
       rerender();
     },
   };
