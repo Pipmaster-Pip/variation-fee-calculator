@@ -81,7 +81,7 @@
     checkedConditions: {}, // "E.1|a" -> Set of condition numbers checked
     selections: loadSelections(), // "E.1|a" -> { qty, units }
     selectionExpanded: false,
-    view: "browse", // "browse" | "summary" | "grouping" | "precisescope" | "qa" | "timetables" | "workload" | "calculator" -- the app opens on the browse view, whose detail area shows the first-load overview (see renderDetail)
+    view: "browse", // "browse" | "summary" | "grouping" | "precisescope" | "qa" | "timetables" | "calculator" -- the app opens on the browse view, whose detail area shows the first-load overview (see renderDetail)
     summaryExpandedUnits: new Set(), // "E.1|a#0" -> that unit's long form is open in the Summary view
     groupingOpen: null, // "acceptable" | "notAcceptable" | "singleChangeInstead" | null -- at most one grouping-guidance section is ever expanded
     preciseScopeOpen: null, // section key of the Precise Scope Wording view -- same one-at-a-time accordion as groupingOpen
@@ -135,7 +135,6 @@
     qaCol: document.getElementById("vcl-qaCol"),
     art5Col: document.getElementById("vcl-art5Col"),
     timetablesCol: document.getElementById("vcl-timetablesCol"),
-    workloadCol: document.getElementById("vcl-workloadCol"),
     workflowCol: document.getElementById("vcl-workflowCol"),
     calculatorCol: document.getElementById("vcl-calculatorCol"),
     calcHead: document.getElementById("vcl-calcHead"),
@@ -194,17 +193,15 @@
     const isQa = state.view === "qa";
     const isArt5 = state.view === "art5";
     const isTimetables = state.view === "timetables";
-    const isWorkload = state.view === "workload";
     const isWorkflow = state.view === "workflow";
     const isCalculator = state.view === "calculator";
-    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkload || isWorkflow || isCalculator);
+    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkflow || isCalculator);
     el.summaryCol.classList.toggle("hidden", !isSummary);
     el.groupingCol.classList.toggle("hidden", !isGrouping);
     el.preciseScopeCol.classList.toggle("hidden", !isPreciseScope);
     if (el.qaCol) el.qaCol.classList.toggle("hidden", !isQa);
     if (el.art5Col) el.art5Col.classList.toggle("hidden", !isArt5);
     el.timetablesCol.classList.toggle("hidden", !isTimetables);
-    el.workloadCol.classList.toggle("hidden", !isWorkload);
     if (el.workflowCol) el.workflowCol.classList.toggle("hidden", !isWorkflow);
     if (el.calculatorCol) el.calculatorCol.classList.toggle("hidden", !isCalculator);
   }
@@ -2223,30 +2220,6 @@
       jumpToTop();
     });
     el.browseTree.appendChild(timetablesBtn);
-
-    // Workload Planning: a separate, self-contained view whose rendering logic lives entirely
-    // in assets/js/vcl-workload.js (see window.VCL_WORKLOAD) -- this block only wires it into
-    // the shared nav, exactly like the timetablesBtn block above.
-    const workloadBtn = document.createElement("button");
-    workloadBtn.type = "button";
-    workloadBtn.className = "tab" + (state.view === "workload" ? " tab--active" : "");
-    workloadBtn.style.setProperty("--accent", "var(--workload)");
-    workloadBtn.style.setProperty("--tint", "var(--workload-tint)");
-    workloadBtn.style.setProperty("--tab-bg", "var(--workload-bg)");
-    workloadBtn.innerHTML = `
-      <span class="tab__code">Workload Planning</span>
-      <span class="tab__title">Estimated RA workload from start to closure of variations.</span>
-    `;
-    workloadBtn.addEventListener("click", () => {
-      state.view = "workload";
-      state.classifyOpen = false;
-      state.guidanceOpen = false;
-      renderBrowse();
-      switchViewVisibility();
-      if (window.VCL_WORKLOAD) window.VCL_WORKLOAD.render(el.workloadCol);
-      jumpToTop();
-    });
-    el.browseTree.appendChild(workloadBtn);
   }
 
   function conditionKey(entryCode, variantId) {
@@ -3224,14 +3197,12 @@
     else if (dest === "precisescope") { state.view = "precisescope"; state.guidanceOpen = true; }
     else if (dest === "qa") { state.view = "qa"; state.guidanceOpen = true; }
     else if (dest === "timetables") state.view = "timetables";
-    else if (dest === "workload") state.view = "workload";
     else if (dest === "workflow") state.view = "workflow";
     else state.view = "browse";
     renderBrowse();
     switchViewVisibility();
     if (dest === "timetables") renderTimetables();
     else if (dest === "qa") renderQA();
-    else if (dest === "workload") { if (window.VCL_WORKLOAD) window.VCL_WORKLOAD.render(el.workloadCol); }
     else if (dest === "workflow") { if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol); }
     else if (dest === "calculator") fillCalcHead();
     else renderDetail();
@@ -3254,7 +3225,6 @@
     { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse the Classification Guideline by chapter E, Q, C, M, Art. 5." },
     { dest: "guidance", label: "Guidance on Variations", color: "var(--group)", desc: "Procedural guidance and Q&amp;A on variations." },
     { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "A visual representation of the timelines of variations." },
-    { dest: "workload", label: "Workload Planning", color: "var(--workload)", desc: "Estimated RA workload from start to closure of variations." },
   ];
   function overviewHtml() {
     const cards = OVERVIEW_DESTINATIONS.map((d) => `
@@ -3521,5 +3491,4 @@
   renderGrouping();
   renderPreciseScope();
   renderTimetables();
-  if (window.VCL_WORKLOAD) window.VCL_WORKLOAD.render(el.workloadCol);
 })();

@@ -92,10 +92,10 @@ function vcl_register_assets() {
 		true
 	);
 
-	// Workload Planning -- registered as separate assets (own stylesheet, own data file, own
-	// script) so the existing Classification/Summary/Guidance/Timetables code in vcl-style.css/
-	// vcl-app.js never needs to be touched to add this view; vcl-app.js only gains a small nav
-	// hook that calls into window.VCL_WORKLOAD once this script has loaded.
+	// Workload assets -- style and RA-hours data/engine, registered separately from vcl-app.js/
+	// vcl-style.css. The standalone Workload Planning tool that used to consume these has been
+	// removed; they are kept because the Guided Workflow still reuses the shared .workload-col
+	// style and the RA-hours engine.
 	$workload_style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-workload-style.css';
 	$workload_style_ver  = file_exists( $workload_style_file ) ? filemtime( $workload_style_file ) : VFC_VERSION;
 
@@ -141,17 +141,6 @@ function vcl_register_assets() {
 		VFC_PLUGIN_URL . 'assets/js/vcl-workload-hours.js',
 		array( 'vcl-workload-hours-data' ),
 		$workload_hours_ver,
-		true
-	);
-
-	$workload_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workload.js';
-	$workload_app_ver  = file_exists( $workload_app_file ) ? filemtime( $workload_app_file ) : VFC_VERSION;
-
-	wp_register_script(
-		'vcl-workload',
-		VFC_PLUGIN_URL . 'assets/js/vcl-workload.js',
-		array( 'vcl-data', 'vcl-workload-data', 'vcl-workload-hours' ),
-		$workload_app_ver,
 		true
 	);
 
@@ -268,7 +257,6 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_style( 'vcl-calc-style' );
 	wp_enqueue_script( 'vcl-app' );
 	wp_enqueue_script( 'vcl-timeline' );
-	wp_enqueue_script( 'vcl-workload' );
 	wp_enqueue_script( 'vcl-workflow' );
 	wp_enqueue_script( 'vcl-calc-app' );
 	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
@@ -365,8 +353,6 @@ function vcl_shortcode( $atts ) {
 	  <div class="grouping-col hidden" id="vcl-art5Col"></div>
 
 	  <div class="timetables-col hidden" id="vcl-timetablesCol"></div>
-
-	  <div class="workload-col hidden" id="vcl-workloadCol"></div>
 
 	  <div class="workload-col hidden" id="vcl-workflowCol"></div>
 

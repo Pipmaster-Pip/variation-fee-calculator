@@ -37,7 +37,7 @@ FILES = [
     "assets/js/vcl-data.js",
     "assets/js/vcl-qa-data.js",
     "assets/js/vcl-art5-data.js",
-    "assets/js/vcl-workload.js",
+    "assets/js/vcl-timeline.js",
     "assets/js/vcl-workload-data.js",
     "assets/js/vcl-workload-hours.js",
     "assets/js/vcl-workload-hours-data.js",
