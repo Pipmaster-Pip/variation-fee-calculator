@@ -117,15 +117,29 @@ function vcl_register_assets() {
 		true
 	);
 
-	// Workload pure hour helpers (window.VCL_WORKLOAD_HOURS). No dependencies; registered
-	// before vcl-workload so its global is ready by the time that script runs.
+	// Additive workload-hours DATA (window.VCL_WORKLOAD_HD), generated from RA-CMC-hours.xlsx by
+	// convert-workload.py. No dependencies; the additive engine (vcl-workload-hours) reads it, so
+	// it is registered before that module and listed as its dependency.
+	$workload_hd_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workload-hours-data.js';
+	$workload_hd_ver  = file_exists( $workload_hd_file ) ? filemtime( $workload_hd_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-workload-hours-data',
+		VFC_PLUGIN_URL . 'assets/js/vcl-workload-hours-data.js',
+		array(),
+		$workload_hd_ver,
+		true
+	);
+
+	// Workload pure hour helpers (window.VCL_WORKLOAD_HOURS), incl. the additive model. Depends on
+	// the generated data above so window.VCL_WORKLOAD_HD is ready when the engine is called.
 	$workload_hours_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workload-hours.js';
 	$workload_hours_ver  = file_exists( $workload_hours_file ) ? filemtime( $workload_hours_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-workload-hours',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workload-hours.js',
-		array(),
+		array( 'vcl-workload-hours-data' ),
 		$workload_hours_ver,
 		true
 	);

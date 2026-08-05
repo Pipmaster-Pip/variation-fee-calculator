@@ -23,6 +23,7 @@ OUT = os.path.join(HERE, "variation-fee-calculator.zip")
 FILES = [
     "variation-fee-calculator.php",
     "convert.py",
+    "convert-workload.py",
     "extract_qa.py",
     "extract_art5.py",
     "README.md",
@@ -39,6 +40,7 @@ FILES = [
     "assets/js/vcl-workload.js",
     "assets/js/vcl-workload-data.js",
     "assets/js/vcl-workload-hours.js",
+    "assets/js/vcl-workload-hours-data.js",
     "assets/js/vcl-sg-logic.js",
     "assets/js/vcl-workflow.js",
     "assets/js/vcl-calc-app.js",

@@ -24,33 +24,43 @@
   const NON_EU_PROCEDURE_COUNTRIES = ["CH", "RS", "UK"];
 
   const STATIONS = [
-    { key: "A", label: "Identify" },
-    { key: "B", label: "Procedure" },
-    { key: "C", label: "Date & Timeline" },
-    { key: "D", label: "Fees" },
+    { key: "A", label: "Variations" },
+    { key: "B", label: "Procedures" },
+    { key: "C", label: "RA tasks" },
+    { key: "D", label: "Date & Timeline" },
+    { key: "E", label: "Fees" },
   ];
 
+  // Only referenced by buildPlaceholder (the fallback for a station without a real builder);
+  // every station A–E now has one, so this is effectively unused but kept as a harmless fallback.
   const STATION_META = {
-    B: { title: "Procedure", sub: "How is it submitted?", note: "Procedure (at country level), submission type and the two list builders (grouping · worksharing) go here." },
-    C: { title: "Date & Timeline", sub: "When, and how does the clock run?", note: "The desired initial-submission date and the timeline go here." },
-    D: { title: "Fees", sub: "What does it cost, per procedure?", note: "Fees per procedure (at country level) and the export go here." },
+    D: { title: "Date & Timeline", sub: "When, and how does the clock run?", note: "The desired initial-submission date and the timeline go here." },
+    E: { title: "Fees", sub: "What does it cost, per procedure?", note: "Fees per procedure (at country level) and the export go here." },
   };
 
   const state = {
     station: "A",
     // The furthest station the user has reached -- gates which dots are clickable.
-    reached: { A: true, B: false, C: false, D: false },
+    reached: { A: true, B: false, C: false, D: false, E: false },
     // Station A
     pickedCode: null,
     pickedVariantId: undefined,
     query: "",
     typeOnly: null,        // 'IA' | 'IB' | 'II' when the user skips the classification and just picks a type
-    activeSubstance: null, // 'biologic' | 'chemical'
-    // Product information (Station A): gate + which documents this change touches.
+    // Station "RA tasks" -- optional RA modules beyond the always-on core RA work.
+    activeSubstance: null, // 'biologic' | 'chemical' -- only drives CMC dossier hours (set in the CMC module)
+    cmcInRA: false,        // CMC dossier written in RA (needs an active substance)
+    compilationInRA: false,// dossier compilation (docuBridge/Veeva) + CESP submission done in RA
+    // Product information module: gate + which documents this change touches.
     piInRA: false,
     piDocs: { smpc: false, leaflet: false, labelling: false, mockups: false },
     // "How the RA hours are calculated" box open/closed (persists across stations).
     methodOpen: false,
+    // "RA-hours reference" lookup box: open/closed + its independent filters.
+    refOpen: false,
+    refType: "II",
+    refRole: "national",
+    refStream: "all",
     // Station B
     procedure: newProcedure(),        // the primary procedure ("procedure 1")
     // mode: null | 'worksharing' | 'annualUpdate' | 'superGrouping'
@@ -435,18 +445,71 @@
     if (sgActive()) state.worksharing.forEach((p) => { if (k[p.kind] !== undefined) k[p.kind]++; });
     return k;
   }
+  // RA effort via the additive workload model (window.VCL_WORKLOAD_HOURS + window.VCL_WORKLOAD_HD,
+  // generated from RA-CMC-hours.xlsx). Returns the granular {min,max} parts, the three composed
+  // sections (RA / CMC / Compilation & submission) and the grand total, or null when no variation
+  // type is set yet or the engine/data is unavailable. CMC and Compilation & submission are gated
+  // by the RA-task modules Station "RA tasks" adds (state.cmcInRA / state.compilationInRA); until
+  // those gates exist they read as off, so only the RA-activities section contributes.
   function raEffort() {
     const t = primaryType();
-    if (!t || !window.VCL_WORKLOAD || !window.VCL_WORKLOAD.raHours) return null;
-    return window.VCL_WORKLOAD.raHours({
-      type: t, substance: state.activeSubstance, procedure: state.procedure.kind,
+    const WLH = window.VCL_WORKLOAD_HOURS, HD = window.VCL_WORKLOAD_HD;
+    if (!t || !WLH || !WLH.computeAdditiveWorkload || !HD) return null;
+    const gb = groupingBuckets();
+    const wk = worksharingKinds();
+    const sp = sgProcKinds();
+    const grouped = state.submission.grouping && !(auActive() || sgActive());
+    const parts = WLH.computeAdditiveWorkload(HD, {
+      type: t,
+      procedure: state.procedure.kind,
       cmsCount: state.procedure.kind === "mrpdcp" ? state.procedure.cms.length : 0,
-      grouping: state.submission.grouping && !(auActive() || sgActive()), worksharing: wsActive(),
-      groupingCounts: groupingBuckets(), worksharingProcs: worksharingKinds(),
-      annualUpdate: auActive(), annualUpdateIaCount: auActive() ? 1 + groupingBuckets().IA : 0,
-      superGrouping: sgActive(), superGroupingProcs: sgProcKinds(),
-      piInRA: state.piInRA, productInfo: state.piDocs, piType: piType(),
+      // The workbook's CMC rows are tagged "chemical"/"biological"; the workflow state uses
+      // "biologic"/"chemical", so map biologic -> biological here.
+      activeSubstance: state.activeSubstance === "biologic" ? "biological"
+        : (state.activeSubstance === "chemical" ? "chemical" : null),
+      modules: {
+        pi: state.piInRA,
+        cmc: !!state.cmcInRA,                    // Station "RA tasks" CMC gate
+        compilation: !!state.compilationInRA,    // Station "RA tasks" compilation & submission gate
+      },
+      piDocs: state.piDocs,                       // which PI documents the change touches (filter)
+      submission: {
+        worksharing: { on: wsActive(), counts: { "national": wk.national, "MRP/DCP": wk.mrpdcp } },
+        grouping: { on: grouped, counts: { "Type IA": gb.IA, "Type IB": gb.IB, "Type II": gb.II } },
+        annualUpdate: { on: auActive(), counts: { "Type IA": 1 + gb.IA } },
+        superGrouping: { on: sgActive(), counts: { "national": sp.national, "MRP/DCP": sp.mrpdcp, "CP": sp.cp } },
+      },
     });
+    const sections = WLH.composeSections(parts);
+    return {
+      parts: parts, items: parts.items, sections: sections, total: sections.total,
+      expected: WLH.pertExpected(sections.total.min, sections.total.max),
+    };
+  }
+  // Format a {min,max} hour band for display: whole hours (ceil each end), collapsed to a single
+  // figure when both ends coincide.
+  function raRangeText(mm) {
+    if (!mm) return "—";
+    const lo = Math.ceil(mm.min), hi = Math.ceil(mm.max);
+    return lo === hi ? (lo + " h") : (lo + "–" + hi + " h");
+  }
+  // Raw min–max band for the transparency box, matching the reference table exactly: half-hours
+  // are NOT rounded up and there is no unit (e.g. "0.5–1", "2–4"). Collapses when both ends match.
+  function raBand(mm) {
+    if (!mm) return "—";
+    const lo = fmtNum(mm.min), hi = fmtNum(mm.max);
+    return lo === hi ? lo : (lo + "–" + hi);
+  }
+  // Bare band without the unit, e.g. "34–65" — for the parenthetical range under the headline.
+  function raRangeBare(mm) {
+    if (!mm) return "—";
+    const lo = Math.ceil(mm.min), hi = Math.ceil(mm.max);
+    return lo === hi ? String(lo) : (lo + "–" + hi);
+  }
+  // The single headline figure: the right-skewed PERT expected value, whole hours.
+  function raExpectedText(ra) {
+    if (!ra || ra.expected == null) return "—";
+    return Math.round(ra.expected) + " h";
   }
   function workflowSchedule() {
     const t = primaryType();
@@ -486,9 +549,10 @@
   // ---- station gating ----
   function stationIndex(key) { return STATIONS.findIndex((s) => s.key === key); }
   function stationComplete(key) {
-    if (key === "A") return hasVariation() && !!state.activeSubstance;
+    if (key === "A") return hasVariation();                          // active substance moved to "RA tasks"
     if (key === "B") return procComplete(state.procedure);
-    return true; // C/D are placeholders for now
+    if (key === "C") return !state.cmcInRA || !!state.activeSubstance; // CMC dossier needs a substance
+    return true; // D (Date & Timeline) / E (Fees): no gating
   }
   // Station changes land the user at the top of the tool again (same behaviour as the
   // toolbox nav's jumpToTop) -- without this, Next/Back/Start over left the view at the
@@ -509,10 +573,12 @@
   function resetAll() {
     jumpTop();
     state.station = "A";
-    state.reached = { A: true, B: false, C: false, D: false };
+    state.reached = { A: true, B: false, C: false, D: false, E: false };
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
+    state.cmcInRA = false; state.compilationInRA = false;
     state.piInRA = false; state.piDocs = { smpc: false, leaflet: false, labelling: false, mockups: false };
     state.methodOpen = false;
+    state.refOpen = false; state.refType = "II"; state.refRole = "national"; state.refStream = "all";
     state.procedure = newProcedure(); state.submission = { grouping: false, mode: null };
     state.grouping = []; state.worksharing = []; state.worksharingLead = null;
     state.worksharingLeadSpecial = null; state.wsSpecials = {}; state.specials = {};
@@ -550,15 +616,11 @@
 
   // ---- Station A: Identify (classification + active substance) ----
   function buildStationA(body) {
-    body.appendChild(el("div", "vcl-wf-body__title", "Identify"));
-    body.appendChild(el("div", "vcl-wf-body__sub", "Which active substance, and which variation(s)?"));
+    body.appendChild(el("div", "vcl-wf-body__title", "Variations"));
+    body.appendChild(el("div", "vcl-wf-body__sub", "Which variation, or variations, are you submitting?"));
 
-    // 1) Active substance -- first, independent of the variation choice.
-    buildSubstance(body);
-
-    // 2) The (base) variation. A section heading precedes the picker so the block reads as its own
-    // step after Active substance.
-    body.appendChild(el("div", "vcl-wf-flabel", "Variations"));
+    // The (base) variation. Active substance and product information used to sit here; they drive
+    // the RA effort, so they now live in the "RA tasks" station.
     if (state.typeOnly) {
       buildTypeOnlyHeader(body);
     } else {
@@ -580,14 +642,47 @@
       buildPickedHeader(body, entry, variant);
     }
 
-    // 3) Further variations -- listed here too; more than one is treated as a
-    // grouping automatically (no separate toggle -- that lives nowhere now).
+    // Further variations -- more than one is treated as a grouping automatically.
     buildGroupingList(body);
+  }
 
-    // 4) Product information -- a property of the change itself (which documents it touches),
-    // known here at classification time, independent of procedure/countries. Only meaningful once
-    // a variation/type is set.
-    if (hasVariation()) buildProductInfo(body);
+  // ---- Station "RA tasks": the optional RA modules, beyond the always-on core RA work. ----
+  // Active substance and product information moved here from "Variations" (both drive RA effort),
+  // alongside the two new modules. Every gate uses the same switch look as the old PI gate: a gate
+  // on -> its hours join the RA workload and its own section appears in the "How the RA hours are
+  // calculated" box. CMC carries the active substance it depends on.
+  function buildStationRA(body) {
+    body.appendChild(el("div", "vcl-wf-body__title", "RA tasks"));
+    body.appendChild(el("div", "vcl-wf-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles."));
+
+    // --- CMC dossier (carries the active substance it depends on) ---
+    const cmcHead = el("div", "vcl-wf-flabel", "CMC dossier"); cmcHead.style.marginTop = "16px"; body.appendChild(cmcHead);
+    const cmcGate = el("label", "vcl-wf-switch" + (state.cmcInRA ? " is-on" : ""));
+    cmcGate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
+      + '<span class="vcl-wf-switch__label">CMC dossier written in RA</span>';
+    cmcGate.addEventListener("click", (e) => { e.preventDefault(); state.cmcInRA = !state.cmcInRA; rerender(); });
+    body.appendChild(cmcGate);
+    if (!state.cmcInRA) {
+      body.appendChild(el("p", "vcl-wf-hint", "Off: a separate CMC / quality unit writes the dossier — it adds no RA hours."));
+    } else {
+      body.appendChild(el("p", "vcl-wf-hint", "The dossier effort depends on the active substance:"));
+      buildSubstance(body);
+      if (!state.activeSubstance) body.appendChild(el("p", "vcl-wf-hint", "Pick the active substance to include the CMC dossier hours."));
+    }
+
+    // --- Product information (moved from Variations) ---
+    buildProductInfo(body);
+
+    // --- Compilation & submission (docuBridge/Veeva + CESP) ---
+    const compHead = el("div", "vcl-wf-flabel", "Compilation & submission"); compHead.style.marginTop = "16px"; body.appendChild(compHead);
+    const compGate = el("label", "vcl-wf-switch" + (state.compilationInRA ? " is-on" : ""));
+    compGate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
+      + '<span class="vcl-wf-switch__label">Compilation & submission in RA</span>';
+    compGate.addEventListener("click", (e) => { e.preventDefault(); state.compilationInRA = !state.compilationInRA; rerender(); });
+    body.appendChild(compGate);
+    body.appendChild(el("p", "vcl-wf-hint", state.compilationInRA
+      ? "Dossier compilation (docuBridge / Veeva), internal checks and CESP submission are done in RA."
+      : "Off: dossier compilation and submission are handled elsewhere — they add no RA hours."));
   }
 
   function buildSubstance(body) {
@@ -607,9 +702,10 @@
     body.appendChild(opts);
   }
 
-  // Station A: does RA prepare the product information for this change, and which documents does it
-  // touch? Gate defaults OFF (another department carries PI -> no RA hours). Chips reuse the green
-  // .vcl-wf-opt look; the per-document hours are shown only in the methodology box, never as pills.
+  // Product information module (Station "RA tasks"): does RA prepare the product information for
+  // this change, and which documents does it touch? Gate defaults OFF (another department carries
+  // PI -> no RA hours). Chips reuse the green .vcl-wf-opt look; the ticked documents filter which
+  // PI rows count (sumPi), and the hours are shown only in the methodology box, never as pills.
   function buildProductInfo(body) {
     const head = el("div", "vcl-wf-flabel", "Product information");
     head.style.marginTop = "16px";
@@ -719,7 +815,7 @@
 
   // ---- Station B: Procedure (country level) + submission type + list builders ----
   function buildStationB(body) {
-    body.appendChild(el("div", "vcl-wf-body__title", "Procedure"));
+    body.appendChild(el("div", "vcl-wf-body__title", "Procedures"));
     body.appendChild(el("div", "vcl-wf-body__sub", "How is it submitted, and where? Fees are per country, so the countries are set here."));
 
     body.appendChild(flabel("Procedure", 0));
@@ -1583,7 +1679,7 @@
     }
 
     const ra = raEffort();
-    if (ra !== null) line("RA workload", `~ ${escapeHtml(String(Math.ceil(ra)))} h`);
+    if (ra) line("RA workload", escapeHtml(raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")"));
     if (anyCountries) line("Total fees", `<strong>${escapeHtml(fmtEUR(grand))}</strong>`);
 
     // Export link: mirrors the whole summary into a .docx plus the variations table in the
@@ -1679,7 +1775,7 @@
       children.push(kv("Timeline", [new TextRun(sd ? fmtDate(addDays(sd, 0)) + " → EOP " + fmtDate(addDays(sd, sch.subToEop)) + " (" + sch.subToEop + " days)" : "Submission → EOP " + sch.subToEop + " days")]));
     }
     const ra = raEffort();
-    if (ra !== null) children.push(kv("RA workload", [new TextRun("~ " + Math.ceil(ra) + " h")]));
+    if (ra) children.push(kv("RA workload", [new TextRun(raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")")]));
     if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
 
     // ---- Annual Update / Super-Grouping block (absent for Worksharing and no-mode-selected) ----
@@ -1862,10 +1958,11 @@
 
   function buildBody() {
     const body = el("div", "vcl-wf-body");
-    if (state.station === "A") buildStationA(body);
-    else if (state.station === "B") buildStationB(body);
-    else if (state.station === "C") buildStationC(body);
-    else if (state.station === "D") buildStationD(body);
+    if (state.station === "A") buildStationA(body);        // Variations
+    else if (state.station === "B") buildStationB(body);   // Procedure
+    else if (state.station === "C") buildStationRA(body);  // RA tasks (optional modules)
+    else if (state.station === "D") buildStationC(body);   // Date & Timeline
+    else if (state.station === "E") buildStationD(body);   // Fees
     else buildPlaceholder(body, state.station);
 
     const nav = el("div", "vcl-wf-nav");
@@ -1907,6 +2004,147 @@
     return box;
   }
 
+  // ---- "RA-hours reference": a collapsible in-page lookup of the whole RA-CMC-hours.xlsx table. ----
+  // Rendered live from window.VCL_WORKLOAD_HD (the exact data the workload above is summed from), so
+  // the reference can never drift out of sync with the tool. Filterable by variation type, role and
+  // stream. This is the transparency "look it up" surface (design decision: in-page, not a download).
+  function buildReferenceBox() {
+    const HD = window.VCL_WORKLOAD_HD;
+    const box = el("div", "vcl-wf-meth" + (state.refOpen ? " is-open" : ""));
+    const bar = el("button", "vcl-wf-meth-bar");
+    bar.type = "button";
+    bar.innerHTML = '<span class="i" aria-hidden="true">&#9776;</span>'
+      + '<span class="t">RA-hours reference — look up any activity</span>'
+      + '<span class="chev" aria-hidden="true">' + (state.refOpen ? "&#9652;" : "&#9662;") + '</span>';
+    bar.addEventListener("click", () => { state.refOpen = !state.refOpen; rerender(); });
+    box.appendChild(bar);
+    if (state.refOpen) box.appendChild(HD ? buildReferencePanel(HD) : el("div", "vcl-wf-meth-panel", '<div class="vcl-wf-meth-inner"><p class="vcl-wf-meth-note">The RA-hours data is not available.</p></div>'));
+    return box;
+  }
+
+  function refSelect(labelText, opts, current, onPick) {
+    const wrap = el("div", "vcl-wf-ref-filter");
+    wrap.appendChild(el("label", null, escapeHtml(labelText)));
+    const sel = document.createElement("select"); sel.className = "vcl-wf-select";
+    opts.forEach((o) => {
+      const op = document.createElement("option"); op.value = o.value; op.textContent = o.label;
+      if (current === o.value) op.selected = true;
+      sel.appendChild(op);
+    });
+    sel.addEventListener("change", () => onPick(sel.value));
+    wrap.appendChild(sel);
+    return wrap;
+  }
+
+  function buildReferencePanel(HD) {
+    const S = HD.streams || {};
+    const bucketOf = (window.VCL_WORKLOAD_HOURS && window.VCL_WORKLOAD_HOURS.typeBucket) || function (t) { return t; };
+    const panel = el("div", "vcl-wf-meth-panel");
+    const inner = el("div", "vcl-wf-meth-inner");
+    panel.appendChild(inner);
+
+    const tb = state.refType, role = state.refRole, stream = state.refStream;
+
+    const filters = el("div", "vcl-wf-ref-filters");
+    filters.appendChild(refSelect("Type", [{ value: "IA", label: "Type IA" }, { value: "IB", label: "Type IB" }, { value: "II", label: "Type II" }], state.refType, (v) => { state.refType = v; rerender(); }));
+    filters.appendChild(refSelect("Role", [{ value: "national", label: "National" }, { value: "MRP/DCP", label: "MRP / DCP" }, { value: "CP", label: "CP" }], state.refRole, (v) => { state.refRole = v; rerender(); }));
+    filters.appendChild(refSelect("Stream", [{ value: "all", label: "All streams" }, { value: "RA", label: "RA" }, { value: "PI", label: "Product information" }, { value: "Comp.", label: "Compilation & submission" }, { value: "CMC", label: "CMC" }], state.refStream, (v) => { state.refStream = v; rerender(); }));
+    inner.appendChild(filters);
+
+    inner.appendChild(buildActivityTable(S, bucketOf, tb, role, stream));
+    // Below the activities: the grouping / worksharing / AU / SG per-unit rates that apply to this
+    // type + role, in the currently selected stream(s).
+    const mods = buildModifierSection(S, bucketOf, tb, role, stream);
+    if (mods) inner.appendChild(mods);
+    inner.appendChild(el("p", "vcl-wf-meth-note", "Straight from RA-CMC-hours.xlsx — the same numbers the workload above is built from."));
+    return panel;
+  }
+
+  // The activity view: per-activity rows from the flat sheets, filtered by the Stream select.
+  function buildActivityTable(S, bucketOf, tb, role, stream) {
+    const rows = [];
+    function collect(list, label) {
+      (list || []).forEach((r) => {
+        if (bucketOf(r.type) === tb && r.role1 === role) rows.push({ stream: label, activity: (r.process || "").trim(), min: r.min, max: r.max });
+      });
+    }
+    if (stream === "all" || stream === "RA") collect(S.ra && S.ra["RA - Variations & Roles"], "RA");
+    if (stream === "all" || stream === "PI") collect(S.piActivities, "PI");
+    if (stream === "all" || stream === "Comp.") collect(S.compilationSubmission, "Comp.");
+    if (stream === "all" || stream === "CMC") collect(S.cmc && S.cmc["CMC - Variations & Roles"], "CMC");
+
+    const table = el("div", "vcl-wf-ref-table");
+    const head = el("div", "vcl-wf-ref-row vcl-wf-ref-row--head");
+    head.innerHTML = "<span>Stream</span><span>Activity</span><span>min&ndash;max</span>";
+    table.appendChild(head);
+    if (!rows.length) {
+      table.appendChild(el("p", "vcl-wf-meth-note", "No activities listed for this combination."));
+    } else {
+      rows.forEach((r) => {
+        const hrs = (r.min == null && r.max == null) ? "n.a." : (fmtNum(r.min || 0) + "–" + fmtNum(r.max || 0));
+        const row = el("div", "vcl-wf-ref-row");
+        row.innerHTML = '<span class="vcl-wf-ref-stream">' + escapeHtml(r.stream) + "</span>"
+          + "<span>" + escapeHtml(r.activity) + "</span>"
+          + '<span class="vcl-wf-ref-hrs">' + escapeHtml(hrs) + "</span>";
+        table.appendChild(row);
+      });
+    }
+    return table;
+  }
+
+  // Below the activity list: the per-unit rates for every grouping / worksharing / annual update /
+  // super-grouping modifier that applies to this type + role, headed per modifier, one "each
+  // additional …" row per dimension. The Stream select chooses the columns: a single stream shows
+  // one range, "All streams" shows RA and CMC side by side. Dimensions with no value in the shown
+  // stream(s) are omitted; if nothing applies the whole block is dropped (returns null).
+  function buildModifierSection(S, bucketOf, tb, role, stream) {
+    const modDefs = [
+      { key: "grouping", label: "Grouping" },
+      { key: "worksharing", label: "Worksharing" },
+      { key: "annualUpdate", label: "Annual Update" },
+      { key: "superGrouping", label: "Super-Grouping" },
+    ];
+    const showRA = stream !== "CMC";
+    const showCMC = stream === "all" || stream === "CMC";
+    const twoCol = showRA && showCMC;
+    const has = (x) => x && (x.min != null || x.max != null);
+    const band = (x) => has(x) ? (fmtNum(x.min || 0) + "–" + fmtNum(x.max || 0)) : "—";
+
+    const blocks = [];
+    modDefs.forEach((m) => {
+      const mrow = (S[m.key] || []).filter((r) => bucketOf(r.type) === tb && r.role === role)[0];
+      if (!mrow) return;
+      const dims = [];
+      Object.keys(mrow.ra || {}).forEach((d) => {
+        const ra = mrow.ra[d], cmc = (mrow.cmc || {})[d];
+        if ((showRA && has(ra)) || (showCMC && has(cmc))) dims.push({ d: d, ra: ra, cmc: cmc });
+      });
+      if (dims.length) blocks.push({ label: m.label, dims: dims });
+    });
+    if (!blocks.length) return null;
+
+    const wrap = el("div", "vcl-wf-ref-mods");
+    const head = el("div", twoCol ? "vcl-wf-ref-mod-head vcl-wf-ref-mod-head--2" : "vcl-wf-ref-mod-head");
+    head.innerHTML = twoCol
+      ? "<span>Grouping &amp; shared</span><span>RA</span><span>CMC</span>"
+      : "<span>Grouping &amp; shared</span><span>min&ndash;max</span>";
+    wrap.appendChild(head);
+
+    blocks.forEach((b) => {
+      wrap.appendChild(el("div", "vcl-wf-ref-mod-title", escapeHtml(b.label)));
+      b.dims.forEach((it) => {
+        const row = el("div", twoCol ? "vcl-wf-ref-mod-row vcl-wf-ref-mod-row--2" : "vcl-wf-ref-mod-row");
+        if (twoCol) {
+          row.innerHTML = "<span>each additional " + escapeHtml(it.d) + "</span><span>" + escapeHtml(band(it.ra)) + "</span><span>" + escapeHtml(band(it.cmc)) + "</span>";
+        } else {
+          row.innerHTML = "<span>each additional " + escapeHtml(it.d) + "</span><span>" + escapeHtml(showRA ? band(it.ra) : band(it.cmc)) + "</span>";
+        }
+        wrap.appendChild(row);
+      });
+    });
+    return wrap;
+  }
+
   // One methodology row: label + pink/green value pill.
   function methRow(label, val, cls) {
     const row = el("div", "vcl-wf-meth-row" + (cls ? " " + cls : ""));
@@ -1915,77 +2153,56 @@
     return row;
   }
 
-  // Methodology panel, FILTERED: only the rows that actually move the number for the current case
-  // (neutral ×1.0 factors and +0 add-ons are hidden), ending in the total that matches the live
-  // preview. Values come from the shared factor table (window.VCL_WORKLOAD.factors).
+  // One named section of the additive breakdown: a title, one itemised line per activity (each an
+  // {label, min, max} band) and a dashed subtotal. Sections are dropped entirely by the caller when
+  // their gate is off (their subtotal would be 0), matching the confirmed "Variant A" display.
+  function methSection(title, items, subtotal) {
+    const sec = el("div", "vcl-wf-meth-sec");
+    sec.appendChild(el("div", "vcl-wf-meth-sec__title", escapeHtml(title)));
+    items.forEach((it) => sec.appendChild(methRow(it.label, raBand(it))));
+
+    sec.appendChild(methRow("Subtotal · " + title, raBand(subtotal), "vcl-wf-meth-subtotal"));
+    return sec;
+  }
+
+  // Methodology panel: the confirmed additive "Variant A" build-up. Three fine-line-separated,
+  // named sections (RA activities / CMC activities / Compilation & submission activities), each
+  // listing its individual activities (verbatim from RA-CMC-hours.xlsx; Product information, the
+  // per-CMS row and grouped/shared items collapse to one line each), with its own subtotal, ending
+  // in the grand "RA workload total". A closing note explains the right-skewed headline figure.
+  // CMC and Compilation & submission only appear when handled in RA (their gate on).
   function buildMethodPanel() {
-    const F = window.VCL_WORKLOAD && window.VCL_WORKLOAD.factors;
-    const META = (window.VCL_WORKLOAD && window.VCL_WORKLOAD.factorsMeta) || {};
     const panel = el("div", "vcl-wf-meth-panel");
     const inner = el("div", "vcl-wf-meth-inner");
     panel.appendChild(inner);
-    if (!F) { inner.appendChild(el("p", "vcl-wf-meth-note", "Factor tables are not available.")); return panel; }
-
-    const tb = feeBucket(primaryType());                     // 'IA' | 'IB' | 'II' | null
-    const kind = state.procedure.kind;                       // 'national' | 'mrpdcp' | 'cp'
-    const cms = kind === "mrpdcp" ? state.procedure.cms.length : 0;
-    const large = cms > F.procedure.cmsThreshold;
-    const s = F.submission;
-    const grouped = state.submission.grouping && !(auActive() || sgActive());
-
-    inner.appendChild(el("div", "vcl-wf-meth-formula",
-      "RA hours = Base[type] × Procedure × Active substance × ∏ Submission factors"
-      + "<br>&nbsp;&nbsp;+ CMS × " + F.cmsHoursPer + " h + Σ grouped items + Σ Product information"));
-
-    const rows = [];
-    // Base -- always shown (the starting point).
-    if (tb) rows.push(["Base · Type " + tb, (F.baseHours[tb] || 0) + " h"]);
-    // Procedure factor (hidden when neutral ×1.0).
-    let pf = F.procedure.national, plabel = "National";
-    if (kind === "cp") { pf = F.procedure.cp; plabel = "Centralised (CP)"; }
-    else if (kind === "mrpdcp") { pf = large ? F.procedure.mrpdcpLarge : F.procedure.mrpdcpSmall; plabel = "MRP/DCP, " + (large ? "> " : "≤ ") + F.procedure.cmsThreshold + " CMS"; }
-    if (pf !== 1) rows.push(["× Procedure · " + plabel, "× " + fmtNum(pf)]);
-    // Active substance (only Biologic changes anything).
-    if (state.activeSubstance === "biologic") rows.push(["× Active substance · Biologic", "× " + fmtNum(F.activeSubstance.biologic)]);
-    // Submission factors (only the active mode).
-    if (wsActive()) rows.push(["× Submission · Worksharing", "× " + fmtNum(s.worksharing.factor)]);
-    if (grouped) rows.push(["× Submission · Grouping", "× " + fmtNum(s.grouping.factor)]);
-    if (auActive()) rows.push(["× Submission · Annual Update", "× " + fmtNum(s.annualUpdate.factor)]);
-    if (sgActive()) rows.push(["× Submission · Super-Grouping", "× " + fmtNum(s.superGrouping.factor)]);
-    // Add-ons (only non-zero).
-    if (kind === "mrpdcp" && cms > 0) rows.push(["+ Per CMS × " + cms, "+ " + fmtNum(F.cmsHoursPer * cms) + " h"]);
-    const wk = worksharingKinds();
-    if (wsActive() && wk.national > 0) rows.push(["+ Worksharing · per national × " + wk.national, "+ " + fmtNum(s.worksharing.perNational * wk.national) + " h"]);
-    if (wsActive() && wk.mrpdcp > 0) rows.push(["+ Worksharing · per MRP/DCP × " + wk.mrpdcp, "+ " + fmtNum(s.worksharing.perMrpdcp * wk.mrpdcp) + " h"]);
-    const gb = groupingBuckets();
-    if (grouped && gb.IA > 0) rows.push(["+ Grouping · Type IA × " + gb.IA, "+ " + fmtNum(s.grouping.perIA * gb.IA) + " h"]);
-    if (grouped && gb.IB > 0) rows.push(["+ Grouping · Type IB × " + gb.IB, "+ " + fmtNum(s.grouping.perIB * gb.IB) + " h"]);
-    if (grouped && gb.II > 0) rows.push(["+ Grouping · Type II × " + gb.II, "+ " + fmtNum(s.grouping.perII * gb.II) + " h"]);
-    if (auActive()) { const n = 1 + gb.IA; if (n > 0) rows.push(["+ Annual Update · per Type IA × " + n, "+ " + fmtNum(s.annualUpdate.perIA * n) + " h"]); }
-    if (sgActive()) {
-      const sp = sgProcKinds();
-      if (sp.national > 0) rows.push(["+ Super-Grouping · national × " + sp.national, "+ " + fmtNum(s.superGrouping.perNational * sp.national) + " h"]);
-      if (sp.mrpdcp > 0) rows.push(["+ Super-Grouping · MRP/DCP × " + sp.mrpdcp, "+ " + fmtNum(s.superGrouping.perMrpdcp * sp.mrpdcp) + " h"]);
-      if (sp.cp > 0) rows.push(["+ Super-Grouping · CP × " + sp.cp, "+ " + fmtNum(s.superGrouping.perCp * sp.cp) + " h"]);
-    }
-    // Product information (only ticked documents).
-    if (state.piInRA && tb) {
-      const pi = F.productInfo;
-      [["smpc", "SmPC"], ["leaflet", "Package leaflet"], ["labelling", "Labelling"], ["mockups", "Mock-ups"]].forEach((d) => {
-        if (state.piDocs[d[0]] && pi[d[0]]) rows.push(["+ Product information · " + d[1], "+ " + fmtNum(pi[d[0]][tb] || 0) + " h"]);
-      });
-    }
-
-    rows.forEach((r) => inner.appendChild(methRow(r[0], r[1])));
 
     const ra = raEffort();
-    if (ra !== null) inner.appendChild(methRow("= RA workload", Math.ceil(ra) + " h", "vcl-wf-meth-total"));
+    if (!ra) { inner.appendChild(el("p", "vcl-wf-meth-note", "Pick a variation type to see how the RA workload is built up.")); return panel; }
+    const it = ra.items, sec = ra.sections;
+    const nz = (mm) => !!(mm && (mm.min || mm.max));
 
-    inner.appendChild(el("p", "vcl-wf-meth-note", "Only the entries that change the number for this case are shown."));
+    inner.appendChild(el("div", "vcl-wf-meth-formula",
+      "RA workload is summed bottom-up from the individual activities below, each an experience-based "
+      + "min–max estimate. CMC and compilation &amp; submission count only when they are handled in RA."));
+    inner.appendChild(el("div", "vcl-wf-meth-colhead", "min. – max."));
+
+    inner.appendChild(methSection("RA activities", it.ra, sec.ra));
+    if (nz(sec.cmc)) inner.appendChild(methSection("CMC activities", it.cmc, sec.cmc));
+    if (nz(sec.compilation)) inner.appendChild(methSection("Compilation & submission activities", it.compilation, sec.compilation));
+
+    inner.appendChild(methRow("RA workload total", raBand(sec.total) + " h", "vcl-wf-meth-total"));
+
+    // Explain the single headline figure (right-skewed PERT expected value).
+    const expected = Math.round(ra.expected);
+    const mid = Math.round((sec.total.min + sec.total.max) / 2);
+    const skew = el("p", "vcl-wf-meth-note");
+    skew.innerHTML = "The headline <strong>" + expected + " h</strong> is the expected value: the most-likely "
+      + "point sits at &#8531; of the range and is weighted four times (PERT), so it lands a little below the "
+      + "midpoint (" + mid + " h) — RA effort is right-skewed, with occasional overruns stretching the maximum.";
+    inner.appendChild(skew);
 
     const src = el("div", "vcl-wf-meth-src");
-    src.innerHTML = "<strong>Source:</strong> " + escapeHtml(META.workbook || "factor workbook")
-      + " — sheet “Faktoren”. Last checked against it on <strong>" + escapeHtml(META.lastChecked || "—") + "</strong>.";
+    src.innerHTML = "<strong>Source:</strong> RA-CMC-hours.xlsx — per-activity RA and CMC hour ranges.";
     const excelUrl = (window.VCL_CONFIG && window.VCL_CONFIG.workloadExcelUrl) || "";
     if (excelUrl) {
       const a = document.createElement("a");
@@ -2037,7 +2254,11 @@
 
     const row = el("div", "vcl-wf-live__row");
     const ra = raEffort();
-    row.appendChild(el("div", "vcl-wf-live__stat", '<div class="v">' + (ra !== null ? escapeHtml(String(Math.ceil(ra))) + " h" : "—") + '</div><div class="l">RA workload</div>'));
+    const raStat = ra
+      ? '<div class="v">' + escapeHtml(raExpectedText(ra)) + '</div>'
+        + '<div class="vcl-wf-live__range">(' + escapeHtml(raRangeBare(ra.total)) + ')</div>'
+      : '<div class="v">—</div>';
+    row.appendChild(el("div", "vcl-wf-live__stat", raStat + '<div class="l">RA workload</div>'));
 
     const sch = workflowSchedule();
     // Plain "Timeline" -- the clock-stop actually applied (from Station C's slider) is
@@ -2132,6 +2353,7 @@
     liveHost = live;
     root.appendChild(live);
     root.appendChild(buildMethodBox());
+    root.appendChild(buildReferenceBox());
     container.appendChild(root);
   }
 
