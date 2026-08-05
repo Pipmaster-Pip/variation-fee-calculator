@@ -21,6 +21,27 @@
   var plan = BUD.loadPlan(window.localStorage);
   var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true };
   var container = null;
+  var modalState = null; // null when closed, else { editingId, draft, query, searchResults }
+
+  function openModalFor(id) {
+    var existing = id && state.lines.find(function (l) { return l.id === id; });
+    modalState = {
+      editingId: id || null,
+      draft: existing ? JSON.parse(JSON.stringify(existing)) : BUD.newLine("line-" + Date.now() + "-" + Math.floor(Math.random() * 1000)),
+      query: "",
+      searchResults: [],
+    };
+    rerender();
+  }
+  function closeModal() { modalState = null; rerender(); }
+  function applyModal() {
+    var idx = state.lines.findIndex(function (l) { return l.id === modalState.draft.id; });
+    if (idx === -1) state.lines.push(modalState.draft);
+    else state.lines[idx] = modalState.draft;
+    modalState = null;
+    saveState();
+    rerender();
+  }
 
   function saveState() {
     var ok = BUD.savePlan(window.localStorage, { version: 1, hoursPerHead: state.hoursPerHead, lines: state.lines });
@@ -189,6 +210,220 @@
     container.appendChild(breakdown);
 
     container.appendChild(renderTable());
+
+    if (modalState) container.appendChild(renderModal());
+  }
+
+  function countriesByRole(role) {
+    var all = (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [];
+    return all.filter(function (c) { return c.roles.indexOf(role) !== -1; });
+  }
+  function findEmaCc() {
+    var all = (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [];
+    var ema = all.find(function (c) { return c.roles.indexOf("EMA") !== -1; });
+    return ema ? ema.cc : null;
+  }
+  function typesForEntry(entry) {
+    var seen = {};
+    (entry.variants || []).forEach(function (v) { if (v.type) seen[v.type] = true; });
+    return Object.keys(seen);
+  }
+
+  function renderModal() {
+    var d = modalState.draft;
+    var overlay = el("div", "vcl-bud-modal-overlay");
+    var modal = el("div", "vcl-bud-modal");
+
+    var head = el("div", "vcl-bud-modal__head");
+    head.appendChild(el("h2", null, modalState.editingId ? "Edit plan line" : "New plan line"));
+    var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
+    closeBtn.type = "button";
+    closeBtn.addEventListener("click", closeModal);
+    head.appendChild(closeBtn);
+    modal.appendChild(head);
+
+    // Product
+    var productField = el("div", "vcl-bud-field");
+    productField.appendChild(el("label", "vcl-bud-field-label", "Product"));
+    var productInput = el("input", "vcl-bud-input");
+    productInput.type = "text"; productInput.value = d.product;
+    productInput.addEventListener("input", function () { d.product = productInput.value; });
+    productField.appendChild(productInput);
+    modal.appendChild(productField);
+
+    // Variation search
+    var varField = el("div", "vcl-bud-field");
+    varField.appendChild(el("label", "vcl-bud-field-label", "Variation"));
+    var varInput = el("input", "vcl-bud-input");
+    varInput.type = "text";
+    varInput.placeholder = "Search by code or keyword ...";
+    varInput.value = modalState.query || d.variationLabel || "";
+    varInput.addEventListener("input", function () {
+      modalState.query = varInput.value;
+      modalState.searchResults = BUD.searchEntries(ENTRIES, modalState.query);
+      rerender();
+    });
+    varField.appendChild(varInput);
+    if (modalState.searchResults.length) {
+      var results = el("div", "vcl-bud-search-results");
+      modalState.searchResults.forEach(function (entry) {
+        var item = el("button", "vcl-bud-search-result", escapeHtml(entry.code + " — " + entry.title));
+        item.type = "button";
+        item.addEventListener("click", function () {
+          d.variationCode = entry.code;
+          d.variationLabel = entry.code + " — " + entry.title;
+          var types = typesForEntry(entry);
+          d.type = types[0] || d.type;
+          modalState.query = "";
+          modalState.searchResults = [];
+          rerender();
+        });
+        results.appendChild(item);
+      });
+      varField.appendChild(results);
+    }
+    if (d.variationCode) {
+      var typesRow = el("div");
+      typesRow.style.marginTop = "8px";
+      var entry = ENTRIES.find(function (e) { return e.code === d.variationCode; });
+      var availableTypes = entry ? typesForEntry(entry) : ["IA", "IB", "II"];
+      availableTypes.forEach(function (t) {
+        var badge = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + t.toLowerCase() + (t === d.type ? " is-active" : ""), escapeHtml(t));
+        badge.addEventListener("click", function () { d.type = t; rerender(); });
+        typesRow.appendChild(badge);
+        typesRow.appendChild(document.createTextNode(" "));
+      });
+      varField.appendChild(typesRow);
+    }
+    modal.appendChild(varField);
+
+    // Procedure + RMS
+    var procRow = el("div", "vcl-bud-field vcl-bud-field-row");
+    var procCol = el("div");
+    procCol.appendChild(el("label", "vcl-bud-field-label", "Procedure"));
+    var procSelect = el("select", "vcl-bud-select");
+    ["national", "mrpdcp", "cp"].forEach(function (kind) {
+      var opt = el("option", null, kind === "mrpdcp" ? "MRP/DCP" : (kind === "cp" ? "CP" : "National"));
+      opt.value = kind;
+      if (d.procedure.kind === kind) opt.selected = true;
+      procSelect.appendChild(opt);
+    });
+    procSelect.addEventListener("change", function () {
+      d.procedure = { kind: procSelect.value, nat: null, rms: null, cms: [] };
+      if (procSelect.value === "cp") d.procedure.ema = findEmaCc();
+      rerender();
+    });
+    procCol.appendChild(procSelect);
+    procRow.appendChild(procCol);
+
+    if (d.procedure.kind === "mrpdcp") {
+      var rmsCol = el("div");
+      rmsCol.appendChild(el("label", "vcl-bud-field-label", "RMS (Reference Member State)"));
+      var rmsSelect = el("select", "vcl-bud-select");
+      rmsSelect.appendChild(el("option", null, "—"));
+      countriesByRole("RMS").forEach(function (c) {
+        var opt = el("option", null, escapeHtml(c.cc + " — " + c.name));
+        opt.value = c.cc;
+        if (d.procedure.rms === c.cc) opt.selected = true;
+        rmsSelect.appendChild(opt);
+      });
+      rmsSelect.addEventListener("change", function () { d.procedure.rms = rmsSelect.value || null; rerender(); });
+      rmsCol.appendChild(rmsSelect);
+      procRow.appendChild(rmsCol);
+    } else if (d.procedure.kind === "national") {
+      var natCol = el("div");
+      natCol.appendChild(el("label", "vcl-bud-field-label", "Country"));
+      var natSelect = el("select", "vcl-bud-select");
+      natSelect.appendChild(el("option", null, "—"));
+      countriesByRole("national").forEach(function (c) {
+        var opt = el("option", null, escapeHtml(c.cc + " — " + c.name));
+        opt.value = c.cc;
+        if (d.procedure.nat === c.cc) opt.selected = true;
+        natSelect.appendChild(opt);
+      });
+      natSelect.addEventListener("change", function () { d.procedure.nat = natSelect.value || null; rerender(); });
+      natCol.appendChild(natSelect);
+      procRow.appendChild(natCol);
+    }
+    modal.appendChild(procRow);
+
+    // CMS checkboxes (MRP/DCP only)
+    if (d.procedure.kind === "mrpdcp") {
+      var ccField = el("div", "vcl-bud-field");
+      ccField.appendChild(el("label", "vcl-bud-field-label", "Countries (CMS)"));
+      var checks = el("div", "vcl-bud-cc-checks");
+      countriesByRole("CMS").forEach(function (c) {
+        if (c.cc === d.procedure.rms) return; // RMS cannot also be a CMS
+        var label = el("label", "vcl-bud-cc-check");
+        var cb = el("input"); cb.type = "checkbox";
+        cb.checked = d.procedure.cms.indexOf(c.cc) !== -1;
+        cb.addEventListener("change", function () {
+          var i = d.procedure.cms.indexOf(c.cc);
+          if (cb.checked && i === -1) d.procedure.cms.push(c.cc);
+          if (!cb.checked && i !== -1) d.procedure.cms.splice(i, 1);
+          rerender();
+        });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(" " + c.cc));
+        checks.appendChild(label);
+      });
+      ccField.appendChild(checks);
+      modal.appendChild(ccField);
+    }
+
+    // Quarter + Probability
+    var qpRow = el("div", "vcl-bud-field vcl-bud-field-row");
+    var qCol = el("div");
+    qCol.appendChild(el("label", "vcl-bud-field-label", "Quarter"));
+    var qSelect = el("select", "vcl-bud-select");
+    ["Q1", "Q2", "Q3", "Q4"].forEach(function (q) {
+      var opt = el("option", null, q); opt.value = q;
+      if (d.quarter === q) opt.selected = true;
+      qSelect.appendChild(opt);
+    });
+    qSelect.addEventListener("change", function () { d.quarter = qSelect.value; });
+    qCol.appendChild(qSelect);
+    qpRow.appendChild(qCol);
+
+    var pCol = el("div");
+    pCol.appendChild(el("label", "vcl-bud-field-label", "Probability"));
+    var pSelect = el("select", "vcl-bud-select");
+    [100, 75, 50, 25].forEach(function (p) {
+      var opt = el("option", null, p + "%" + (p === 100 ? " (firm)" : "")); opt.value = String(p);
+      if (d.probability === p) opt.selected = true;
+      pSelect.appendChild(opt);
+    });
+    pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); });
+    pCol.appendChild(pSelect);
+    qpRow.appendChild(pCol);
+    modal.appendChild(qpRow);
+
+    // Live preview
+    var preview = BUD.computeLineResult(d, engines());
+    var liveResult = el("div", "vcl-bud-live-result");
+    var feeItem = el("div");
+    feeItem.innerHTML = '<div class="lbl">Fee</div><div class="val">' + escapeHtml(fmtEUR(preview.fee)) + "</div>";
+    liveResult.appendChild(feeItem);
+    var hoursItem = el("div");
+    hoursItem.innerHTML = '<div class="lbl">RA hours</div><div class="val">' + Math.round(preview.hours.expected) +
+      ' h <span class="band">' + Math.round(preview.hours.min) + "–" + Math.round(preview.hours.max) + "</span></div>";
+    liveResult.appendChild(hoursItem);
+    modal.appendChild(liveResult);
+
+    // Footer
+    var foot = el("div", "vcl-bud-modal__foot");
+    var cancelBtn = el("button", "vcl-bud-btn", "Cancel");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeModal);
+    var applyBtn = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Apply");
+    applyBtn.type = "button";
+    applyBtn.addEventListener("click", applyModal);
+    foot.appendChild(cancelBtn);
+    foot.appendChild(applyBtn);
+    modal.appendChild(foot);
+
+    overlay.appendChild(modal);
+    return overlay;
   }
 
   function duplicateLine(id) {
@@ -213,7 +448,13 @@
     var id = tr && tr.dataset.lineId;
     if (btn.dataset.act === "duplicate" && id) duplicateLine(id);
     if (btn.dataset.act === "delete" && id) deleteLine(id);
-    // "edit" is wired in Task 5.
+    if (btn.dataset.act === "edit" && id) openModalFor(id);
+  }
+  function onHeaderClick(evt) {
+    var btn = evt.target.closest("button[data-act]");
+    if (!btn) return;
+    if (btn.dataset.act === "new-line") openModalFor(null);
+    if (btn.dataset.act === "export") exportExcel(); // Task 6
   }
 
   window.VCL_BUDGET = {
@@ -221,6 +462,8 @@
       container = col;
       container.removeEventListener("click", onTableClick);
       container.addEventListener("click", onTableClick);
+      container.removeEventListener("click", onHeaderClick);
+      container.addEventListener("click", onHeaderClick);
       rerender();
     },
   };
