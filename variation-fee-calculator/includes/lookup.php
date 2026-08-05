@@ -187,7 +187,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-workflow',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
-		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-calc-app' ),
+		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-workload-data', 'vcl-workload-hours', 'vcl-calc-app' ),
 		$workflow_app_ver,
 		true
 	);
