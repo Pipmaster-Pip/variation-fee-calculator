@@ -77,6 +77,8 @@
   }
   function closeModal() { modalState = null; rerender(); }
   function applyModal() {
+    // Final guard: never persist a strategy that is no longer allowed for the current variations.
+    normalizeModeEnablement(modalState.draft.submission);
     var idx = state.lines.findIndex(function (l) { return l.id === modalState.draft.id; });
     if (idx === -1) state.lines.push(modalState.draft);
     else state.lines[idx] = modalState.draft;
@@ -357,6 +359,9 @@
   // references are captured by renderModal() each time the modal is (re)built.
   function refreshEditor() {
     if (!modalState) return;
+    // Clear any now-invalid strategy BEFORE the body/preview repaint, independent of the active
+    // station (Station A refreshes never run renderStationB's own clear).
+    normalizeModeEnablement(modalState.draft.submission);
     if (modalState.paintStepper) modalState.paintStepper();
     if (modalState.bodyHost) stationBody(modalState.bodyHost);
     if (modalState.previewHost) renderPreviewStrip(modalState.previewHost);
@@ -442,10 +447,11 @@
   // ---- Station B: Procedures + multi-authorisation strategy ----
   // A labelled country <select> in the budget field style: options are country objects
   // ({cc,name,roles}) from countriesByRole(); onPick receives the chosen cc (or null).
-  function countrySelectField(labelText, list, current, onPick) {
+  function countrySelectField(labelText, list, current, onPick, disabled) {
     var field = el("div", "vcl-bud-field");
     field.appendChild(el("label", "vcl-bud-field-label", escapeHtml(labelText)));
     var sel = el("select", "vcl-bud-select");
+    if (disabled) sel.disabled = true; // locked field (e.g. CP-forced EMA lead) -- shows current, no picking
     var opt0 = el("option", null, "— select —"); opt0.value = "";
     if (!current) opt0.selected = true;
     sel.appendChild(opt0);
@@ -549,15 +555,28 @@
     return card;
   }
 
-  function renderStationB(host) {
-    var sub = modalState.draft.submission;
-
-    // Enablement mirrors the Guided Workflow (vcl-workflow.js:735/828): WS is offered only for a
-    // mixed submission, SG/AU only for an all-Type-IA one. Clear an invalidated strategy on every
-    // render BEFORE painting, so a mode that is no longer allowed can never survive silently.
+  // Strategy-enablement rule shared by the chips (renderStationB) AND the always-on normaliser.
+  // Mirrors the Guided Workflow (vcl-workflow.js:735/828): a mixed submission may only Worksharing;
+  // an all-Type-IA one may only Super-Group / Annual-Update. Clearing an invalidated mode must run
+  // on EVERY modal render/refresh -- not just when Station B happens to paint -- so the always-on
+  // preview strip and Apply can never price a strategy that is no longer allowed. Example: pick
+  // Worksharing on a mixed line in Station B, return to Station A and delete the last non-IA
+  // variation; without this, sub.mode stays "worksharing" and the line prices/persists as an
+  // all-IA worksharing the Guided Workflow forbids. Returns allIA so the chip block can reuse it
+  // and can never disagree with the clear.
+  function normalizeModeEnablement(sub) {
     var allIA = SUB.allVariationsAreIA(sub, engines());
     if (sub.mode === "worksharing" && allIA) sub.mode = null;
     if ((sub.mode === "superGrouping" || sub.mode === "annualUpdate") && !allIA) sub.mode = null;
+    return allIA;
+  }
+
+  function renderStationB(host) {
+    var sub = modalState.draft.submission;
+
+    // Same enablement rule the preview/Apply paths already ran; reuse it so chip state and the
+    // invalidated-mode clear can never diverge.
+    var allIA = normalizeModeEnablement(sub);
 
     host.appendChild(el("div", "vcl-bud-body__title", "Procedures"));
     host.appendChild(el("div", "vcl-bud-body__sub", "How is it submitted, and where? Fees are per country, so the countries are set here."));
@@ -621,9 +640,21 @@
       countriesByRole("EMA").forEach(function (c) {
         if (!leadList.some(function (x) { return x.cc === c.cc; })) leadList.push(c);
       });
+      // Mirror the Guided Workflow (vcl-workflow.js:2244 / buildWorksharingLead:947): a Centralised
+      // procedure in the group auto-leads it. Same condition as the GW -- leadPricingActive AND any
+      // CP procedure -- so the lead is forced to the EMA and the select is locked; without this a
+      // CP-in-Worksharing could keep an RMS lead, which leadPricingRole would then price under that
+      // RMS's role -- a different fee than the GW's forced-EMA lead. No CP => selectable as before.
+      var hasCP = sub.procedures.some(function (p) { return p.kind === "cp"; });
+      if (hasCP) sub.lead = SUB.emaCc(engines());
       host.appendChild(countrySelectField(
         SUB.sgActive(sub) ? "Super-Grouping RMS (lead)" : "Worksharing RMS (lead)",
-        leadList, sub.lead, function (cc) { sub.lead = cc; refreshEditor(); }));
+        leadList, sub.lead, function (cc) { sub.lead = cc; refreshEditor(); }, hasCP));
+      if (hasCP) {
+        host.appendChild(el("p", "vcl-bud-hint", SUB.sgActive(sub)
+          ? "Automatically the EMA — this Super-Grouping consists of Centralised procedures."
+          : "Automatically the EMA, because a Centralised procedure (CP) is part of the worksharing."));
+      }
     }
   }
 
@@ -709,6 +740,9 @@
   function renderModal() {
     var d = modalState.draft;
     var sub = d.submission;
+    // Full rerenders (e.g. Station A variation edits) land here without touching Station B, so run
+    // the enablement clear BEFORE the body card and the live preview strip are built below.
+    normalizeModeEnablement(sub);
     var overlay = el("div", "vcl-bud-modal-overlay");
     var modal = el("div", "vcl-bud-modal");
 
