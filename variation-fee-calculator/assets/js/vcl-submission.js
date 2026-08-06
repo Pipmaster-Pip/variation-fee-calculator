@@ -65,12 +65,122 @@
     return sub.variations.length > 1 ? "grouping" : "single";
   }
 
+  // ---- fee-special resolution sub-layer (reads engines.feeRows / engines.countries) ----
+  function emaCc(engines) { return (engines.countries.find(function (c) { return c.roles.indexOf("EMA") !== -1; }) || {}).cc || null; }
+  // Number of strengths registered for a country: the global default unless overridden.
+  function strengthsFor(sub, cc) {
+    var o = sub.strengths.overrides[cc];
+    var n = (o != null) ? o : sub.strengths.default;
+    return Math.max(1, parseInt(n, 10) || 1);
+  }
+  // Flatten a procedure to the (cc, role, strengths) triples the fee engine consumes.
+  function procCountries(sub, p, engines) {
+    if (!p) return [];
+    if (p.kind === "national") return p.nat ? [{ cc: p.nat, role: "national", strengths: strengthsFor(sub, p.nat) }] : [];
+    if (p.kind === "cp") { var e = emaCc(engines); return e ? [{ cc: e, role: "EMA", strengths: strengthsFor(sub, e) }] : []; }
+    if (p.kind === "mrpdcp") {
+      var out = [];
+      if (p.rms) out.push({ cc: p.rms, role: "RMS", strengths: strengthsFor(sub, p.rms) });
+      p.cms.forEach(function (cc) { out.push({ cc: cc, role: "CMS", strengths: strengthsFor(sub, cc) }); });
+      return out;
+    }
+    return [];
+  }
+  // The variation types actually being priced (from the IA/IB/II tally): reuses the derivation
+  // layer's feeCounts(sub) in place of the source's closure-only feeCounts(); not part of the
+  // brief's listed interface but required for specialOptionsFor/hasStandardRow to be faithful
+  // (the source functions depend on it), so it stays an internal (non-exported) helper.
+  function activeTypes(sub) {
+    var c = feeCounts(sub);
+    return ["IA", "IB", "II"].filter(function (t) { return c[t] > 0; });
+  }
+  // Special-case labels published for a country+role across the active types.
+  function specialOptionsFor(sub, cc, role, engines) {
+    var types = activeTypes(sub);
+    var seen = {}; var out = [];
+    engines.feeRows.forEach(function (r) {
+      if (r.cc !== cc || r.role !== role || types.indexOf(r.type) === -1) return;
+      var s = r.special;
+      if (!s || /^standard$/i.test(s) || seen[s]) return;
+      seen[s] = 1; out.push(s);
+    });
+    return out;
+  }
+  // Does this country+role publish a plain standard row for any active type?
+  function hasStandardRow(sub, cc, role, engines) {
+    var types = activeTypes(sub);
+    return engines.feeRows.some(function (r) {
+      return r.cc === cc && r.role === role && types.indexOf(r.type) !== -1
+        && (!r.special || /^standard$/i.test(r.special));
+    });
+  }
+  // A non-lead RMS of an MRP/DCP inside a Worksharing or Super-Grouping pays its
+  // worksharing-CMS fee, not its standalone RMS fee.
+  var WS_RMS_PRICES_AS = "CMS";
+  function wsPricingRole(role) { return role === "RMS" ? WS_RMS_PRICES_AS : role; }
+  function wsSpecialKey(cc, role) { return cc + "|" + role; }
+  function isWorksharingSpecial(s) { return /worksharing/i.test(s || ""); }
+  // Options offered in a worksharing pricing context: where an authority publishes
+  // "… - worksharing" variants, ONLY those are offered; otherwise the normal special cases.
+  function wsOptionsFor(sub, cc, role, engines) {
+    var all = specialOptionsFor(sub, cc, role, engines);
+    var ws = all.filter(isWorksharingSpecial);
+    return ws.length ? ws : all;
+  }
+  // The effective pick for a line: the stored choice if it is still on offer; otherwise the
+  // first option wherever "no pick" is not a real alternative.
+  function defaultSpecial(sub, cc, role, opts, engines) {
+    if (!opts.length) return null;
+    if (isWorksharingSpecial(opts[0]) || !hasStandardRow(sub, cc, role, engines)) return opts[0];
+    return null;
+  }
+  function wsSpecialFor(sub, cc, role, engines) {
+    var opts = wsOptionsFor(sub, cc, role, engines);
+    var stored = sub.specials.ws[wsSpecialKey(cc, role)];
+    if (stored && opts.indexOf(stored) !== -1) return stored;
+    return defaultSpecial(sub, cc, role, opts, engines);
+  }
+  // Non-worksharing fee-category options: the published labels minus the "… - worksharing" variants.
+  function nonWsOptionsFor(sub, cc, role, engines) {
+    return specialOptionsFor(sub, cc, role, engines).filter(function (s) { return !isWorksharingSpecial(s); });
+  }
+  // The effective pick for a single (non-worksharing) line.
+  function specialFor(sub, cc, role, engines) {
+    var opts = nonWsOptionsFor(sub, cc, role, engines);
+    var stored = sub.specials.line[wsSpecialKey(cc, role)];
+    if (stored && opts.indexOf(stored) !== -1) return stored;
+    return defaultSpecial(sub, cc, role, opts, engines);
+  }
+  // Same rule for the lead's own pick.
+  function leadSpecial(sub, engines) {
+    if (!sub.lead) return null;
+    var opts = wsOptionsFor(sub, sub.lead, leadPricingRole(sub, engines), engines);
+    var stored = sub.specials.lead;
+    if (stored && opts.indexOf(stored) !== -1) return stored;
+    return defaultSpecial(sub, sub.lead, leadPricingRole(sub, engines), opts, engines);
+  }
+  // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
+  // publishes RMS rows, falling back to national, then CMS.
+  function leadPricingRole(sub, engines) {
+    var cc = sub.lead;
+    if (!cc) return null;
+    if (cc === emaCc(engines)) return "EMA";
+    var has = function (role) { return engines.feeRows.some(function (r) { return r.cc === cc && r.role === role; }); };
+    return has("RMS") ? "RMS" : (has("national") ? "national" : "CMS");
+  }
+
   var api = {
     feeBucket: feeBucket, feeCounts: feeCounts, feeCountsTotal: feeCountsTotal, highestType: highestType,
     primaryType: primaryType, groupingBuckets: groupingBuckets, worksharingKinds: worksharingKinds,
     sgProcKinds: sgProcKinds, allPricedProcedures: allPricedProcedures, allVariationsAreIA: allVariationsAreIA,
     wsActive: wsActive, auActive: auActive, sgActive: sgActive, leadPricingActive: leadPricingActive,
     multiProcedureMode: multiProcedureMode, annualUpdateActive: annualUpdateActive, displayMode: displayMode,
+    emaCc: emaCc, strengthsFor: strengthsFor, procCountries: procCountries,
+    specialOptionsFor: specialOptionsFor, hasStandardRow: hasStandardRow,
+    wsPricingRole: wsPricingRole, wsSpecialKey: wsSpecialKey, isWorksharingSpecial: isWorksharingSpecial,
+    wsOptionsFor: wsOptionsFor, defaultSpecial: defaultSpecial, wsSpecialFor: wsSpecialFor,
+    nonWsOptionsFor: nonWsOptionsFor, specialFor: specialFor, leadSpecial: leadSpecial,
+    leadPricingRole: leadPricingRole,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.VCL_SUBMISSION = api;

@@ -46,5 +46,21 @@ eq(SUB.allVariationsAreIA(mk({ variations: [{ type: "IA" }, { type: "IA" }] }), 
 eq(SUB.allVariationsAreIA(mk({ variations: [{ type: "IA" }, { type: "IAIN" }] }), engines), false, "allVariationsAreIA false for IAIN (engine is exact-match, not prefix)");
 eq(SUB.allVariationsAreIA(g, engines), false, "allVariationsAreIA false when a II is present");
 
+console.log("\nSubmission — fee-special sub-layer");
+// Minimal FEE_ROWS-shaped fixture: DE Type II has a "simple" and a "…- worksharing" row (no plain
+// standard), FR national has only a standard row.
+var feeRowsFixture = [
+  { cc: "DE - BfArM", role: "national", type: "II", label: "simple" },
+  { cc: "DE - BfArM", role: "national", type: "II", label: "complex - worksharing" },
+  { cc: "FR", role: "national", type: "II", label: null },
+];
+var feEng = { feeRows: feeRowsFixture, countries: [{ cc: "EU", roles: ["EMA"] }, { cc: "FR", roles: ["national","RMS","CMS"] }, { cc: "DE - BfArM", roles: ["national","RMS","CMS"] }] };
+var s0 = mk({ specials: { line: {}, ws: {}, lead: null } });
+eq(SUB.strengthsFor(mk({ strengths: { default: 3, overrides: { FR: 5 } } }), "FR"), 5, "strengthsFor honours per-cc override");
+eq(SUB.strengthsFor(mk({ strengths: { default: 3, overrides: {} } }), "FR"), 3, "strengthsFor falls back to default");
+eq(SUB.procCountries(mk({ strengths: { default: 1, overrides: {} } }), { kind: "mrpdcp", rms: "FR", cms: ["DE - BfArM"] }),
+  [{ cc: "FR", role: "RMS", strengths: 1 }, { cc: "DE - BfArM", role: "CMS", strengths: 1 }], "procCountries flattens MRP/DCP to RMS+CMS");
+eq(SUB.wsPricingRole("RMS"), "CMS", "wsPricingRole: a non-lead RMS prices as CMS in worksharing");
+
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);
