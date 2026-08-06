@@ -10,13 +10,45 @@
   var DATA = window.VCL_DATA || {};
   var ENTRIES = DATA.ENTRIES || [];
 
+  // Full shape VCL_SUBMISSION's API expects (see vcl-submission.js header) -- SUB is the
+  // module itself so computeLineResult/renderModal/renderTable all delegate pricing/hours to
+  // the single shared engine instead of reimplementing anything here.
   function engines() {
     return {
+      SUB: window.VCL_SUBMISSION,
       computeFees: window.VCLCALC && window.VCLCALC.computeFees,
+      countries: (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [],
+      feeRows: (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || [],
       workload: window.VCL_WORKLOAD_HOURS,
       workloadData: window.VCL_WORKLOAD_HD,
+      sgLogic: window.VCL_SG_LOGIC,
     };
   }
+
+  // ---- per-submission summary helpers for the plan-lines table (pure) ----
+  var SUB = window.VCL_SUBMISSION;
+  function variationsSummary(sub) {
+    var n = sub.variations.length;
+    if (n === 0) return "—";
+    if (n === 1) return escapeHtml(sub.variations[0].code || sub.variations[0].type || "1 variation");
+    var c = SUB.feeCounts(sub); // {IA,IB,II}
+    var mix = ["IA", "IB", "II"].filter(function (k) { return c[k] > 0; }).map(function (k) { return c[k] + " " + k; }).join("·");
+    return n + " · " + mix;
+  }
+  function proceduresSummary(sub) {
+    var nat = 0, mrp = 0, cp = 0, cms = 0;
+    sub.procedures.forEach(function (p) {
+      if (p.kind === "national") nat++;
+      else if (p.kind === "mrpdcp") { mrp++; cms += (p.cms || []).length; }
+      else if (p.kind === "cp") cp++;
+    });
+    var bits = [];
+    if (nat) bits.push(nat + " nat");
+    if (mrp) bits.push(mrp + " MRP/DCP" + (cms ? " (" + cms + " CMS)" : ""));
+    if (cp) bits.push(cp + " CP");
+    return bits.join(" · ") || "—";
+  }
+  var MODE_LABEL = { worksharing: "Worksharing", superGrouping: "Super-Grouping", annualUpdate: "Annual Update", grouping: "Grouping", single: "Single" };
 
   var plan = BUD.loadPlan(window.localStorage);
   var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true };
@@ -149,22 +181,16 @@
     var tableWrap = el("div", "vcl-bud-table-wrap");
     var table = el("table", "vcl-bud-table");
     table.innerHTML =
-      "<thead><tr><th>Product</th><th>Variation</th><th>Type</th><th>Procedure</th>" +
-      "<th>Countries</th><th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
+      "<thead><tr><th>Product</th><th>Mode</th><th>Variations</th><th>Procedures</th>" +
+      "<th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
       "<th style=\"text-align:right\">Hours (PERT)</th><th></th></tr></thead>";
     var tbody = el("tbody");
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
+      var sub = line.submission;
       var tr = el("tr");
-      var procLabel = line.procedure.kind === "mrpdcp"
-        ? "MRP/DCP" + (line.procedure.rms ? " · RMS " + line.procedure.rms : "")
-        : (line.procedure.kind === "cp" ? "CP" : "National");
-      var ccChips = BUD.lineCountries(line).map(function (c) {
-        return '<span class="vcl-bud-cc-chip">' + escapeHtml(c.cc) + "</span>";
-      }).join("");
-      var typeBadge = line.type
-        ? '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(line.type) + '">' + escapeHtml(line.type) + "</span>"
-        : "—";
+      var mode = SUB.displayMode(sub);
+      var modePill = '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--' + mode + '">' + escapeHtml(MODE_LABEL[mode]) + "</span>";
       var feeCell = r.complete
         ? '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(r.fee)) + "</td>"
         : '<td class="vcl-bud-num"><span class="vcl-bud-warn">Countries incomplete</span></td>';
@@ -174,10 +200,9 @@
         : '<td class="vcl-bud-num">—</td>';
       tr.innerHTML =
         "<td>" + escapeHtml(line.product || "—") + "</td>" +
-        "<td>" + escapeHtml(line.variationLabel || "—") + "</td>" +
-        "<td>" + typeBadge + "</td>" +
-        "<td class=\"mono\">" + escapeHtml(procLabel) + "</td>" +
-        "<td>" + ccChips + "</td>" +
+        "<td>" + modePill + "</td>" +
+        "<td>" + variationsSummary(sub) + "</td>" +
+        "<td class=\"vcl-bud-proc-summary\">" + proceduresSummary(sub) + "</td>" +
         "<td>" + escapeHtml(line.quarter || "—") + "</td>" +
         feeCell + hoursCell +
         '<td class="vcl-bud-row-actions">' +
@@ -196,7 +221,7 @@
     var tfoot = el("tfoot");
     var totalTr = el("tr");
     totalTr.innerHTML =
-      '<td colspan="6">Total</td>' +
+      '<td colspan="5">Total</td>' +
       '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(rollup.totals.fee)) + "</td>" +
       '<td class="vcl-bud-num">' + Math.round(rollup.totals.hoursExpected) + " h</td>" +
       "<td></td>";
