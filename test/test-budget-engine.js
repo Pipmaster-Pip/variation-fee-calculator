@@ -125,13 +125,6 @@ eq(BUD.searchEntries(fixtureEntries, "trade name").length, 1, "searchEntries: ma
 eq(BUD.searchEntries(fixtureEntries, "zzz"), [], "searchEntries: no match = []");
 
 // --- 6. loadPlan()/savePlan(): fake storage, plus a throwing storage to prove the fallback.
-// NOTE: normalizeLine()'s line-migration path (and the loadPlan/savePlan round-trip through it) is
-// NOT covered here — normalizeLine() still assumes the pre-Phase-2 newLine() shape (top-level
-// `procedure`/`type`/etc.) that this task's newLine() rewrite removed, and it is fully rewritten
-// for the v1(legacy)->v2(Submission) migration in Phase-2 Task 2 (see
-// docs/superpowers/plans/2026-08-06-budget-submission-phase2.md), which adds its own migration +
-// malformed-fallback tests. Only the storage-plumbing paths that don't call normalizeLine are
-// covered here (empty storage, save/load of an empty plan, throwing storage, unparsable JSON).
 function fakeStorage() {
   var data = {};
   return { getItem: function (k) { return data[k] || null; }, setItem: function (k, v) { data[k] = v; } };
@@ -144,13 +137,40 @@ function throwingStorage() {
 }
 var store = fakeStorage();
 eq(BUD.loadPlan(store), BUD.defaultPlan(), "loadPlan: empty storage returns defaultPlan()");
-var emptyPlan = { version: 1, hoursPerHead: 1600, lines: [] };
+var emptyPlan = { version: 2, hoursPerHead: 1600, lines: [] };
 eq(BUD.savePlan(store, emptyPlan), true, "savePlan: succeeds against working storage");
 eq(BUD.loadPlan(store), emptyPlan, "loadPlan: round-trips an empty plan (no lines -> normalizeLine not invoked)");
 eq(BUD.loadPlan(throwingStorage()), BUD.defaultPlan(), "loadPlan: falls back to defaultPlan() when storage throws");
 eq(BUD.savePlan(throwingStorage(), emptyPlan), false, "savePlan: returns false when storage throws");
 eq(BUD.loadPlan({ getItem: function () { return "not json"; } }), BUD.defaultPlan(),
   "loadPlan: falls back to defaultPlan() on unparsable JSON");
+
+// --- 7. normalizeLine(): v1 (legacy single-variation) -> v2 (Submission) migration, malformed
+//        input recovers to a safe empty Single instead of throwing, and an already-v2 line passes
+//        through unchanged (see docs/superpowers/plans/2026-08-06-budget-submission-phase2.md,
+//        Phase 2 Task 2).
+// v1 single-variation line migrates to a Single-mode Submission
+var v1line = { id: "a", product: "X", type: "IB", variationCode: "C.I.2", procedure: { kind: "mrpdcp", rms: "DE - BfArM", cms: ["FR"] }, modules: { cmc: true }, quarter: "Q2", probability: 75 };
+var m = BUD.normalizeLine(v1line, "fb");
+eq(m.submission.variations, [{ code: "C.I.2", variantId: null, type: "IB" }], "migrate: variation carried");
+eq(m.submission.procedures[0].kind, "mrpdcp", "migrate: procedure carried");
+eq(m.submission.mode, null, "migrate: single mode");
+eq(m.submission.raTasks.cmc, true, "migrate: modules.cmc -> raTasks.cmc");
+eq(m.product === "X" && m.quarter === "Q2" && m.probability === 75, true, "migrate: budget fields carried");
+// malformed line -> safe empty Single, never throws
+var bad = BUD.normalizeLine({ id: "b", procedure: 42, submission: "nope" }, "fb2");
+eq(bad.submission.variations.length === 0 && bad.submission.procedures.length === 1, true, "migrate: malformed -> safe empty Single");
+// v2 line passes through
+var v2line = { id: "c", product: "Y", quarter: "Q1", probability: 100, submission: { mode: "worksharing", variations: [{ type: "II" }], procedures: [{ kind: "national", nat: "FR", cms: [] }], lead: "FR", raTasks: {}, strengths: {}, specials: {} } };
+eq(BUD.normalizeLine(v2line, "fb3").submission.mode, "worksharing", "v2: mode preserved");
+
+// --- 8. loadPlan(): reads the v2 key directly; migrates from the old v1 key when only that exists.
+var v1Store = fakeStorage();
+v1Store.setItem("vcl_budget_plan_v1", JSON.stringify({ version: 1, hoursPerHead: 1700, lines: [v1line] }));
+var migrated = BUD.loadPlan(v1Store);
+eq(migrated.version, 2, "loadPlan: migrating from v1 key returns version 2");
+eq(migrated.lines[0].submission.variations, [{ code: "C.I.2", variantId: null, type: "IB" }],
+  "loadPlan: v1-key migration normalizes each line via normalizeLine");
 
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);

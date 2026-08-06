@@ -5,7 +5,7 @@
 (function (root) {
   "use strict";
 
-  var STORAGE_KEY = "vcl_budget_plan_v1";
+  var STORAGE_KEY = "vcl_budget_plan_v2";
 
   // A default Submission (see docs/superpowers/specs/2026-08-05-budget-submission-model-design.md
   // and vcl-submission.js's header) — the shape VCL_SUBMISSION reads. `specials` MUST use the real
@@ -89,51 +89,101 @@
     }).slice(0, 20);
   }
 
-  function defaultPlan() { return { version: 1, hoursPerHead: 1500, lines: [] }; }
+  function defaultPlan() { return { version: 2, hoursPerHead: 1500, lines: [] }; }
 
-  // Fills in every top-level field newLine() would set, from whatever a persisted line already
-  // has -- so a malformed/partial line (e.g. missing `procedure`, or `procedure` without `kind`)
-  // never causes vcl-budget.js to dereference undefined later (line.procedure.kind, etc). Shallow
-  // merge only: nested procedure/piDocs/modules/submission shapes are type-checked at the
-  // top level, not deep-validated field by field (see spec's "malformed persisted plan" note).
+  // v1 lines carried RA-task flags in `modules` (booleans only) plus top-level `piDocs`/
+  // `activeSubstance`; the v2 Submission moves all of that under `submission.raTasks`.
+  function migrateRaTasks(raw) {
+    var m = (raw && raw.modules) || {};
+    return {
+      cmc: !!m.cmc, compilation: !!m.compilation, pi: !!m.pi,
+      piDocs: (raw && raw.piDocs && typeof raw.piDocs === "object") ? raw.piDocs : {},
+      activeSubstance: (raw && raw.activeSubstance) || null,
+    };
+  }
+
+  function normalizeProcedure(p) {
+    p = (p && typeof p === "object") ? p : {};
+    var out = {
+      kind: typeof p.kind === "string" ? p.kind : "national",
+      nat: p.nat !== undefined ? p.nat : null, rms: p.rms !== undefined ? p.rms : null,
+      cms: Array.isArray(p.cms) ? p.cms : [],
+    };
+    if (p.ema !== undefined) out.ema = p.ema;
+    return out;
+  }
+
+  // Normalizes a raw `submission` payload (either an already-v2 submission, or a synthetic one
+  // built by normalizeLine() from legacy v1 top-level fields) into a valid Submission shape.
+  // Malformed input (wrong types, non-objects) never throws -- it recovers to safe defaults.
+  function normalizeSubmission(raw) {
+    raw = (raw && typeof raw === "object") ? raw : {};
+    var variations = Array.isArray(raw.variations)
+      ? raw.variations.filter(function (v) { return v && typeof v === "object"; })
+          .map(function (v) { return { code: v.code || null, variantId: v.variantId != null ? v.variantId : null, type: (typeof v.type === "string") ? v.type : null }; })
+      : [];
+    var procedures = Array.isArray(raw.procedures) && raw.procedures.length
+      ? raw.procedures.map(normalizeProcedure)
+      : [normalizeProcedure(null)];
+    return {
+      mode: (raw.mode === "worksharing" || raw.mode === "superGrouping" || raw.mode === "annualUpdate") ? raw.mode : null,
+      variations: variations, procedures: procedures,
+      lead: (typeof raw.lead === "string") ? raw.lead : null,
+      raTasks: (raw.raTasks && typeof raw.raTasks === "object")
+        ? { cmc: !!raw.raTasks.cmc, compilation: !!raw.raTasks.compilation, pi: !!raw.raTasks.pi,
+            piDocs: (raw.raTasks.piDocs && typeof raw.raTasks.piDocs === "object") ? raw.raTasks.piDocs : {},
+            activeSubstance: raw.raTasks.activeSubstance || null }
+        : { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+      strengths: { default: 1, overrides: {} },
+      specials: { line: {}, ws: {}, lead: null },
+    };
+  }
+
+  // Accepts BOTH an already-v2 line (has `.submission`) and a legacy v1 line (top-level
+  // `variationCode`/`type`/`procedure`/`modules`/`piDocs`/`activeSubstance`), and always returns
+  // a valid v2 PlanLine. Never throws, even on malformed input -- falls back to a safe empty
+  // Single-mode submission.
   function normalizeLine(raw, fallbackId) {
     raw = (raw && typeof raw === "object") ? raw : {};
     var id = (typeof raw.id === "string" && raw.id) || fallbackId ||
       ("line-recovered-" + Date.now() + "-" + Math.floor(Math.random() * 100000));
-    var base = newLine(id);
-    var rawProc = (raw.procedure && typeof raw.procedure === "object") ? raw.procedure : {};
-    var procedure = {
-      kind: (typeof rawProc.kind === "string") ? rawProc.kind : base.procedure.kind,
-      nat: rawProc.nat !== undefined ? rawProc.nat : base.procedure.nat,
-      rms: rawProc.rms !== undefined ? rawProc.rms : base.procedure.rms,
-      cms: Array.isArray(rawProc.cms) ? rawProc.cms : base.procedure.cms,
-    };
-    if (rawProc.ema !== undefined) procedure.ema = rawProc.ema;
+    var submission;
+    if (raw.submission && typeof raw.submission === "object") {
+      submission = normalizeSubmission(raw.submission); // already-v2 line
+    } else {
+      // legacy v1 line: one variation + one procedure
+      submission = normalizeSubmission({
+        mode: null,
+        variations: raw.variationCode || raw.type ? [{ code: raw.variationCode || null, variantId: null, type: (typeof raw.type === "string") ? raw.type : null }] : [],
+        procedures: raw.procedure ? [raw.procedure] : null,
+        raTasks: migrateRaTasks(raw),
+      });
+    }
     return {
       id: id,
-      product: typeof raw.product === "string" ? raw.product : base.product,
-      variationCode: (typeof raw.variationCode === "string" || raw.variationCode === null) ? raw.variationCode : base.variationCode,
-      variationLabel: typeof raw.variationLabel === "string" ? raw.variationLabel : base.variationLabel,
-      type: (typeof raw.type === "string" || raw.type === null) ? raw.type : base.type,
-      procedure: procedure,
-      activeSubstance: raw.activeSubstance !== undefined ? raw.activeSubstance : base.activeSubstance,
-      piDocs: (raw.piDocs && typeof raw.piDocs === "object") ? raw.piDocs : base.piDocs,
-      modules: (raw.modules && typeof raw.modules === "object") ? raw.modules : base.modules,
-      submission: (raw.submission && typeof raw.submission === "object") ? raw.submission : base.submission,
-      quarter: (typeof raw.quarter === "string" || raw.quarter === null) ? raw.quarter : base.quarter,
-      probability: typeof raw.probability === "number" ? raw.probability : base.probability,
+      product: typeof raw.product === "string" ? raw.product : "",
+      quarter: (typeof raw.quarter === "string" || raw.quarter === null) ? raw.quarter : null,
+      probability: typeof raw.probability === "number" ? raw.probability : 100,
+      submission: submission,
     };
   }
 
   function loadPlan(storage) {
     try {
       var raw = storage && storage.getItem(STORAGE_KEY);
-      if (!raw) return defaultPlan();
+      if (!raw) {
+        // one-time migration: read the old v1 key if present
+        var oldRaw = storage && storage.getItem("vcl_budget_plan_v1");
+        if (!oldRaw) return defaultPlan();
+        var oldParsed = JSON.parse(oldRaw);
+        if (!oldParsed || !Array.isArray(oldParsed.lines)) return defaultPlan();
+        return { version: 2, hoursPerHead: oldParsed.hoursPerHead || 1500,
+          lines: oldParsed.lines.map(function (l, i) { return normalizeLine(l, "line-migrated-" + i); }) };
+      }
       var parsed = JSON.parse(raw);
-      if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.lines)) return defaultPlan();
-      parsed.lines = parsed.lines.map(function (line, i) {
-        return normalizeLine(line, "line-recovered-" + i);
-      });
+      if (!parsed || !Array.isArray(parsed.lines)) return defaultPlan();
+      parsed.version = 2;
+      parsed.lines = parsed.lines.map(function (l, i) { return normalizeLine(l, "line-recovered-" + i); });
       return parsed;
     } catch (e) {
       return defaultPlan();
