@@ -223,7 +223,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-budget',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget.js',
-		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-budget-engine' ),
+		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic' ),
 		$budget_app_ver,
 		true
 	);

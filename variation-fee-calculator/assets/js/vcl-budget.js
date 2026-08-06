@@ -89,7 +89,7 @@
   }
 
   function saveState() {
-    var ok = BUD.savePlan(window.localStorage, { version: 1, hoursPerHead: state.hoursPerHead, lines: state.lines });
+    var ok = BUD.savePlan(window.localStorage, { version: 2, hoursPerHead: state.hoursPerHead, lines: state.lines });
     if (!ok && state.storageOk) { state.storageOk = false; rerender(); }
     else if (ok && !state.storageOk) { state.storageOk = true; }
   }

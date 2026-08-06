@@ -1,7 +1,7 @@
 // Pure Budget Planning helpers: no DOM, no window state read directly (engines are passed in).
 // Dual-mode: attaches to window.VCL_BUDGET_ENGINE in the browser and exports via
 // module.exports in Node so it can be unit-tested without a browser. Mirrors the split already
-// used for vcl-workload-hours.js — see docs/superpowers/specs/2026-08-05-budget-planning-design.md.
+// used for vcl-workload-hours.js — see docs/superpowers/specs/2026-08-05-budget-submission-model-design.md.
 (function (root) {
   "use strict";
 
