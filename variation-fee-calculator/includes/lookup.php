@@ -181,13 +181,27 @@ function vcl_register_assets() {
 		true
 	);
 
+	// Pure fee/hours orchestration for a canonical Submission object (window.VCL_SUBMISSION),
+	// shared by the Guided Workflow and the Budget tool. No dependencies; registered before
+	// vcl-workflow so its global is ready by the time that script runs.
+	$submission_file = VFC_PLUGIN_DIR . 'assets/js/vcl-submission.js';
+	$submission_ver  = file_exists( $submission_file ) ? filemtime( $submission_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-submission',
+		VFC_PLUGIN_URL . 'assets/js/vcl-submission.js',
+		array(),
+		$submission_ver,
+		true
+	);
+
 	$workflow_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workflow.js';
 	$workflow_app_ver  = file_exists( $workflow_app_file ) ? filemtime( $workflow_app_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-workflow',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
-		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-workload-data', 'vcl-workload-hours', 'vcl-calc-app' ),
+		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-workload-data', 'vcl-workload-hours', 'vcl-calc-app', 'vcl-submission' ),
 		$workflow_app_ver,
 		true
 	);
@@ -290,6 +304,7 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_style( 'vcl-budget-style' );
 	wp_enqueue_script( 'vcl-app' );
 	wp_enqueue_script( 'vcl-timeline' );
+	wp_enqueue_script( 'vcl-submission' );
 	wp_enqueue_script( 'vcl-workflow' );
 	wp_enqueue_script( 'vcl-calc-app' );
 	wp_enqueue_script( 'vcl-budget-engine' );

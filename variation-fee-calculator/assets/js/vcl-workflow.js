@@ -114,25 +114,12 @@
   }
 
   // Number of strengths registered for a country: the global default unless overridden.
-  function strengthsFor(cc) {
-    const o = state.strengthsOverrides[cc];
-    const n = (o != null) ? o : state.strengthsDefault;
-    return Math.max(1, parseInt(n, 10) || 1);
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function strengthsFor(cc) { return window.VCL_SUBMISSION.strengthsFor(submissionFromState(), cc); }
 
   // Flatten a procedure to the (cc, role, strengths) triples the fee engine consumes.
-  function procCountries(p) {
-    if (!p) return [];
-    if (p.kind === "national") return p.nat ? [{ cc: p.nat, role: "national", strengths: strengthsFor(p.nat) }] : [];
-    if (p.kind === "cp") { const e = countryData().ema; return e ? [{ cc: e, role: "EMA", strengths: strengthsFor(e) }] : []; }
-    if (p.kind === "mrpdcp") {
-      const out = [];
-      if (p.rms) out.push({ cc: p.rms, role: "RMS", strengths: strengthsFor(p.rms) });
-      p.cms.forEach((cc) => out.push({ cc: cc, role: "CMS", strengths: strengthsFor(cc) }));
-      return out;
-    }
-    return [];
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function procCountries(p) { return window.VCL_SUBMISSION.procCountries(submissionFromState(), p, subEngines()); }
   function procComplete(p) {
     if (!p) return false;
     if (p.kind === "national") return !!p.nat;
@@ -148,6 +135,40 @@
     return "";
   }
 
+  // ---- shared submission builder (feeds window.VCL_SUBMISSION, the module both the Guided
+  // Workflow and the Budget tool build a Submission for and call for fee/hours math -- see
+  // docs/superpowers/specs/2026-08-05-budget-submission-model-design.md). The single mapping
+  // point (Substitution Table in the Phase-1 plan) from the Guided-Workflow `state` to the
+  // canonical Submission shape.
+  function submissionFromState() {
+    var base = currentType();
+    // variations[0] is ALWAYS the base slot: the shared engine treats variations[0] as the base and
+    // variations.slice(1) as the grouped extras. Keep the slot even when the base type is transiently
+    // unset (e.g. the user clicked "Change" on the base while grouping rows remain) so a grouping item
+    // is never mis-promoted into the base position — that would drop it from the grouping counts and
+    // change the displayed RA hours, breaking behaviour parity.
+    var variations = [{ code: state.pickedCode, variantId: state.pickedVariantId, type: base }];
+    if (state.submission.grouping) state.grouping.forEach(function (g) { variations.push({ code: g.code, variantId: g.variantId, type: g.type }); });
+    var procedures = [state.procedure].concat(multiProcedureMode() ? state.worksharing : []);
+    return {
+      mode: state.submission.mode,
+      variations: variations,
+      procedures: procedures,
+      lead: state.worksharingLead,
+      raTasks: { cmc: !!state.cmcInRA, compilation: !!state.compilationInRA, pi: state.piInRA, piDocs: state.piDocs, activeSubstance: state.activeSubstance },
+      strengths: { default: state.strengthsDefault, overrides: state.strengthsOverrides },
+      specials: { line: state.specials, ws: state.wsSpecials, lead: state.worksharingLeadSpecial },
+    };
+  }
+  function subEngines() {
+    return {
+      computeFees: window.VCLCALC && window.VCLCALC.computeFees,
+      countries: (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [],
+      feeRows: (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || [],
+      workload: window.VCL_WORKLOAD_HOURS, workloadData: window.VCL_WORKLOAD_HD, sgLogic: window.VCL_SG_LOGIC,
+    };
+  }
+
   // ---- fees ----
   // The fee engine buckets by IA/IB/II; IAIN counts as IA, "IB (unforeseen)" as IB.
   function feeBucket(type) {
@@ -158,29 +179,14 @@
     return null;
   }
   // Every procedure carries the same variation content: the base variation plus any grouped ones.
-  function feeCounts() {
-    const c = { IA: 0, IB: 0, II: 0 };
-    const bt = currentType();
-    if (bt) { const b = feeBucket(bt); if (b) c[b]++; }
-    if (state.submission.grouping) state.grouping.forEach((g) => { if (g.type) { const b = feeBucket(g.type); if (b) c[b]++; } });
-    return c;
-  }
-  function feeCountsTotal(c) { return c.IA + c.IB + c.II; }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function feeCounts() { return window.VCL_SUBMISSION.feeCounts(submissionFromState()); }
+  function feeCountsTotal(c) { return window.VCL_SUBMISSION.feeCountsTotal(c); }
   // Highest-severity type across the whole submission (base + grouping): a grouped bundle is
   // procedurally governed by its most complex member (IA < IB < II), so the live-preview's
   // "no classification code picked" badge must track this, not just the base's own type.
-  function highestType() {
-    const c = feeCounts();
-    if (c.II) return "II";
-    if (c.IB) return "IB";
-    if (c.IA) return "IA";
-    return null;
-  }
-  function allProcedures() {
-    const list = [state.procedure];
-    if (multiProcedureMode()) state.worksharing.forEach((p) => list.push(p));
-    return list;
-  }
+  function highestType() { return window.VCL_SUBMISSION.highestType(submissionFromState()); }
+  function allProcedures() { return window.VCL_SUBMISSION.allPricedProcedures(submissionFromState()); }
   // A Centralised procedure (CP/EMA) taking part in a worksharing automatically leads it.
   function worksharingHasCP() { return allProcedures().some((p) => p.kind === "cp"); }
 
@@ -201,12 +207,8 @@
   function multiProcedureMode() { return wsActive() || sgActive(); }
   function annualUpdateActive() { return auActive() || sgActive(); }
 
-  function allVariationsAreIA() {
-    return VCL_SG_LOGIC.computeAllVariationsAreIA(
-      currentType(),
-      state.grouping.map(function (g) { return g.type; })
-    );
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function allVariationsAreIA() { return window.VCL_SUBMISSION.allVariationsAreIA(submissionFromState(), subEngines()); }
 
   // Base + grouped variations, each annotated with its classification chapter (E/Q/C/M).
   function variationsWithChapter() {
@@ -285,7 +287,8 @@
   // worksharing-CMS fee, not its standalone RMS fee (confirmed decision). Every lookup
   // below (dropdown options and pricing) follows from this single spot.
   const WS_RMS_PRICES_AS = "CMS";
-  function wsPricingRole(role) { return role === "RMS" ? WS_RMS_PRICES_AS : role; }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function wsPricingRole(role) { return window.VCL_SUBMISSION.wsPricingRole(role); }
   function wsSpecialKey(cc, role) { return cc + "|" + role; }
   function isWorksharingSpecial(s) { return /worksharing/i.test(s || ""); }
   // Options offered in a worksharing pricing context: where an authority publishes
@@ -305,12 +308,8 @@
     if (isWorksharingSpecial(opts[0]) || !hasStandardRow(cc, role)) return opts[0];
     return null;
   }
-  function wsSpecialFor(cc, role) {
-    const opts = wsOptionsFor(cc, role);
-    const stored = state.wsSpecials[wsSpecialKey(cc, role)];
-    if (stored && opts.indexOf(stored) !== -1) return stored;
-    return defaultSpecial(cc, role, opts);
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function wsSpecialFor(cc, role) { return window.VCL_SUBMISSION.wsSpecialFor(submissionFromState(), cc, role, subEngines()); }
   // Non-worksharing fee-category options (e.g. DE Type II "simple"/"complex"): the published
   // labels minus the "… - worksharing" variants, which belong to the worksharing path only.
   function nonWsOptionsFor(cc, role) {
@@ -319,43 +318,15 @@
   // The effective pick for a single (non-worksharing) line: the stored choice if still on
   // offer, otherwise defaultSpecial (first option where "no pick" is not a real alternative,
   // e.g. DK/ES/DE-II with no plain standard row -- so display and pricing stay in sync).
-  function specialFor(cc, role) {
-    const opts = nonWsOptionsFor(cc, role);
-    const stored = state.specials[wsSpecialKey(cc, role)];
-    if (stored && opts.indexOf(stored) !== -1) return stored;
-    return defaultSpecial(cc, role, opts);
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function specialFor(cc, role) { return window.VCL_SUBMISSION.specialFor(submissionFromState(), cc, role, subEngines()); }
   // Same rule for the lead's own pick.
-  function leadSpecial() {
-    if (!state.worksharingLead) return null;
-    const opts = wsOptionsFor(state.worksharingLead, leadPricingRole());
-    const stored = state.worksharingLeadSpecial;
-    if (stored && opts.indexOf(stored) !== -1) return stored;
-    return defaultSpecial(state.worksharingLead, leadPricingRole(), opts);
-  }
+  function leadSpecial() { return window.VCL_SUBMISSION.leadSpecial(submissionFromState(), subEngines()); }
   // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
   // publishes RMS rows, falling back to national, then CMS.
-  function leadPricingRole() {
-    const cc = state.worksharingLead;
-    if (!cc) return null;
-    if (cc === countryData().ema) return "EMA";
-    const has = (role) => feeRows().some((r) => r.cc === cc && r.role === role);
-    return has("RMS") ? "RMS" : (has("national") ? "national" : "CMS");
-  }
+  function leadPricingRole() { return window.VCL_SUBMISSION.leadPricingRole(submissionFromState(), subEngines()); }
   // The lead's one-off fee: a single engine country-result, or null while it can't be priced.
-  function leadFees(counts) {
-    if (!leadPricingActive() || !state.worksharingLead || !window.VCLCALC || !window.VCLCALC.computeFees) return null;
-    if (feeCountsTotal(counts) === 0) return null;
-    const cc = state.worksharingLead;
-    const s = leadSpecial();
-    const r = window.VCLCALC.computeFees({
-      // The picked category is handed to every type; resolveRow falls back to the standard
-      // row per type wherever the label is not published for it.
-      countries: [{ cc: cc, role: leadPricingRole(), strengths: strengthsFor(cc), special: { IA: s, IB: s, II: s } }],
-      counts: counts,
-    });
-    return (r.countries && r.countries[0]) || null;
-  }
+  function leadFees(counts) { return window.VCL_SUBMISSION.leadFees(submissionFromState(), counts, subEngines()); }
   function fmtEUR(v) {
     if (v === null || v === undefined) return "–";
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
@@ -364,33 +335,16 @@
   // (it is priced exactly once, in Station D's lead box) and every remaining line carries
   // its chosen fee category, applied to every type (resolveRow falls back to standard per
   // type wherever the label is not published).
-  function procPricedCountries(p) {
-    const list = procCountries(p);
-    if (!leadPricingActive()) return list.map((x) => {
-      const s = specialFor(x.cc, x.role);
-      return s ? { cc: x.cc, role: x.role, strengths: x.strengths, special: { IA: s, IB: s, II: s } } : x;
-    });
-    return list.filter((x) => x.cc !== state.worksharingLead).map((x) => {
-      const role = wsPricingRole(x.role);
-      const s = wsSpecialFor(x.cc, role);
-      return { cc: x.cc, role: role, strengths: x.strengths, special: { IA: s, IB: s, II: s } };
-    });
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function procPricedCountries(p) { return window.VCL_SUBMISSION.procPricedCountries(submissionFromState(), p, subEngines()); }
   // Fees for one procedure, via the shared engine (window.VCLCALC.computeFees).
   function procFees(p, counts) {
     if (!window.VCLCALC || !window.VCLCALC.computeFees) return null;
     if (!procCountries(p).length || feeCountsTotal(counts) === 0) return { countries: [], grandTotal: 0 };
     return window.VCLCALC.computeFees({ countries: procPricedCountries(p), counts: counts });
   }
-  function grandTotalFees() {
-    const counts = feeCounts();
-    if (feeCountsTotal(counts) === 0) return null;
-    let total = 0;
-    let any = false;
-    allProcedures().forEach((p) => { const r = procFees(p, counts); if (r) { total += r.grandTotal; if (procCountries(p).length) any = true; } });
-    if (leadPricingActive()) { const lf = leadFees(counts); if (lf) { total += lf.total || 0; any = true; } }
-    return any ? total : null;
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function grandTotalFees() { return window.VCL_SUBMISSION.computeSubmissionFees(submissionFromState(), subEngines()).total; }
 
   // Unique selected countries across all procedures (keyed by cc, strengths is per product/cc).
   function selectedCcs() {
@@ -416,76 +370,29 @@
   // drives the procedure, timeline, II sub-procedure and RA effort. (Fees stay per-variation via
   // feeCounts, so each variation is still charged at its own type.)
   function typeRankOf(type) { const b = feeBucket(type); return b === "II" ? 3 : b === "IB" ? 2 : b === "IA" ? 1 : 0; }
-  function primaryType() {
-    let best = currentType();
-    if (state.submission.grouping) {
-      state.grouping.forEach((g) => { if (g.type && typeRankOf(g.type) > typeRankOf(best)) best = g.type; });
-    }
-    return best;
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function primaryType() { return window.VCL_SUBMISSION.primaryType(submissionFromState()); }
   // Which type drives the PI per-document hours, bucketed to IA/IB/II (F.productInfo's keys) so
   // IAIN / "IB (unforeseen)" map correctly. For a grouped, mixed-type submission this uses the
   // HIGHEST type (primaryType), consistent with how the group's timeline and RA effort are derived.
   // OPEN ITEM (see spec): if the domain rule turns out to be "per variation", change only this.
   function piType() { return feeBucket(primaryType()); }
-  function groupingBuckets() {
-    const c = { IA: 0, IB: 0, II: 0 };
-    if (state.submission.grouping) state.grouping.forEach((g) => { if (g.type) { const b = feeBucket(g.type); if (b) c[b]++; } });
-    return c;
-  }
-  function worksharingKinds() {
-    const k = { national: 0, mrpdcp: 0 };
-    if (multiProcedureMode()) state.worksharing.forEach((p) => { if (p.kind === "national") k.national++; else if (p.kind === "mrpdcp") k.mrpdcp++; });
-    return k;
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool).
+  function groupingBuckets() { return window.VCL_SUBMISSION.groupingBuckets(submissionFromState()); }
+  function worksharingKinds() { return window.VCL_SUBMISSION.worksharingKinds(submissionFromState()); }
   // Further Super-Grouping procedures counted by kind (incl. CP, unlike worksharingKinds). The
   // primary procedure (state.procedure) is the base and is not counted here.
-  function sgProcKinds() {
-    const k = { national: 0, mrpdcp: 0, cp: 0 };
-    if (sgActive()) state.worksharing.forEach((p) => { if (k[p.kind] !== undefined) k[p.kind]++; });
-    return k;
-  }
+  function sgProcKinds() { return window.VCL_SUBMISSION.sgProcKinds(submissionFromState()); }
   // RA effort via the additive workload model (window.VCL_WORKLOAD_HOURS + window.VCL_WORKLOAD_HD,
   // generated from RA-CMC-hours.xlsx). Returns the granular {min,max} parts, the three composed
   // sections (RA / CMC / Compilation & submission) and the grand total, or null when no variation
   // type is set yet or the engine/data is unavailable. CMC and Compilation & submission are gated
   // by the RA-task modules Station "RA tasks" adds (state.cmcInRA / state.compilationInRA); until
   // those gates exist they read as off, so only the RA-activities section contributes.
-  function raEffort() {
-    const t = primaryType();
-    const WLH = window.VCL_WORKLOAD_HOURS, HD = window.VCL_WORKLOAD_HD;
-    if (!t || !WLH || !WLH.computeAdditiveWorkload || !HD) return null;
-    const gb = groupingBuckets();
-    const wk = worksharingKinds();
-    const sp = sgProcKinds();
-    const grouped = state.submission.grouping && !(auActive() || sgActive());
-    const parts = WLH.computeAdditiveWorkload(HD, {
-      type: t,
-      procedure: state.procedure.kind,
-      cmsCount: state.procedure.kind === "mrpdcp" ? state.procedure.cms.length : 0,
-      // The workbook's CMC rows are tagged "chemical"/"biological"; the workflow state uses
-      // "biologic"/"chemical", so map biologic -> biological here.
-      activeSubstance: state.activeSubstance === "biologic" ? "biological"
-        : (state.activeSubstance === "chemical" ? "chemical" : null),
-      modules: {
-        pi: state.piInRA,
-        cmc: !!state.cmcInRA,                    // Station "RA tasks" CMC gate
-        compilation: !!state.compilationInRA,    // Station "RA tasks" compilation & submission gate
-      },
-      piDocs: state.piDocs,                       // which PI documents the change touches (filter)
-      submission: {
-        worksharing: { on: wsActive(), counts: { "national": wk.national, "MRP/DCP": wk.mrpdcp } },
-        grouping: { on: grouped, counts: { "Type IA": gb.IA, "Type IB": gb.IB, "Type II": gb.II } },
-        annualUpdate: { on: auActive(), counts: { "Type IA": 1 + gb.IA } },
-        superGrouping: { on: sgActive(), counts: { "national": sp.national, "MRP/DCP": sp.mrpdcp, "CP": sp.cp } },
-      },
-    });
-    const sections = WLH.composeSections(parts);
-    return {
-      parts: parts, items: parts.items, sections: sections, total: sections.total,
-      expected: WLH.pertExpected(sections.total.min, sections.total.max),
-    };
-  }
+  // Delegates to vcl-submission.js (single implementation shared with the Budget tool). Returns
+  // the exact superset (parts/items/sections/total/expected + flat min/max) the transparency box
+  // consumes -- a thin pass-through.
+  function raEffort() { return window.VCL_SUBMISSION.computeSubmissionHours(submissionFromState(), subEngines()); }
   // Format a {min,max} hour band for display: whole hours (ceil each end), collapsed to a single
   // figure when both ends coincide.
   function raRangeText(mm) {
