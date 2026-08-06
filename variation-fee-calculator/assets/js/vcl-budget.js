@@ -568,6 +568,17 @@
     var allIA = SUB.allVariationsAreIA(sub, engines());
     if (sub.mode === "worksharing" && allIA) sub.mode = null;
     if ((sub.mode === "superGrouping" || sub.mode === "annualUpdate") && !allIA) sub.mode = null;
+    // Symmetric with the mode-clear above: a Centralised (CP) procedure inside an active
+    // Worksharing/Super-Grouping always leads the group via the EMA (mirrors the Guided Workflow's
+    // forced-EMA lead, vcl-workflow.js:2244/947 -- see renderStationB's lead block for the
+    // corresponding UI lock/hint). This force must run from every normalize call-site
+    // (refreshEditor, renderModal, applyModal), not just whenever Station B happens to paint --
+    // otherwise a line persisted/migrated BEFORE this rule existed (CP + a stale non-EMA
+    // sub.lead) could be re-opened and Applied from Station A/C without Station B ever
+    // repainting, silently persisting a stale RMS lead that misprices.
+    if (SUB.leadPricingActive(sub) && sub.procedures.some(function (p) { return p.kind === "cp"; })) {
+      sub.lead = SUB.emaCc(engines());
+    }
     return allIA;
   }
 
@@ -645,8 +656,11 @@
       // CP procedure -- so the lead is forced to the EMA and the select is locked; without this a
       // CP-in-Worksharing could keep an RMS lead, which leadPricingRole would then price under that
       // RMS's role -- a different fee than the GW's forced-EMA lead. No CP => selectable as before.
+      // The sub.lead assignment itself now lives in normalizeModeEnablement (run at the top of this
+      // function and from every other normalize call-site) so it's symmetric across all entry
+      // points, not just whenever Station B happens to paint; hasCP is re-derived here only to
+      // drive this select's lock/hint.
       var hasCP = sub.procedures.some(function (p) { return p.kind === "cp"; });
-      if (hasCP) sub.lead = SUB.emaCc(engines());
       host.appendChild(countrySelectField(
         SUB.sgActive(sub) ? "Super-Grouping RMS (lead)" : "Worksharing RMS (lead)",
         leadList, sub.lead, function (cc) { sub.lead = cc; refreshEditor(); }, hasCP));
@@ -900,15 +914,18 @@
 
     var wb = XLSX.utils.book_new();
 
-    var linesRows = [["Product", "Variation", "Type", "Procedure", "Countries", "Quarter", "Probability", "Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
+    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Quarter", "Probability", "Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
-      var procLabel = line.procedure.kind === "mrpdcp" ? "MRP/DCP" : (line.procedure.kind === "cp" ? "CP" : "National");
-      var ccs = BUD.lineCountries(line).map(function (c) { return c.cc; }).join(", ");
+      var sub = line.submission;
+      var mode = SUB.displayMode(sub);
+      // Incomplete lines (countries not fully specified) still show Mode/Variations/Procedures --
+      // only the priced columns collapse to 0, mirroring the on-screen table's "Countries
+      // incomplete" cell (r.complete === false).
       linesRows.push([
-        line.product || "", line.variationLabel || "", line.type || "", procLabel, ccs,
-        line.quarter || "", line.probability, r.fee,
-        Math.round(r.hours.min), Math.round(r.hours.max), Math.round(r.hours.expected),
+        line.product || "", MODE_LABEL[mode] || mode, variationsSummary(sub), proceduresSummary(sub),
+        line.quarter || "", line.probability, r.complete ? r.fee : 0,
+        r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
       ]);
     });
     var wsLines = XLSX.utils.aoa_to_sheet(linesRows);
