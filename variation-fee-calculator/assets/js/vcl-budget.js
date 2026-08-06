@@ -267,6 +267,11 @@
     if (modalState) container.appendChild(renderModal());
   }
 
+  // Worksharing / Super-Grouping / Annual Update are EU-only procedures: these three authorities
+  // are not offered for a national line once a multi-procedure/annual-update strategy is active
+  // (mirrors vcl-workflow.js's NON_EU_PROCEDURE_COUNTRIES gate on cd.nationalEU).
+  var NON_EU_PROCEDURE_COUNTRIES = ["CH", "RS", "UK"];
+
   function countriesByRole(role) {
     var all = (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [];
     return all.filter(function (c) { return c.roles.indexOf(role) !== -1; });
@@ -335,18 +340,27 @@
   }
 
   // Dispatches on modalState.station and (re)builds only the body card's contents -- used both
-  // for the initial render and by the station-stepper click handler in renderModal(), which
-  // repaints the stepper's own classes in place rather than tearing down the whole modal.
+  // for the initial render and by refreshEditor(), which repaints the stepper + body + preview in
+  // place rather than tearing down the whole modal.
   function stationBody(host) {
     host.innerHTML = "";
     if (modalState.station === "A") renderStationA(host);
-    else if (modalState.station === "B") renderStationPlaceholder(host, "Procedures", "Procedure & country selection arrives with Station B in the next update.");
-    else renderStationPlaceholder(host, "RA tasks", "RA-effort toggles arrive with Station C in the next update.");
+    else if (modalState.station === "B") renderStationB(host);
+    else renderStationC(host);
   }
 
-  function renderStationPlaceholder(host, title, note) {
-    host.appendChild(el("div", "vcl-bud-body__title", escapeHtml(title)));
-    host.appendChild(el("div", "vcl-bud-body__sub", escapeHtml(note)));
+  // Targeted editor refresh (Task 5, Step 5): repaint the stepper's done/active classes, rebuild
+  // the current station's body card, refresh the live preview strip and the summary line -- WITHOUT
+  // a full container-level rerender(). Used for every Station B/C mutation (all of which are chip /
+  // select / checkbox clicks, never a text-input keystroke). Station A keeps its own rerender()
+  // path because of its focus-sensitive search <input> (see populateSearchResults). The host
+  // references are captured by renderModal() each time the modal is (re)built.
+  function refreshEditor() {
+    if (!modalState) return;
+    if (modalState.paintStepper) modalState.paintStepper();
+    if (modalState.bodyHost) stationBody(modalState.bodyHost);
+    if (modalState.previewHost) renderPreviewStrip(modalState.previewHost);
+    if (modalState.summaryHost) modalState.summaryHost.textContent = summaryLine(modalState.draft);
   }
 
   // ---- Station A: Variations ----
@@ -423,6 +437,255 @@
     });
     row.appendChild(rm);
     return row;
+  }
+
+  // ---- Station B: Procedures + multi-authorisation strategy ----
+  // A labelled country <select> in the budget field style: options are country objects
+  // ({cc,name,roles}) from countriesByRole(); onPick receives the chosen cc (or null).
+  function countrySelectField(labelText, list, current, onPick) {
+    var field = el("div", "vcl-bud-field");
+    field.appendChild(el("label", "vcl-bud-field-label", escapeHtml(labelText)));
+    var sel = el("select", "vcl-bud-select");
+    var opt0 = el("option", null, "— select —"); opt0.value = "";
+    if (!current) opt0.selected = true;
+    sel.appendChild(opt0);
+    list.forEach(function (c) {
+      var o = el("option", null, escapeHtml((c.name || c.cc) + " (" + c.cc + ")")); o.value = c.cc;
+      if (current === c.cc) o.selected = true;
+      sel.appendChild(o);
+    });
+    // A <select> change only fires on a finalised choice (no keystroke focus risk) -- safe to
+    // targeted-refresh the editor.
+    sel.addEventListener("change", function () { onPick(sel.value || null); });
+    field.appendChild(sel);
+    return field;
+  }
+
+  // Kind chips (National / MRP-DCP / CP) for one procedure. In a Super-Grouping the kinds NOT in
+  // VCL_SG_LOGIC.computeAllowedProcedureKinds are disabled (CP-exclusivity is the shared module's
+  // job, never reimplemented here); outside SG every kind stays selectable.
+  function procKindChips(p) {
+    var sub = modalState.draft.submission;
+    var kinds = [{ k: "national", l: "National" }, { k: "mrpdcp", l: "MRP / DCP" }, { k: "cp", l: "CP" }];
+    var allowed = SUB.sgActive(sub) ? engines().sgLogic.computeAllowedProcedureKinds(sub.procedures, p) : null;
+    var row = el("div", "vcl-bud-chips");
+    kinds.forEach(function (it) {
+      var isAllowed = !allowed || allowed.indexOf(it.k) !== -1;
+      var chip = el("button", "vcl-bud-chip" + (p.kind === it.k ? " is-on" : "") + (isAllowed ? "" : " is-disabled"), escapeHtml(it.l));
+      chip.type = "button";
+      if (!isAllowed) {
+        chip.disabled = true;
+        chip.title = it.k === "cp"
+          ? "Not allowed together with national/MRP-DCP procedures in Super-Grouping"
+          : "Not allowed together with CP in Super-Grouping";
+      } else {
+        chip.addEventListener("click", function () {
+          p.kind = it.k;
+          if (it.k === "cp") p.ema = SUB.emaCc(engines()); // recorded for display; pricing reads emaCc directly
+          refreshEditor();
+        });
+      }
+      row.appendChild(chip);
+    });
+    return row;
+  }
+
+  // CMS multi-select for an MRP/DCP procedure -- reuses the budget checkbox chip style; the current
+  // RMS is excluded from the offered CMS.
+  function cmsChecks(p) {
+    var wrap = el("div", "vcl-bud-field");
+    wrap.appendChild(el("label", "vcl-bud-field-label", "CMS (Concerned Member States)"));
+    var box = el("div", "vcl-bud-cc-checks");
+    countriesByRole("CMS").forEach(function (c) {
+      if (c.cc === p.rms) return; // the RMS cannot also be a CMS
+      var on = (p.cms || []).indexOf(c.cc) !== -1;
+      var label = el("label", "vcl-bud-cc-check");
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on;
+      cb.addEventListener("change", function () {
+        if (cb.checked) { if (p.cms.indexOf(c.cc) === -1) p.cms.push(c.cc); }
+        else p.cms = p.cms.filter(function (x) { return x !== c.cc; });
+        refreshEditor();
+      });
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(" " + c.cc));
+      label.title = c.name || c.cc;
+      box.appendChild(label);
+    });
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  function renderProcedureRow(p, idx) {
+    var sub = modalState.draft.submission;
+    var card = el("div", "vcl-bud-proc-card");
+    var head = el("div", "vcl-bud-proc-card__head");
+    head.appendChild(el("span", "vcl-bud-proc-card__title", idx === 0 ? "Primary procedure" : "Procedure " + (idx + 1)));
+    // Remove only for the added procedures (procedures[1..]); the base procedure[0] is permanent.
+    if (idx >= 1) {
+      var rm = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger", "✕");
+      rm.type = "button"; rm.setAttribute("aria-label", "Remove procedure");
+      rm.addEventListener("click", function () { sub.procedures.splice(idx, 1); refreshEditor(); });
+      head.appendChild(rm);
+    }
+    card.appendChild(head);
+    card.appendChild(procKindChips(p));
+
+    if (p.kind === "national") {
+      // EU-only national list once a multi-procedure / annual-update strategy is active.
+      var euOnly = SUB.multiProcedureMode(sub) || SUB.auActive(sub);
+      var natList = countriesByRole("national").filter(function (c) {
+        return !euOnly || NON_EU_PROCEDURE_COUNTRIES.indexOf(c.cc) === -1;
+      });
+      card.appendChild(countrySelectField("Country", natList, p.nat, function (cc) { p.nat = cc; refreshEditor(); }));
+    } else if (p.kind === "mrpdcp") {
+      card.appendChild(countrySelectField("RMS (Reference Member State)", countriesByRole("RMS"), p.rms, function (cc) {
+        p.rms = cc; p.cms = (p.cms || []).filter(function (x) { return x !== cc; }); refreshEditor();
+      }));
+      card.appendChild(cmsChecks(p));
+      card.appendChild(el("p", "vcl-bud-hint", "Each selected CMS is charged its own national fee. The RMS cannot also be a CMS."));
+    } else if (p.kind === "cp") {
+      card.appendChild(el("p", "vcl-bud-hint", "CP · EMA — centralised procedure, one authority (EMA), no country selection."));
+    }
+    return card;
+  }
+
+  function renderStationB(host) {
+    var sub = modalState.draft.submission;
+
+    // Enablement mirrors the Guided Workflow (vcl-workflow.js:735/828): WS is offered only for a
+    // mixed submission, SG/AU only for an all-Type-IA one. Clear an invalidated strategy on every
+    // render BEFORE painting, so a mode that is no longer allowed can never survive silently.
+    var allIA = SUB.allVariationsAreIA(sub, engines());
+    if (sub.mode === "worksharing" && allIA) sub.mode = null;
+    if ((sub.mode === "superGrouping" || sub.mode === "annualUpdate") && !allIA) sub.mode = null;
+
+    host.appendChild(el("div", "vcl-bud-body__title", "Procedures"));
+    host.appendChild(el("div", "vcl-bud-body__sub", "How is it submitted, and where? Fees are per country, so the countries are set here."));
+
+    // --- Strategy chips (opt-in Worksharing / Super-Grouping / Annual Update) ---
+    host.appendChild(el("div", "vcl-bud-section-label", "Multi-authorisation strategy"));
+    var chips = el("div", "vcl-bud-chips");
+    [
+      { mode: "worksharing", label: "Worksharing", disabled: allIA },
+      { mode: "superGrouping", label: "Super-Grouping", disabled: !allIA },
+      { mode: "annualUpdate", label: "Annual Update", disabled: !allIA },
+    ].forEach(function (s) {
+      var on = sub.mode === s.mode;
+      var chip = el("button", "vcl-bud-chip" + (on ? " is-on" : "") + (s.disabled ? " is-disabled" : ""), escapeHtml(s.label));
+      chip.type = "button";
+      if (s.disabled) { chip.disabled = true; }
+      else chip.addEventListener("click", function () { sub.mode = on ? null : s.mode; refreshEditor(); });
+      chips.appendChild(chip);
+    });
+    host.appendChild(chips);
+
+    // With no strategy set, show the DERIVED state (Single / Grouping) as a non-interactive label.
+    if (!sub.mode) {
+      var dm = SUB.displayMode(sub); // "single" | "grouping"
+      var derived = el("div", "vcl-bud-derived");
+      derived.innerHTML = "No multi-authorisation strategy — priced as <strong>" + escapeHtml(MODE_LABEL[dm]) + "</strong>.";
+      host.appendChild(derived);
+    } else {
+      host.appendChild(el("p", "vcl-bud-hint", allIA
+        ? "Type-IA-only: Super-Grouping shares the change across several authorisations; Annual Update keeps it within this one."
+        : "Worksharing shares the change across several procedures or authorisations."));
+    }
+
+    // --- Procedure rows: base procedure always; extras only in WS/SG (multiProcedureMode) ---
+    host.appendChild(el("div", "vcl-bud-section-label", "Procedures"));
+    var list = el("div", "vcl-bud-proc-list");
+    var procs = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
+    procs.forEach(function (p, idx) { list.appendChild(renderProcedureRow(p, idx)); });
+    host.appendChild(list);
+
+    if (SUB.multiProcedureMode(sub)) {
+      var add = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "+ Add procedure");
+      add.type = "button";
+      add.addEventListener("click", function () {
+        var np = { kind: "national", nat: null, rms: null, cms: [] };
+        // Respect CP-exclusivity from the outset: if 'national' is not allowed (a CP already sits
+        // in the group), start the new procedure on the first allowed kind instead.
+        if (SUB.sgActive(sub)) {
+          var allowed = engines().sgLogic.computeAllowedProcedureKinds(sub.procedures, np);
+          if (allowed.indexOf(np.kind) === -1) np.kind = allowed[0];
+        }
+        sub.procedures.push(np);
+        refreshEditor();
+      });
+      host.appendChild(add);
+    }
+
+    // --- Lead (WS / SG only): RMS-role authorities + the EMA, writing d.submission.lead ---
+    if (SUB.leadPricingActive(sub)) {
+      var leadList = countriesByRole("RMS").slice();
+      countriesByRole("EMA").forEach(function (c) {
+        if (!leadList.some(function (x) { return x.cc === c.cc; })) leadList.push(c);
+      });
+      host.appendChild(countrySelectField(
+        SUB.sgActive(sub) ? "Super-Grouping RMS (lead)" : "Worksharing RMS (lead)",
+        leadList, sub.lead, function (cc) { sub.lead = cc; refreshEditor(); }));
+    }
+  }
+
+  // ---- Station C: RA tasks ----
+  // A switch-style gate row (track + thumb + label); clicking flips the boolean via onClick.
+  function toggleGate(labelText, on, onClick) {
+    var btn = el("button", "vcl-bud-toggle" + (on ? " is-on" : ""));
+    btn.type = "button";
+    btn.innerHTML = '<span class="vcl-bud-toggle__track"><span class="vcl-bud-toggle__thumb"></span></span>'
+      + '<span class="vcl-bud-toggle__label">' + escapeHtml(labelText) + "</span>";
+    btn.addEventListener("click", function (e) { e.preventDefault(); onClick(); });
+    return btn;
+  }
+
+  function renderStationC(host) {
+    var rt = modalState.draft.submission.raTasks;
+    host.appendChild(el("div", "vcl-bud-body__title", "RA tasks"));
+    host.appendChild(el("div", "vcl-bud-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles."));
+
+    // --- CMC dossier (+ active substance it depends on) ---
+    host.appendChild(el("div", "vcl-bud-section-label", "CMC dossier"));
+    host.appendChild(toggleGate("CMC dossier written in RA", !!rt.cmc, function () { rt.cmc = !rt.cmc; refreshEditor(); }));
+    if (rt.cmc) {
+      host.appendChild(el("p", "vcl-bud-hint", "The dossier effort depends on the active substance:"));
+      var asChips = el("div", "vcl-bud-chips");
+      [{ k: "chemical", l: "Chemically-synthesized API" }, { k: "biologic", l: "Biologic" }].forEach(function (o) {
+        var chip = el("button", "vcl-bud-chip" + (rt.activeSubstance === o.k ? " is-on" : ""), escapeHtml(o.l));
+        chip.type = "button";
+        chip.addEventListener("click", function () { rt.activeSubstance = o.k; refreshEditor(); });
+        asChips.appendChild(chip);
+      });
+      host.appendChild(asChips);
+      if (!rt.activeSubstance) host.appendChild(el("p", "vcl-bud-hint", "Pick the active substance to include the CMC dossier hours."));
+    } else {
+      host.appendChild(el("p", "vcl-bud-hint", "Off: a separate CMC / quality unit writes the dossier — it adds no RA hours."));
+    }
+
+    // --- Product information (+ which documents the change touches) ---
+    host.appendChild(el("div", "vcl-bud-section-label", "Product information"));
+    host.appendChild(toggleGate("Product information managed in RA", !!rt.pi, function () { rt.pi = !rt.pi; refreshEditor(); }));
+    if (rt.pi) {
+      host.appendChild(el("p", "vcl-bud-hint", "Which documents does this change touch?"));
+      var piChips = el("div", "vcl-bud-chips");
+      // piDocs keys MUST match the workload engine's PI filter -- see vcl-workflow.js buildProductInfo
+      // (smpc / leaflet / labelling / mockups), consumed via sub.raTasks.piDocs in vcl-submission.js.
+      [{ k: "smpc", l: "SmPC" }, { k: "leaflet", l: "Package leaflet" }, { k: "labelling", l: "Labelling" }, { k: "mockups", l: "Mock-ups" }].forEach(function (o) {
+        var chip = el("button", "vcl-bud-chip" + (rt.piDocs[o.k] ? " is-on" : ""), escapeHtml(o.l));
+        chip.type = "button";
+        chip.addEventListener("click", function () { rt.piDocs[o.k] = !rt.piDocs[o.k]; refreshEditor(); });
+        piChips.appendChild(chip);
+      });
+      host.appendChild(piChips);
+    } else {
+      host.appendChild(el("p", "vcl-bud-hint", "Off: another department prepares the product information — it adds no RA hours."));
+    }
+
+    // --- Compilation & submission (docuBridge/Veeva + CESP) ---
+    host.appendChild(el("div", "vcl-bud-section-label", "Compilation & submission"));
+    host.appendChild(toggleGate("Compilation & submission in RA", !!rt.compilation, function () { rt.compilation = !rt.compilation; refreshEditor(); }));
+    host.appendChild(el("p", "vcl-bud-hint", rt.compilation
+      ? "Dossier compilation (docuBridge / Veeva), internal checks and CESP submission are done in RA."
+      : "Off: dossier compilation and submission are handled elsewhere — they add no RA hours."));
   }
 
   // Emphasised live Fee / RA-hours preview, recomputed from the draft on every rerender via the
@@ -523,9 +786,10 @@
       btn.appendChild(el("div", "vcl-bud-station__dot", s.key));
       btn.appendChild(el("div", "vcl-bud-station__label", escapeHtml(s.label)));
       btn.addEventListener("click", function () {
+        // Switching stations changes no draft data, so a targeted refresh is enough (and repaints
+        // the stepper's own active/done classes via refreshEditor -> paintStepper).
         modalState.station = s.key;
-        paintStepper();
-        stationBody(card);
+        refreshEditor();
       });
       stationButtons[s.key] = btn;
       stepper.appendChild(btn);
@@ -543,7 +807,15 @@
     renderPreviewStrip(strip);
 
     // De-emphasised summary line
-    modal.appendChild(el("p", "vcl-bud-modal__summary", escapeHtml(summaryLine(d))));
+    var summaryP = el("p", "vcl-bud-modal__summary", escapeHtml(summaryLine(d)));
+    modal.appendChild(summaryP);
+
+    // Capture the live host references for refreshEditor()'s targeted (non-full-rerender) updates.
+    // Reset on every renderModal() so they always point at the current DOM nodes.
+    modalState.paintStepper = paintStepper;
+    modalState.bodyHost = card;
+    modalState.previewHost = strip;
+    modalState.summaryHost = summaryP;
 
     // Footer
     var foot = el("div", "vcl-bud-modal__foot");
