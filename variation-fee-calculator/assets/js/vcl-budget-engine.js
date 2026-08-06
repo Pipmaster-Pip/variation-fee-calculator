@@ -7,88 +7,42 @@
 
   var STORAGE_KEY = "vcl_budget_plan_v1";
 
+  // A default Submission (see docs/superpowers/specs/2026-08-05-budget-submission-model-design.md
+  // and vcl-submission.js's header) — the shape VCL_SUBMISSION reads. `specials` MUST use the real
+  // { line, ws, lead } shape (not `{}`): computeSubmissionFees dereferences sub.specials.line/.ws/.lead.
+  function emptySubmission() {
+    return {
+      mode: null,
+      variations: [],
+      procedures: [{ kind: "national", nat: null, rms: null, cms: [] }],
+      lead: null,
+      raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+      strengths: { default: 1, overrides: {} },
+      specials: { line: {}, ws: {}, lead: null },
+    };
+  }
+
   function newLine(id) {
-    return {
-      id: id,
-      product: "",
-      variationCode: null,
-      variationLabel: "",
-      type: null,
-      procedure: { kind: "national", nat: null, rms: null, cms: [] },
-      activeSubstance: null,
-      piDocs: {},
-      modules: { pi: false, cmc: false, compilation: false },
-      submission: {},
-      quarter: null,
-      probability: 100,
-    };
+    return { id: id, product: "", quarter: null, probability: 100, submission: emptySubmission() };
   }
 
-  // -> [{cc, role, strengths}], the shape VCLCALC.computeFees expects. Mirrors
-  // vcl-workflow.js:124-135 (procCountries), fixed at strengths=1 (no per-line strength UI in
-  // the MVP — see spec).
-  function lineCountries(line) {
-    var p = (line && line.procedure) || {};
-    if (p.kind === "national") return p.nat ? [{ cc: p.nat, role: "national", strengths: 1 }] : [];
-    if (p.kind === "cp") return p.ema ? [{ cc: p.ema, role: "EMA", strengths: 1 }] : [];
-    if (p.kind === "mrpdcp") {
-      var out = [];
-      if (p.rms) out.push({ cc: p.rms, role: "RMS", strengths: 1 });
-      (p.cms || []).forEach(function (cc) { out.push({ cc: cc, role: "CMS", strengths: 1 }); });
-      return out;
-    }
-    return [];
-  }
-
-  // -> the sel shape VCL_WORKLOAD_HOURS.computeAdditiveWorkload expects. Mirrors
-  // vcl-workflow.js:462-482 (raEffort), simplified: worksharing/grouping/AU/SG counts are not
-  // exposed at line level in the MVP (each plan line is one standalone variation).
-  function lineHoursSel(line) {
-    var p = (line && line.procedure) || {};
-    return {
-      type: line.type,
-      procedure: p.kind || "national",
-      cmsCount: p.kind === "mrpdcp" ? (p.cms || []).length : 0,
-      activeSubstance: line.activeSubstance || null,
-      piDocs: line.piDocs || {},
-      modules: line.modules || { pi: false, cmc: false, compilation: false },
-      submission: line.submission || {},
-    };
-  }
-
-  // engines = { computeFees, workload, workloadData } — dependency-injected so this module never
-  // touches `window` itself (keeps it Node-testable). In the browser, Task 2 wires
-  // computeFees: window.VCLCALC.computeFees, workload: window.VCL_WORKLOAD_HOURS,
-  // workloadData: window.VCL_WORKLOAD_HD.
+  // engines = { SUB, computeFees, countries, feeRows, workload, workloadData, sgLogic } —
+  // dependency-injected so this module never touches `window` itself (keeps it Node-testable).
+  // Single source of truth: fees/hours are computed ONLY by delegating to VCL_SUBMISSION
+  // (engines.SUB) — no reimplemented pricing/hours logic here.
   function computeLineResult(line, engines) {
     engines = engines || {};
-    var countries = lineCountries(line);
-    var complete = !!(countries.length && line.type);
-
-    var fee = 0, feeByCountry = [];
-    if (complete && engines.computeFees && engines.workload) {
-      var counts = { IA: 0, IB: 0, II: 0 };
-      var bucket = engines.workload.typeBucket(line.type);
-      if (bucket) counts[bucket] = 1;
-      var feesResult = engines.computeFees({ countries: countries, counts: counts });
-      fee = feesResult.grandTotal || 0;
-      feeByCountry = (feesResult.countries || []).map(function (c) {
-        return { cc: c.cc, total: c.total || 0 };
-      });
-    }
-
-    var hours = { min: 0, max: 0, expected: 0 };
-    if (complete && engines.workload && engines.workload.computeAdditiveWorkload && engines.workloadData) {
-      var parts = engines.workload.computeAdditiveWorkload(engines.workloadData, lineHoursSel(line));
-      var sections = engines.workload.composeSections(parts);
-      hours = {
-        min: sections.total.min,
-        max: sections.total.max,
-        expected: engines.workload.pertExpected(sections.total.min, sections.total.max),
-      };
-    }
-
-    return { fee: fee, feeByCountry: feeByCountry, hours: hours, complete: complete };
+    var sub = (line && line.submission) || {};
+    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0 }, complete: false };
+    if (!engines.SUB || !engines.computeFees) return out;
+    var feeRes = engines.SUB.computeSubmissionFees(sub, engines); // {total, byCountry}
+    out.complete = feeRes.total !== null;
+    if (!out.complete) return out;
+    out.fee = feeRes.total || 0;
+    out.feeByCountry = feeRes.byCountry || [];
+    var h = engines.SUB.computeSubmissionHours(sub, engines);
+    if (h) out.hours = { min: h.min, max: h.max, expected: h.expected };
+    return out;
   }
 
   function sortDesc(map) {
@@ -197,8 +151,7 @@
 
   var api = {
     newLine: newLine,
-    lineCountries: lineCountries,
-    lineHoursSel: lineHoursSel,
+    emptySubmission: emptySubmission,
     computeLineResult: computeLineResult,
     computeRollup: computeRollup,
     computeFte: computeFte,
