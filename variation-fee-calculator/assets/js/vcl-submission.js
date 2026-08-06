@@ -222,6 +222,47 @@
     return { total: any ? total : null, byCountry: byCountry };
   }
 
+  // RA effort via the additive workload model (engines.workload + engines.workloadData, generated
+  // from RA-CMC-hours.xlsx). Faithful move of vcl-workflow.js's raEffort() (state.* -> sub.*,
+  // window.VCL_WORKLOAD_HOURS/window.VCL_WORKLOAD_HD -> engines.workload/engines.workloadData).
+  // Returns the granular {min,max} parts, the three composed sections (RA / CMC / Compilation &
+  // submission), the grand total, plus flat min/max/expected (the superset both the Guided
+  // Workflow transparency box and the Budget tool consume), or null when no variation type is set
+  // yet or the engine/data is unavailable.
+  function computeSubmissionHours(sub, engines) {
+    var t = primaryType(sub);
+    if (!t || !engines.workload || !engines.workload.computeAdditiveWorkload || !engines.workloadData) return null;
+    var gb = groupingBuckets(sub);
+    var wk = worksharingKinds(sub);
+    var sp = sgProcKinds(sub);
+    var grouped = sub.variations.length > 1 && !(auActive(sub) || sgActive(sub));
+    var parts = engines.workload.computeAdditiveWorkload(engines.workloadData, {
+      type: t,
+      procedure: sub.procedures[0].kind,
+      cmsCount: sub.procedures[0].kind === "mrpdcp" ? sub.procedures[0].cms.length : 0,
+      // The workbook's CMC rows are tagged "chemical"/"biological"; the workflow state uses
+      // "biologic"/"chemical", so map biologic -> biological here.
+      activeSubstance: sub.raTasks.activeSubstance === "biologic" ? "biological"
+        : (sub.raTasks.activeSubstance === "chemical" ? "chemical" : null),
+      modules: {
+        pi: sub.raTasks.pi,
+        cmc: !!sub.raTasks.cmc,                    // Station "RA tasks" CMC gate
+        compilation: !!sub.raTasks.compilation,    // Station "RA tasks" compilation & submission gate
+      },
+      piDocs: sub.raTasks.piDocs,                   // which PI documents the change touches (filter)
+      submission: {
+        worksharing: { on: wsActive(sub), counts: { "national": wk.national, "MRP/DCP": wk.mrpdcp } },
+        grouping: { on: grouped, counts: { "Type IA": gb.IA, "Type IB": gb.IB, "Type II": gb.II } },
+        annualUpdate: { on: auActive(sub), counts: { "Type IA": 1 + gb.IA } },
+        superGrouping: { on: sgActive(sub), counts: { "national": sp.national, "MRP/DCP": sp.mrpdcp, "CP": sp.cp } },
+      },
+    });
+    var sections = engines.workload.composeSections(parts);
+    return { parts: parts, items: parts.items, sections: sections, total: sections.total,
+      min: sections.total.min, max: sections.total.max,
+      expected: engines.workload.pertExpected(sections.total.min, sections.total.max) };
+  }
+
   var api = {
     feeBucket: feeBucket, feeCounts: feeCounts, feeCountsTotal: feeCountsTotal, highestType: highestType,
     primaryType: primaryType, groupingBuckets: groupingBuckets, worksharingKinds: worksharingKinds,
@@ -235,6 +276,7 @@
     nonWsOptionsFor: nonWsOptionsFor, specialFor: specialFor, leadSpecial: leadSpecial,
     leadPricingRole: leadPricingRole, procPricedCountries: procPricedCountries, procFees: procFees,
     leadFees: leadFees, computeSubmissionFees: computeSubmissionFees,
+    computeSubmissionHours: computeSubmissionHours,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.VCL_SUBMISSION = api;

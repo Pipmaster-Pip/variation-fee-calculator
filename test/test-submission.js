@@ -83,5 +83,26 @@ eq(wsFees.byCountry, [{ cc: "FR", total: 100 }, { cc: "DE - BfArM", total: 100 }
 // incomplete (no country) prices to null
 eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: null, cms: [] }] }), feeEng).total, null, "fees: incomplete → null");
 
+console.log("\nSubmission — computeSubmissionHours (real engine)");
+var sHours = mk({ variations: [{ type: "IB" }], procedures: [{ kind: "mrpdcp", rms: "DE - BfArM", cms: ["FR", "ES"] }] });
+var h = SUB.computeSubmissionHours(sHours, engines);
+// cross-check against calling the workload engine directly with the equivalent sel
+var parts = WLH.computeAdditiveWorkload(HD, {
+  type: "IB", procedure: "mrpdcp", cmsCount: 2, activeSubstance: null,
+  modules: { pi: false, cmc: false, compilation: false }, piDocs: {},
+  submission: {
+    worksharing: { on: false, counts: { "national": 0, "MRP/DCP": 0 } },
+    grouping: { on: false, counts: { "Type IA": 0, "Type IB": 0, "Type II": 0 } },
+    annualUpdate: { on: false, counts: { "Type IA": 1 } },
+    superGrouping: { on: false, counts: { "national": 0, "MRP/DCP": 0, "CP": 0 } },
+  },
+});
+var sec = WLH.composeSections(parts);
+eq({ min: h.min, max: h.max, expected: h.expected },
+   { min: sec.total.min, max: sec.total.max, expected: WLH.pertExpected(sec.total.min, sec.total.max) },
+   "hours match a direct workload-engine call with the equivalent sel");
+eq(!!h.sections && !!h.parts, true, "hours result carries the transparency-box superset (sections, parts)");
+eq(SUB.computeSubmissionHours(mk({ variations: [] }), engines), null, "hours: no variation → null");
+
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);
