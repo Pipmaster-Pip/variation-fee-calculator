@@ -168,6 +168,59 @@
     var has = function (role) { return engines.feeRows.some(function (r) { return r.cc === cc && r.role === role; }); };
     return has("RMS") ? "RMS" : (has("national") ? "national" : "CMS");
   }
+  // Flatten a procedure for PRICING: in a worksharing the lead authority is excluded here
+  // (it is priced exactly once, as the lead) and every remaining line carries its chosen fee
+  // category, applied to every type (resolveRow falls back to standard per type wherever the
+  // label is not published).
+  function procPricedCountries(sub, p, engines) {
+    var list = procCountries(sub, p, engines);
+    if (!leadPricingActive(sub)) return list.map(function (x) {
+      var s = specialFor(sub, x.cc, x.role, engines);
+      return s ? { cc: x.cc, role: x.role, strengths: x.strengths, special: { IA: s, IB: s, II: s } } : x;
+    });
+    return list.filter(function (x) { return x.cc !== sub.lead; }).map(function (x) {
+      var role = wsPricingRole(x.role);
+      var s = wsSpecialFor(sub, x.cc, role, engines);
+      return { cc: x.cc, role: role, strengths: x.strengths, special: { IA: s, IB: s, II: s } };
+    });
+  }
+  // Fees for one procedure, via the shared engine (engines.computeFees).
+  function procFees(sub, p, counts, engines) {
+    if (!engines.computeFees) return null;
+    if (!procCountries(sub, p, engines).length || feeCountsTotal(counts) === 0) return { countries: [], grandTotal: 0 };
+    return engines.computeFees({ countries: procPricedCountries(sub, p, engines), counts: counts });
+  }
+  // The lead's one-off fee: a single engine country-result, or null while it can't be priced.
+  function leadFees(sub, counts, engines) {
+    if (!leadPricingActive(sub) || !sub.lead || !engines.computeFees) return null;
+    if (feeCountsTotal(counts) === 0) return null;
+    var s = leadSpecial(sub, engines);
+    var r = engines.computeFees({
+      countries: [{ cc: sub.lead, role: leadPricingRole(sub, engines), strengths: strengthsFor(sub, sub.lead), special: { IA: s, IB: s, II: s } }],
+      counts: counts,
+    });
+    return (r.countries && r.countries[0]) || null;
+  }
+  // Assemble per-procedure + lead pricing into one grand total (parity with vcl-workflow.js's
+  // grandTotalFees) plus a NEW by-country breakdown for the Budget tool.
+  function computeSubmissionFees(sub, engines) {
+    var counts = feeCounts(sub);
+    if (feeCountsTotal(counts) === 0) return { total: null, byCountry: [] };
+    var byCc = {}; var total = 0; var any = false;
+    allPricedProcedures(sub).forEach(function (p) {
+      var r = procFees(sub, p, counts, engines);
+      if (!r) return;
+      total += r.grandTotal || 0;
+      if (procCountries(sub, p, engines).length) any = true;
+      (r.countries || []).forEach(function (c) { byCc[c.cc] = (byCc[c.cc] || 0) + (c.total || 0); });
+    });
+    if (leadPricingActive(sub)) {
+      var lf = leadFees(sub, counts, engines);
+      if (lf) { total += lf.total || 0; byCc[lf.cc] = (byCc[lf.cc] || 0) + (lf.total || 0); any = true; }
+    }
+    var byCountry = Object.keys(byCc).map(function (cc) { return { cc: cc, total: byCc[cc] }; });
+    return { total: any ? total : null, byCountry: byCountry };
+  }
 
   var api = {
     feeBucket: feeBucket, feeCounts: feeCounts, feeCountsTotal: feeCountsTotal, highestType: highestType,
@@ -180,7 +233,8 @@
     wsPricingRole: wsPricingRole, wsSpecialKey: wsSpecialKey, isWorksharingSpecial: isWorksharingSpecial,
     wsOptionsFor: wsOptionsFor, defaultSpecial: defaultSpecial, wsSpecialFor: wsSpecialFor,
     nonWsOptionsFor: nonWsOptionsFor, specialFor: specialFor, leadSpecial: leadSpecial,
-    leadPricingRole: leadPricingRole,
+    leadPricingRole: leadPricingRole, procPricedCountries: procPricedCountries, procFees: procFees,
+    leadFees: leadFees, computeSubmissionFees: computeSubmissionFees,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.VCL_SUBMISSION = api;

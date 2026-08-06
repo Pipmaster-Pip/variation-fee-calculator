@@ -62,5 +62,26 @@ eq(SUB.procCountries(mk({ strengths: { default: 1, overrides: {} } }), { kind: "
   [{ cc: "FR", role: "RMS", strengths: 1 }, { cc: "DE - BfArM", role: "CMS", strengths: 1 }], "procCountries flattens MRP/DCP to RMS+CMS");
 eq(SUB.wsPricingRole("RMS"), "CMS", "wsPricingRole: a non-lead RMS prices as CMS in worksharing");
 
+console.log("\nSubmission — computeSubmissionFees");
+function stubFees(input) {
+  var per = input.countries.map(function (c) { return { cc: c.cc, role: c.role, total: 100 + (c.role === "RMS" ? 50 : 0) + (c.role === "EMA" ? 200 : 0) }; });
+  return { countries: per, grandTotal: per.reduce(function (s, c) { return s + c.total; }, 0) };
+}
+var feeEng = { computeFees: stubFees, feeRows: [], countries: [{ cc: "EU", roles: ["EMA"] }] };
+// single national submission
+var sSingle = mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "FR", cms: [] }] });
+eq(SUB.computeSubmissionFees(sSingle, feeEng), { total: 100, byCountry: [{ cc: "FR", total: 100 }] }, "fees: single national");
+// worksharing: lead DE excluded from its procedure, priced once as lead
+var sWs = mk({ mode: "worksharing", lead: "DE - BfArM",
+  variations: [{ type: "II" }],
+  procedures: [{ kind: "national", nat: "DE - BfArM", cms: [] }, { kind: "national", nat: "FR", cms: [] }] });
+var wsFees = SUB.computeSubmissionFees(sWs, feeEng);
+eq(wsFees.total, 200, "fees: worksharing = lead DE (100) + FR (100), DE not double-charged");
+// byCountry exercises the lead-exclusion path independently of total: FR from its procedure,
+// DE once as the lead (its own procedure prices to nothing since the lead is filtered out).
+eq(wsFees.byCountry, [{ cc: "FR", total: 100 }, { cc: "DE - BfArM", total: 100 }], "fees: byCountry has FR (100) + lead DE (100) once each, no double DE");
+// incomplete (no country) prices to null
+eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: null, cms: [] }] }), feeEng).total, null, "fees: incomplete → null");
+
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);
