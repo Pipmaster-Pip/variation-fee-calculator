@@ -45,6 +45,7 @@ FILES = [
     "assets/js/vcl-budget.js",
     "assets/css/vcl-budget-style.css",
     "assets/js/vcl-sg-logic.js",
+    "assets/js/vcl-submission.js",
     "assets/js/vcl-workflow.js",
     "assets/js/vcl-calc-app.js",
     "assets/js/vcl-calc-data.js",
