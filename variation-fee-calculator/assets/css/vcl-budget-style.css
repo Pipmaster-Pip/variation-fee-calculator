@@ -78,12 +78,92 @@
 .vcl-app .vcl-bud-table tfoot td { padding: 11px 12px; font-weight: 600; border-top: 2px solid var(--border); background: var(--border-soft); font-variant-numeric: tabular-nums; }
 
 .vcl-app .vcl-bud-modal-overlay { position: fixed; inset: 0; background: rgba(20,25,32,.42); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
-.vcl-app .vcl-bud-modal { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; background: var(--panel); border-radius: 14px; padding: 24px 26px 22px; box-shadow: 0 12px 40px rgba(10,15,25,.28); }
-.vcl-app .vcl-bud-modal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.vcl-app .vcl-bud-modal { width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; background: var(--panel); border-radius: 14px; padding: 24px 26px 22px; box-shadow: 0 12px 40px rgba(10,15,25,.28); }
+.vcl-app .vcl-bud-modal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .vcl-app .vcl-bud-modal__head h2 { font-family: "IBM Plex Serif", serif; font-size: 18px; margin: 0; font-weight: 600; }
 .vcl-app .vcl-bud-modal__sub { font-size: 12.5px; color: var(--muted); margin: 0 0 18px; }
+.vcl-app .vcl-bud-modal__summary { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 .vcl-app .vcl-bud-field { margin-bottom: 14px; }
 .vcl-app .vcl-bud-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.vcl-app .vcl-bud-meta-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.vcl-app .vcl-bud-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
+/* --- Station indicator (A B C) -- geometry copied verbatim from vcl-workflow-style.css:36-83
+   (.vcl-wf-stations et al.), swapping only the colour token (--workflow -> --budget) and the
+   class prefix (vcl-wf- -> vcl-bud-). --- */
+.vcl-app .vcl-bud-stations { display: flex; gap: 6px; margin-bottom: 18px; position: relative; }
+.vcl-app .vcl-bud-station {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+.vcl-app .vcl-bud-station:disabled { cursor: default; }
+.vcl-app .vcl-bud-station__dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  border: 1.5px solid var(--line, #d8d8d2);
+  color: var(--muted);
+}
+.vcl-app .vcl-bud-station.is-active .vcl-bud-station__dot {
+  background: var(--budget-bg);
+  border-color: var(--budget);
+  color: var(--budget);
+}
+.vcl-app .vcl-bud-station.is-done .vcl-bud-station__dot {
+  background: var(--budget);
+  border-color: var(--budget);
+  color: #fff;
+}
+.vcl-app .vcl-bud-station__label {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
+}
+.vcl-app .vcl-bud-station.is-active .vcl-bud-station__label { color: var(--budget); font-weight: 600; }
+
+/* --- Station body card -- geometry copied verbatim from vcl-workflow-style.css:88-106
+   (.vcl-wf-body et al.). --- */
+.vcl-app .vcl-bud-body {
+  border: 1px solid var(--line, #e4e4de);
+  border-radius: 12px;
+  background: #fff;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.vcl-app .vcl-bud-body__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink, #222);
+  margin: 0 0 2px;
+}
+.vcl-app .vcl-bud-body__sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+/* --- Station A: variation rows --- */
+.vcl-app .vcl-bud-var-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.vcl-app .vcl-bud-var-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); }
+.vcl-app .vcl-bud-var-row__main { flex: 1; font-size: 13px; }
+.vcl-app .vcl-bud-var-row__code { font-family: "IBM Plex Mono", monospace; font-weight: 600; margin-right: 4px; }
+.vcl-app .vcl-bud-var-row__muted { color: var(--muted); font-style: italic; }
+.vcl-app .vcl-bud-var-row__types { display: flex; gap: 4px; flex: none; }
 .vcl-app .vcl-bud-field-label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 5px; }
 .vcl-app .vcl-bud-input, .vcl-app .vcl-bud-select { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--paper); color: var(--ink); }
 .vcl-app .vcl-bud-input:focus, .vcl-app .vcl-bud-select:focus { outline: none; border-color: var(--budget); }
@@ -98,8 +178,9 @@
 .vcl-app .vcl-bud-search-results { border: 1px solid var(--border); border-radius: 7px; margin-top: 4px; max-height: 180px; overflow-y: auto; background: var(--panel); }
 .vcl-app .vcl-bud-search-result { display: block; width: 100%; text-align: left; padding: 8px 10px; font-size: 12.5px; border: none; background: none; cursor: pointer; border-bottom: 1px solid var(--border-soft); }
 .vcl-app .vcl-bud-search-result:hover { background: var(--budget-tint); }
-.vcl-app .vcl-bud-live-result { margin-top: 18px; border-top: 1px dashed var(--border); padding-top: 14px; display: flex; justify-content: space-between; align-items: baseline; }
+.vcl-app .vcl-bud-live-result { margin-top: 4px; border-top: 1px dashed var(--border); padding-top: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 18px; }
 .vcl-app .vcl-bud-live-result .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .vcl-app .vcl-bud-live-result .val { font-family: "IBM Plex Serif", serif; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-live-result .val .band { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 400; color: var(--ink-faint); margin-left: 4px; }
+.vcl-app .vcl-bud-live-result__note { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--ink-faint); }
 .vcl-app .vcl-bud-modal__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }

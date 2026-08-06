@@ -53,7 +53,7 @@
   var plan = BUD.loadPlan(window.localStorage);
   var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true };
   var container = null;
-  var modalState = null; // null when closed, else { editingId, draft, query, searchResults }
+  var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
 
   // Per-line result cache, keyed by line id, kept current by the mutation points below
   // (applyModal/duplicateLine/deleteLine) rather than rebuilt wholesale on every render -- see
@@ -69,6 +69,7 @@
     modalState = {
       editingId: id || null,
       draft: existing ? JSON.parse(JSON.stringify(existing)) : BUD.newLine("line-" + Date.now() + "-" + Math.floor(Math.random() * 1000)),
+      station: "A", // stations editor always opens on Station A (Variations)
       query: "",
       searchResults: [],
     };
@@ -283,6 +284,8 @@
 
   // Targeted update: rebuilds only the results host, leaving the search <input> (and its focus/
   // caret) untouched. A full rerender() on every keystroke would recreate the input and drop focus.
+  // Picking a result APPENDS a new variation onto d.submission.variations (Station A can hold
+  // several -- two or more is a Grouping) rather than overwriting a single variationCode field.
   function populateSearchResults(host) {
     if (!host) return;
     var d = modalState.draft;
@@ -292,47 +295,74 @@
       var item = el("button", "vcl-bud-search-result", escapeHtml(entry.code + " — " + entry.title));
       item.type = "button";
       item.addEventListener("click", function () {
-        d.variationCode = entry.code;
-        d.variationLabel = entry.code + " — " + entry.title;
         var types = typesForEntry(entry);
-        d.type = types[0] || d.type;
+        d.submission.variations.push({ code: entry.code, variantId: null, type: types[0] || null });
         modalState.query = "";
         modalState.searchResults = [];
-        rerender();
+        rerender(); // click, not a keystroke -- safe to fully rerender (no focus to preserve)
       });
       host.appendChild(item);
     });
   }
 
-  function renderModal() {
-    var d = modalState.draft;
-    var overlay = el("div", "vcl-bud-modal-overlay");
-    var modal = el("div", "vcl-bud-modal");
+  // The three stations of the editor. B (Procedures) and C (RA tasks) get real bodies in Task 5;
+  // this task wires the shell + stepper + Station A (Variations) only.
+  var STATIONS = [
+    { key: "A", label: "Variations" },
+    { key: "B", label: "Procedures" },
+    { key: "C", label: "RA tasks" },
+  ];
 
-    var head = el("div", "vcl-bud-modal__head");
-    head.appendChild(el("h2", null, modalState.editingId ? "Edit plan line" : "New plan line"));
-    var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
-    closeBtn.type = "button";
-    closeBtn.addEventListener("click", closeModal);
-    head.appendChild(closeBtn);
-    modal.appendChild(head);
+  // "Done" gates for the stepper's checkmark state -- purely cosmetic (unlike the Guided
+  // Workflow's `reached` gate, every station here is always clickable; a plan line can be applied
+  // with any subset filled in and revisited later).
+  function stationDone(key, sub) {
+    if (key === "A") return sub.variations.length > 0;
+    if (key === "B") return sub.procedures.some(function (p) { return !!(p.nat || p.rms || p.kind === "cp"); });
+    var rt = sub.raTasks || {};
+    return !!(rt.cmc || rt.compilation || rt.pi);
+  }
 
-    // Product
-    var productField = el("div", "vcl-bud-field");
-    productField.appendChild(el("label", "vcl-bud-field-label", "Product"));
-    var productInput = el("input", "vcl-bud-input");
-    productInput.type = "text"; productInput.value = d.product;
-    productInput.addEventListener("input", function () { d.product = productInput.value; });
-    productField.appendChild(productInput);
-    modal.appendChild(productField);
+  // De-emphasised one-line summary shown under the live-preview strip.
+  function summaryLine(d) {
+    var sub = d.submission;
+    var mode = SUB.displayMode(sub);
+    var nVar = sub.variations.length;
+    var nProc = sub.procedures.length;
+    return MODE_LABEL[mode] + " · " + nVar + " variation" + (nVar === 1 ? "" : "s") +
+      " · " + nProc + " procedure" + (nProc === 1 ? "" : "s") +
+      " · " + (sub.lead || "—") + " · " + (d.quarter || "—");
+  }
 
-    // Variation search
+  // Dispatches on modalState.station and (re)builds only the body card's contents -- used both
+  // for the initial render and by the station-stepper click handler in renderModal(), which
+  // repaints the stepper's own classes in place rather than tearing down the whole modal.
+  function stationBody(host) {
+    host.innerHTML = "";
+    if (modalState.station === "A") renderStationA(host);
+    else if (modalState.station === "B") renderStationPlaceholder(host, "Procedures", "Procedure & country selection arrives with Station B in the next update.");
+    else renderStationPlaceholder(host, "RA tasks", "RA-effort toggles arrive with Station C in the next update.");
+  }
+
+  function renderStationPlaceholder(host, title, note) {
+    host.appendChild(el("div", "vcl-bud-body__title", escapeHtml(title)));
+    host.appendChild(el("div", "vcl-bud-body__sub", escapeHtml(note)));
+  }
+
+  // ---- Station A: Variations ----
+  function renderStationA(host) {
+    var sub = modalState.draft.submission;
+    host.appendChild(el("div", "vcl-bud-body__title", "Variations"));
+    host.appendChild(el("div", "vcl-bud-body__sub", "Which variation, or variations, are you submitting? Two or more are priced as a Grouping."));
+
+    // Search field: focus-safe targeted-update pattern (populateSearchResults only ever rebuilds
+    // the results host below, never this input) -- see populateSearchResults for why that matters.
     var varField = el("div", "vcl-bud-field");
-    varField.appendChild(el("label", "vcl-bud-field-label", "Variation"));
+    varField.appendChild(el("label", "vcl-bud-field-label", "Search variation"));
     var varInput = el("input", "vcl-bud-input");
     varInput.type = "text";
     varInput.placeholder = "Search by code or keyword ...";
-    varInput.value = modalState.query || d.variationLabel || "";
+    varInput.value = modalState.query || "";
     varInput.addEventListener("input", function () {
       modalState.query = varInput.value;
       modalState.searchResults = BUD.searchEntries(ENTRIES, modalState.query);
@@ -343,98 +373,105 @@
     results.id = "vcl-bud-search-results";
     varField.appendChild(results);
     populateSearchResults(results);
-    if (d.variationCode) {
-      var typesRow = el("div");
-      typesRow.style.marginTop = "8px";
-      var entry = ENTRIES.find(function (e) { return e.code === d.variationCode; });
-      var availableTypes = entry ? typesForEntry(entry) : ["IA", "IB", "II"];
-      availableTypes.forEach(function (t) {
-        var badge = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + typeBucketClass(t) + (t === d.type ? " is-active" : ""), escapeHtml(t));
-        badge.addEventListener("click", function () { d.type = t; rerender(); });
-        typesRow.appendChild(badge);
-        typesRow.appendChild(document.createTextNode(" "));
-      });
-      varField.appendChild(typesRow);
-    }
-    modal.appendChild(varField);
+    host.appendChild(varField);
 
-    // Procedure + RMS
-    var procRow = el("div", "vcl-bud-field vcl-bud-field-row");
-    var procCol = el("div");
-    procCol.appendChild(el("label", "vcl-bud-field-label", "Procedure"));
-    var procSelect = el("select", "vcl-bud-select");
-    ["national", "mrpdcp", "cp"].forEach(function (kind) {
-      var opt = el("option", null, kind === "mrpdcp" ? "MRP/DCP" : (kind === "cp" ? "CP" : "National"));
-      opt.value = kind;
-      if (d.procedure.kind === kind) opt.selected = true;
-      procSelect.appendChild(opt);
-    });
-    procSelect.addEventListener("change", function () {
-      d.procedure = { kind: procSelect.value, nat: null, rms: null, cms: [] };
-      if (procSelect.value === "cp") d.procedure.ema = findEmaCc();
+    // Quick-add without a classification code (e.g. "just a Type IB, no code yet") -- the row's
+    // type badges (all three IA/IB/II, since no entry constrains it) let the user set it after.
+    var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "+ Add variation");
+    addBtn.type = "button";
+    addBtn.addEventListener("click", function () {
+      sub.variations.push({ code: null, variantId: null, type: null });
       rerender();
     });
-    procCol.appendChild(procSelect);
-    procRow.appendChild(procCol);
+    host.appendChild(addBtn);
 
-    if (d.procedure.kind === "mrpdcp") {
-      var rmsCol = el("div");
-      rmsCol.appendChild(el("label", "vcl-bud-field-label", "RMS (Reference Member State)"));
-      var rmsSelect = el("select", "vcl-bud-select");
-      rmsSelect.appendChild(el("option", null, "—"));
-      countriesByRole("RMS").forEach(function (c) {
-        var opt = el("option", null, escapeHtml(c.cc + " — " + c.name));
-        opt.value = c.cc;
-        if (d.procedure.rms === c.cc) opt.selected = true;
-        rmsSelect.appendChild(opt);
-      });
-      rmsSelect.addEventListener("change", function () { d.procedure.rms = rmsSelect.value || null; rerender(); });
-      rmsCol.appendChild(rmsSelect);
-      procRow.appendChild(rmsCol);
-    } else if (d.procedure.kind === "national") {
-      var natCol = el("div");
-      natCol.appendChild(el("label", "vcl-bud-field-label", "Country"));
-      var natSelect = el("select", "vcl-bud-select");
-      natSelect.appendChild(el("option", null, "—"));
-      countriesByRole("national").forEach(function (c) {
-        var opt = el("option", null, escapeHtml(c.cc + " — " + c.name));
-        opt.value = c.cc;
-        if (d.procedure.nat === c.cc) opt.selected = true;
-        natSelect.appendChild(opt);
-      });
-      natSelect.addEventListener("change", function () { d.procedure.nat = natSelect.value || null; rerender(); });
-      natCol.appendChild(natSelect);
-      procRow.appendChild(natCol);
+    var list = el("div", "vcl-bud-var-list");
+    sub.variations.forEach(function (v, idx) { list.appendChild(renderVariationRow(v, idx)); });
+    host.appendChild(list);
+
+    if (sub.variations.length >= 2) {
+      host.appendChild(el("p", "vcl-bud-hint", sub.variations.length + " variations — this line is priced as a Grouping."));
     }
-    modal.appendChild(procRow);
+  }
 
-    // CMS checkboxes (MRP/DCP only)
-    if (d.procedure.kind === "mrpdcp") {
-      var ccField = el("div", "vcl-bud-field");
-      ccField.appendChild(el("label", "vcl-bud-field-label", "Countries (CMS)"));
-      var checks = el("div", "vcl-bud-cc-checks");
-      countriesByRole("CMS").forEach(function (c) {
-        if (c.cc === d.procedure.rms) return; // RMS cannot also be a CMS
-        var label = el("label", "vcl-bud-cc-check");
-        var cb = el("input"); cb.type = "checkbox";
-        cb.checked = d.procedure.cms.indexOf(c.cc) !== -1;
-        cb.addEventListener("change", function () {
-          var i = d.procedure.cms.indexOf(c.cc);
-          if (cb.checked && i === -1) d.procedure.cms.push(c.cc);
-          if (!cb.checked && i !== -1) d.procedure.cms.splice(i, 1);
-          rerender();
-        });
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode(" " + c.cc));
-        checks.appendChild(label);
-      });
-      ccField.appendChild(checks);
-      modal.appendChild(ccField);
-    }
+  function renderVariationRow(v, idx) {
+    var sub = modalState.draft.submission;
+    var row = el("div", "vcl-bud-var-row");
+    var entry = v.code ? ENTRIES.find(function (e) { return e.code === v.code; }) : null;
 
-    // Quarter + Probability
-    var qpRow = el("div", "vcl-bud-field vcl-bud-field-row");
-    var qCol = el("div");
+    var main = el("div", "vcl-bud-var-row__main");
+    if (entry) main.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(entry.code) + "</span> " + escapeHtml(entry.title);
+    else if (v.code) main.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(v.code) + "</span>";
+    else main.innerHTML = '<span class="vcl-bud-var-row__muted">No classification code</span>';
+    row.appendChild(main);
+
+    var types = entry ? typesForEntry(entry) : ["IA", "IB", "II"];
+    var badges = el("div", "vcl-bud-var-row__types");
+    types.forEach(function (t) {
+      var badge = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + typeBucketClass(t) + (t === v.type ? " is-active" : ""), escapeHtml(t));
+      badge.addEventListener("click", function () { v.type = t; rerender(); });
+      badges.appendChild(badge);
+    });
+    row.appendChild(badges);
+
+    var rm = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger", "✕");
+    rm.type = "button";
+    rm.setAttribute("aria-label", "Remove variation");
+    rm.addEventListener("click", function () {
+      sub.variations.splice(idx, 1);
+      rerender();
+    });
+    row.appendChild(rm);
+    return row;
+  }
+
+  // Emphasised live Fee / RA-hours preview, recomputed from the draft on every rerender via the
+  // single shared engine (BUD.computeLineResult -> VCL_SUBMISSION) -- no pricing logic here.
+  function renderPreviewStrip(host) {
+    host.innerHTML = "";
+    var preview = BUD.computeLineResult(modalState.draft, engines());
+    var feeItem = el("div");
+    feeItem.innerHTML = '<div class="lbl">Fee</div><div class="val">' +
+      (preview.complete ? escapeHtml(fmtEUR(preview.fee)) : '<span class="vcl-bud-warn">Countries incomplete</span>') + "</div>";
+    host.appendChild(feeItem);
+    var hoursItem = el("div");
+    hoursItem.innerHTML = '<div class="lbl">RA hours</div><div class="val">' +
+      (preview.complete
+        ? Math.round(preview.hours.expected) + ' h <span class="band">' + Math.round(preview.hours.min) + "–" + Math.round(preview.hours.max) + "</span>"
+        : "—") + "</div>";
+    host.appendChild(hoursItem);
+    host.appendChild(el("p", "vcl-bud-live-result__note", "Grouping cap & worksharing lead pricing applied automatically."));
+  }
+
+  function renderModal() {
+    var d = modalState.draft;
+    var sub = d.submission;
+    var overlay = el("div", "vcl-bud-modal-overlay");
+    var modal = el("div", "vcl-bud-modal");
+
+    // Header
+    var head = el("div", "vcl-bud-modal__head");
+    var title = (modalState.editingId ? "Edit" : "New") + " plan line" + (d.product ? " — " + d.product : "");
+    head.appendChild(el("h2", null, escapeHtml(title)));
+    var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
+    closeBtn.type = "button";
+    closeBtn.addEventListener("click", closeModal);
+    head.appendChild(closeBtn);
+    modal.appendChild(head);
+
+    // Meta row: Product / Quarter / Probability (moved out of the old single-station body)
+    var metaRow = el("div", "vcl-bud-meta-row");
+    var productCol = el("div", "vcl-bud-field");
+    productCol.appendChild(el("label", "vcl-bud-field-label", "Product"));
+    var productInput = el("input", "vcl-bud-input");
+    productInput.type = "text"; productInput.value = d.product;
+    // No rerender() here: this is a text input, same focus-safety rule as the search field --
+    // rebuilding the DOM per keystroke would drop focus/caret mid-typing.
+    productInput.addEventListener("input", function () { d.product = productInput.value; });
+    productCol.appendChild(productInput);
+    metaRow.appendChild(productCol);
+
+    var qCol = el("div", "vcl-bud-field");
     qCol.appendChild(el("label", "vcl-bud-field-label", "Quarter"));
     var qSelect = el("select", "vcl-bud-select");
     var qPlaceholder = el("option", null, "—");
@@ -446,11 +483,13 @@
       if (d.quarter === q) opt.selected = true;
       qSelect.appendChild(opt);
     });
-    qSelect.addEventListener("change", function () { d.quarter = qSelect.value || null; });
+    // A <select> "change" only fires once a choice is finalised (no keystroke-level focus risk),
+    // so it's safe to rerender -- and it needs to, to refresh the summary line's quarter.
+    qSelect.addEventListener("change", function () { d.quarter = qSelect.value || null; rerender(); });
     qCol.appendChild(qSelect);
-    qpRow.appendChild(qCol);
+    metaRow.appendChild(qCol);
 
-    var pCol = el("div");
+    var pCol = el("div", "vcl-bud-field");
     pCol.appendChild(el("label", "vcl-bud-field-label", "Probability"));
     var pSelect = el("select", "vcl-bud-select");
     [100, 75, 50, 25].forEach(function (p) {
@@ -458,22 +497,53 @@
       if (d.probability === p) opt.selected = true;
       pSelect.appendChild(opt);
     });
-    pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); });
+    pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); rerender(); });
     pCol.appendChild(pSelect);
-    qpRow.appendChild(pCol);
-    modal.appendChild(qpRow);
+    metaRow.appendChild(pCol);
+    modal.appendChild(metaRow);
 
-    // Live preview
-    var preview = BUD.computeLineResult(d, engines());
-    var liveResult = el("div", "vcl-bud-live-result");
-    var feeItem = el("div");
-    feeItem.innerHTML = '<div class="lbl">Fee</div><div class="val">' + escapeHtml(fmtEUR(preview.fee)) + "</div>";
-    liveResult.appendChild(feeItem);
-    var hoursItem = el("div");
-    hoursItem.innerHTML = '<div class="lbl">RA hours</div><div class="val">' + Math.round(preview.hours.expected) +
-      ' h <span class="band">' + Math.round(preview.hours.min) + "–" + Math.round(preview.hours.max) + "</span></div>";
-    liveResult.appendChild(hoursItem);
-    modal.appendChild(liveResult);
+    // Station stepper (A · B · C) -- clicking a chip only swaps the body card's content via
+    // stationBody() and repaints the stepper's own active/done classes in place; it does not
+    // trigger a full container-level rerender() (nothing about the draft changed).
+    var card = el("div", "vcl-bud-body");
+    var stepper = el("div", "vcl-bud-stations");
+    var stationButtons = {};
+    function paintStepper() {
+      STATIONS.forEach(function (s) {
+        var btn = stationButtons[s.key];
+        var active = modalState.station === s.key;
+        var done = stationDone(s.key, sub);
+        btn.className = "vcl-bud-station" + (active ? " is-active" : "") + (done ? " is-done" : "");
+        btn.firstChild.innerHTML = done ? '<span aria-hidden="true">✓</span>' : s.key;
+      });
+    }
+    STATIONS.forEach(function (s) {
+      var btn = el("button", "vcl-bud-station");
+      btn.type = "button";
+      btn.appendChild(el("div", "vcl-bud-station__dot", s.key));
+      btn.appendChild(el("div", "vcl-bud-station__label", escapeHtml(s.label)));
+      btn.addEventListener("click", function () {
+        modalState.station = s.key;
+        paintStepper();
+        stationBody(card);
+      });
+      stationButtons[s.key] = btn;
+      stepper.appendChild(btn);
+    });
+    paintStepper();
+    modal.appendChild(stepper);
+
+    // Body card (Station A/B/C content)
+    stationBody(card);
+    modal.appendChild(card);
+
+    // Live preview strip
+    var strip = el("div", "vcl-bud-live-result");
+    modal.appendChild(strip);
+    renderPreviewStrip(strip);
+
+    // De-emphasised summary line
+    modal.appendChild(el("p", "vcl-bud-modal__summary", escapeHtml(summaryLine(d))));
 
     // Footer
     var foot = el("div", "vcl-bud-modal__foot");
