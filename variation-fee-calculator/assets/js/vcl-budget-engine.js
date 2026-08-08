@@ -33,7 +33,7 @@
   function computeLineResult(line, engines) {
     engines = engines || {};
     var sub = (line && line.submission) || {};
-    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0 }, complete: false };
+    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0 }, hoursDetail: null, complete: false };
     if (!engines.SUB || !engines.computeFees) return out;
     var feeRes = engines.SUB.computeSubmissionFees(sub, engines); // {total, byCountry}
     out.complete = feeRes.total !== null;
@@ -41,7 +41,12 @@
     out.fee = feeRes.total || 0;
     out.feeByCountry = feeRes.byCountry || [];
     var h = engines.SUB.computeSubmissionHours(sub, engines);
-    if (h) out.hours = { min: h.min, max: h.max, expected: h.expected };
+    if (h) {
+      out.hours = { min: h.min, max: h.max, expected: h.expected };
+      // Itemised breakdown (grouped RA / CMC / Compilation, matching the GW method box) for the
+      // expandable per-line detail in the table.
+      out.hoursDetail = { items: h.items, sections: h.sections };
+    }
     return out;
   }
 

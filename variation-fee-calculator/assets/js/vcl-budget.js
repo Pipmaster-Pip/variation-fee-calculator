@@ -11,7 +11,7 @@
   var ENTRIES = DATA.ENTRIES || [];
 
   // Full shape VCL_SUBMISSION's API expects (see vcl-submission.js header) -- SUB is the
-  // module itself so computeLineResult/renderModal/renderTable all delegate pricing/hours to
+  // module itself so computeLineResult/renderEditor/renderTable all delegate pricing/hours to
   // the single shared engine instead of reimplementing anything here.
   function engines() {
     return {
@@ -27,31 +27,77 @@
 
   // ---- per-submission summary helpers for the plan-lines table (pure) ----
   var SUB = window.VCL_SUBMISSION;
+  // Variations cell: one colour-coded type-badge (+ classification code, if any) per variation,
+  // inline. Replaces the old "n · 1 IB·1 II" count string with the actual variations at a glance.
   function variationsSummary(sub) {
-    var n = sub.variations.length;
-    if (n === 0) return "—";
-    if (n === 1) return escapeHtml(sub.variations[0].code || sub.variations[0].type || "1 variation");
-    var c = SUB.feeCounts(sub); // {IA,IB,II}
-    var mix = ["IA", "IB", "II"].filter(function (k) { return c[k] > 0; }).map(function (k) { return c[k] + " " + k; }).join("·");
-    return n + " · " + mix;
+    if (!sub.variations.length) return "—";
+    var pills = sub.variations.map(function (v) {
+      var t = v.type || "";
+      var badge = t ? '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>" : "";
+      var code = v.code ? '<span class="vcl-bud-var-cell__code">' + escapeHtml(v.code) + "</span>" : "";
+      var body = (badge + code) || '<span class="vcl-bud-var-cell__muted">variation</span>';
+      return '<span class="vcl-bud-var-pill">' + body + "</span>";
+    }).join("");
+    return '<span class="vcl-bud-var-cell">' + pills + "</span>";
   }
+  // The country code stored for a procedure can be composite ("DE - BfArM"); the table cell shows
+  // just the 2-letter base so every chip stays compact.
+  function ccShort(cc) {
+    var s = String(cc == null ? "" : cc);
+    var m = /^([A-Za-z]{2})/.exec(s);
+    return m ? m[1] : s;
+  }
+  // Procedures cell: a country-code chip per procedure (RMS highlighted, CMS as plain chips after a
+  // "→", CP shown as "CP · EMA"). Only the *visible* procedures are shown -- extras beyond the base
+  // exist only in a multi-procedure (WS/SG) submission -- so this never over-counts hidden ones.
   function proceduresSummary(sub) {
-    var nat = 0, mrp = 0, cp = 0, cms = 0;
-    sub.procedures.forEach(function (p) {
-      if (p.kind === "national") nat++;
-      else if (p.kind === "mrpdcp") { mrp++; cms += (p.cms || []).length; }
-      else if (p.kind === "cp") cp++;
+    if (!sub.procedures.length) return "—";
+    var visible = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
+    var parts = visible.map(function (p) {
+      if (p.kind === "cp") return '<span class="vcl-bud-cc vcl-bud-cc--cp">CP · EMA</span>';
+      if (p.kind === "national") {
+        return p.nat
+          ? '<span class="vcl-bud-cc">' + escapeHtml(ccShort(p.nat)) + "</span>"
+          : '<span class="vcl-bud-cc-empty">national?</span>';
+      }
+      if (p.kind === "mrpdcp") {
+        var rms = p.rms
+          ? '<span class="vcl-bud-cc vcl-bud-cc--rms">' + escapeHtml(ccShort(p.rms)) + "</span>"
+          : '<span class="vcl-bud-cc-empty">RMS?</span>';
+        var cmsList = p.cms || [];
+        var arrow = cmsList.length ? '<span class="vcl-bud-proc-arrow">→</span>' : "";
+        var cms = cmsList.map(function (cc) { return '<span class="vcl-bud-cc">' + escapeHtml(ccShort(cc)) + "</span>"; }).join("");
+        return '<span class="vcl-bud-proc-grp">' + rms + arrow + cms + "</span>";
+      }
+      return "";
     });
-    var bits = [];
-    if (nat) bits.push(nat + " nat");
-    if (mrp) bits.push(mrp + " MRP/DCP" + (cms ? " (" + cms + " CMS)" : ""));
-    if (cp) bits.push(cp + " CP");
-    return bits.join(" · ") || "—";
+    return '<span class="vcl-bud-proc-cell">' + parts.join('<span class="vcl-bud-proc-sep">·</span>') + "</span>";
+  }
+  // Plain-text variants of the two cell summaries, for the Excel export (the on-screen ones return
+  // HTML markup, which a spreadsheet cell must never receive).
+  function variationsText(sub) {
+    if (!sub.variations.length) return "—";
+    return sub.variations.map(function (v) {
+      return [v.type, v.code].filter(Boolean).join(" ") || "variation";
+    }).join(", ");
+  }
+  function proceduresText(sub) {
+    if (!sub.procedures.length) return "—";
+    var visible = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
+    return visible.map(function (p) {
+      if (p.kind === "cp") return "CP EMA";
+      if (p.kind === "national") return "National " + (ccShort(p.nat) || "?");
+      if (p.kind === "mrpdcp") {
+        var cms = (p.cms || []).map(ccShort).join(", ");
+        return "MRP/DCP " + (ccShort(p.rms) || "?") + (cms ? " → " + cms : "");
+      }
+      return "";
+    }).join(" · ");
   }
   var MODE_LABEL = { worksharing: "Worksharing", superGrouping: "Super-Grouping", annualUpdate: "Annual Update", grouping: "Grouping", single: "Single" };
 
   var plan = BUD.loadPlan(window.localStorage);
-  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true };
+  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedIds: {} };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
 
@@ -70,6 +116,9 @@
       editingId: id || null,
       draft: existing ? JSON.parse(JSON.stringify(existing)) : BUD.newLine("line-" + Date.now() + "-" + Math.floor(Math.random() * 1000)),
       station: "A", // stations editor always opens on Station A (Variations)
+      // GW-style forward gating: a new line is a wizard (only A reached until each station is
+      // completed); an existing line is fully reached so the user can jump A/B/C freely.
+      reached: id ? { A: true, B: true, C: true } : { A: true, B: false, C: false },
       query: "",
       searchResults: [],
     };
@@ -123,7 +172,7 @@
   function renderRollupTiles(rollup) {
     var wrap = el("div", "vcl-bud-rollup");
     var feeTile = el("div", "vcl-bud-tile");
-    feeTile.appendChild(el("p", "vcl-bud-tile__label", "Annual fees"));
+    feeTile.appendChild(el("p", "vcl-bud-tile__label", "Variation fees"));
     feeTile.appendChild(el("p", "vcl-bud-tile__value", escapeHtml(fmtEUR(rollup.totals.fee))));
     feeTile.appendChild(el("p", "vcl-bud-tile__sub", state.lines.length + " plan lines"));
     wrap.appendChild(feeTile);
@@ -174,6 +223,85 @@
     return panel;
   }
 
+  // Whole-hours-ish band formatter for the detail rows: keeps half hours (matches the workbook's
+  // raw ranges) but drops trailing ".0".
+  function hNum(n) { var x = Math.round((n || 0) * 10) / 10; return String(x); }
+  function hBand(mm) { if (!mm) return "—"; var lo = hNum(mm.min), hi = hNum(mm.max); return lo === hi ? lo + " h" : lo + "–" + hi + " h"; }
+
+  // Expandable per-line detail (chosen "Variant A"): the itemised RA-hours breakdown grouped into
+  // RA / CMC / Compilation sections (with subtotals + PERT total, matching the GW method box),
+  // beside the fee-by-country and the probability-weighted expected value. Rendered as a full-width
+  // <tr> appended under the line row.
+  function renderDetailRow(line, r) {
+    var tr = el("tr", "vcl-bud-detail-row");
+    var td = el("td"); td.colSpan = 8;
+    var box = el("div", "vcl-bud-detail");
+
+    if (!r.complete || !r.hoursDetail) {
+      box.appendChild(el("p", "vcl-bud-hint", "Set all countries for this line to see the fee and RA-hours breakdown."));
+      td.appendChild(box); tr.appendChild(td); return tr;
+    }
+
+    var d = r.hoursDetail; // { items:{ra,cmc,compilation}, sections:{ra,cmc,compilation,total} }
+    var grid = el("div", "vcl-bud-detail__grid");
+
+    // Left column: itemised RA-hours build-up.
+    var left = el("div");
+    function section(title, items, subtotal) {
+      if (!items || !items.length) return;
+      left.appendChild(el("div", "vcl-bud-detail__sec", escapeHtml(title)));
+      items.forEach(function (it) {
+        var row = el("div", "vcl-bud-detail__item");
+        row.appendChild(el("span", null, escapeHtml(it.label)));
+        row.appendChild(el("span", "vcl-bud-detail__h", hBand(it)));
+        left.appendChild(row);
+      });
+      var sub = el("div", "vcl-bud-detail__sub");
+      sub.appendChild(el("span", null, "Subtotal · " + escapeHtml(title)));
+      sub.appendChild(el("span", null, hBand(subtotal)));
+      left.appendChild(sub);
+    }
+    section("RA activities", d.items.ra, d.sections.ra);
+    section("CMC activities", d.items.cmc, d.sections.cmc);
+    section("Compilation & submission", d.items.compilation, d.sections.compilation);
+    var tot = el("div", "vcl-bud-detail__total");
+    tot.appendChild(el("span", null, "RA workload total"));
+    tot.appendChild(el("span", null, Math.round(r.hours.expected) + " h · " + hBand(d.sections.total)));
+    left.appendChild(tot);
+    grid.appendChild(left);
+
+    // Right column: fee by country + probability-weighted expected value.
+    var right = el("div");
+    right.appendChild(el("div", "vcl-bud-detail__sec", "Fee by country"));
+    (r.feeByCountry || []).forEach(function (f) {
+      var row = el("div", "vcl-bud-detail__item");
+      row.appendChild(el("span", null, '<span class="vcl-bud-cc">' + escapeHtml(ccShort(f.cc)) + "</span>"));
+      row.appendChild(el("span", "vcl-bud-detail__h", escapeHtml(fmtEUR(f.total))));
+      right.appendChild(row);
+    });
+    var feeSub = el("div", "vcl-bud-detail__sub");
+    feeSub.appendChild(el("span", null, "Total fee"));
+    feeSub.appendChild(el("span", null, escapeHtml(fmtEUR(r.fee))));
+    right.appendChild(feeSub);
+
+    var p = (line.probability == null) ? 100 : line.probability;
+    right.appendChild(el("div", "vcl-bud-detail__sec", "Expected value (× " + p + "% probability)"));
+    var ef = el("div", "vcl-bud-detail__item");
+    ef.appendChild(el("span", null, "Expected fee"));
+    ef.appendChild(el("span", "vcl-bud-detail__h", escapeHtml(fmtEUR(r.fee * p / 100))));
+    right.appendChild(ef);
+    var eh = el("div", "vcl-bud-detail__item");
+    eh.appendChild(el("span", null, "Expected hours"));
+    eh.appendChild(el("span", "vcl-bud-detail__h", Math.round(r.hours.expected * p / 100) + " h"));
+    right.appendChild(eh);
+    grid.appendChild(right);
+
+    box.appendChild(grid);
+    td.appendChild(box);
+    tr.appendChild(td);
+    return tr;
+  }
+
   function renderTable(rollup) {
     var wrap = el("div");
     var head = el("div", "vcl-bud-table-head");
@@ -191,7 +319,8 @@
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
-      var tr = el("tr");
+      var expanded = !!state.expandedIds[line.id];
+      var tr = el("tr", "vcl-bud-line-row" + (expanded ? " is-expanded" : ""));
       var mode = SUB.displayMode(sub);
       var modePill = '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--' + mode + '">' + escapeHtml(MODE_LABEL[mode]) + "</span>";
       var feeCell = r.complete
@@ -201,8 +330,10 @@
         ? '<td class="vcl-bud-num">' + Math.round(r.hours.expected) + ' h<div class="vcl-bud-hours-band">' +
           Math.round(r.hours.min) + "–" + Math.round(r.hours.max) + "</div></td>"
         : '<td class="vcl-bud-num">—</td>';
+      // The Product cell carries a chevron and is the expand toggle (data-act="expand"); the row
+      // detail (fee + RA-hours breakdown) is appended below when open. Multiple rows may be open.
       tr.innerHTML =
-        "<td>" + escapeHtml(line.product || "—") + "</td>" +
+        '<td class="vcl-bud-expcell" data-act="expand"><span class="vcl-bud-chev" aria-hidden="true">' + (expanded ? "▾" : "▸") + "</span>" + escapeHtml(line.product || "—") + "</td>" +
         "<td>" + modePill + "</td>" +
         "<td>" + variationsSummary(sub) + "</td>" +
         "<td class=\"vcl-bud-proc-summary\">" + proceduresSummary(sub) + "</td>" +
@@ -215,6 +346,7 @@
         "</td>";
       tr.dataset.lineId = line.id;
       tbody.appendChild(tr);
+      if (expanded) tbody.appendChild(renderDetailRow(line, r));
     });
     table.appendChild(tbody);
 
@@ -238,15 +370,26 @@
 
   function rerender() {
     if (!container) return;
-    var rollup = BUD.computeRollup(state.lines, state.resultsById);
 
     container.innerHTML = "";
     if (!state.storageOk) {
       container.appendChild(el("div", "vcl-bud-warn", "Your plan isn't being saved in this browser."));
     }
+
+    // Editor is a full "takeover": while a line is being built/edited the station flow replaces the
+    // dashboard (header actions + tiles + breakdown + table) entirely -- no pop-up overlay.
+    if (modalState) {
+      container.appendChild(renderEditor());
+      return;
+    }
+
+    var rollup = BUD.computeRollup(state.lines, state.resultsById);
     var header = el("div", "vcl-bud-header");
-    var left = el("div");
-    left.appendChild(el("h2", null, "Budget Planning"));
+    var left = el("div", "vcl-bud-header__intro");
+    // Budget planning is done for the coming year (e.g. in 2026 you plan 2027), so surface the
+    // plan year right in the heading.
+    var planYear = new Date().getFullYear() + 1;
+    left.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + planYear + "</span>"));
     left.appendChild(el("p", null, "Portfolio-wide annual plan: fees &amp; RA effort across all products and markets."));
     header.appendChild(left);
     var actions = el("div", "vcl-bud-header__actions");
@@ -265,8 +408,6 @@
     container.appendChild(breakdown);
 
     container.appendChild(renderTable(rollup));
-
-    if (modalState) container.appendChild(renderModal());
   }
 
   // Worksharing / Super-Grouping / Annual Update are EU-only procedures: these three authorities
@@ -303,7 +444,12 @@
       item.type = "button";
       item.addEventListener("click", function () {
         var types = typesForEntry(entry);
-        d.submission.variations.push({ code: entry.code, variantId: null, type: types[0] || null });
+        var v = { code: entry.code, variantId: null, type: types[0] || null };
+        // Picking sets the BASE variation (variations[0]); additional variations for a Grouping are
+        // added via the grouping list once a base is chosen. If a (possibly emptied) base slot
+        // already exists it's replaced in place so any additional variations keep their indices.
+        if (d.submission.variations.length) d.submission.variations[0] = v;
+        else d.submission.variations.push(v);
         modalState.query = "";
         modalState.searchResults = [];
         rerender(); // click, not a keystroke -- safe to fully rerender (no focus to preserve)
@@ -320,14 +466,38 @@
     { key: "C", label: "RA tasks" },
   ];
 
-  // "Done" gates for the stepper's checkmark state -- purely cosmetic (unlike the Guided
-  // Workflow's `reached` gate, every station here is always clickable; a plan line can be applied
-  // with any subset filled in and revisited later).
-  function stationDone(key, sub) {
-    if (key === "A") return sub.variations.length > 0;
-    if (key === "B") return sub.procedures.some(function (p) { return !!(p.nat || p.rms || p.kind === "cp"); });
-    var rt = sub.raTasks || {};
-    return !!(rt.cmc || rt.compilation || rt.pi);
+  var STATION_ORDER = ["A", "B", "C"];
+
+  // Completion gate per station (GW-style): drives the stepper checkmark, the "Next" enablement,
+  // and the final "Add/Save line" enablement. A is complete once every variation carries a type
+  // (needed to price); B once every *visible* procedure has its authority/country resolved (and,
+  // in a WS/SG lead scenario, a lead is chosen); C is always satisfiable (core RA prep is always
+  // included, the optional modules are opt-in).
+  function stationComplete(key, sub) {
+    if (key === "A") return sub.variations.length > 0 && sub.variations.every(function (v) { return !!v.type; });
+    if (key === "B") {
+      var procs = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
+      var procsOk = procs.every(function (p) {
+        return p.kind === "cp" || (p.kind === "national" && p.nat) || (p.kind === "mrpdcp" && p.rms);
+      });
+      var leadOk = !SUB.leadPricingActive(sub) || !!sub.lead;
+      return procsOk && leadOk;
+    }
+    return true;
+  }
+
+  // Step one station forward/back. Forward is gated: it only advances if the current station is
+  // complete, and it marks the destination "reached" so its stepper dot becomes clickable.
+  function advanceStation(dir) {
+    var sub = modalState.draft.submission;
+    var i = STATION_ORDER.indexOf(modalState.station);
+    var j = i + dir;
+    if (j < 0 || j >= STATION_ORDER.length) return;
+    if (dir > 0 && !stationComplete(modalState.station, sub)) return;
+    var key = STATION_ORDER[j];
+    if (dir > 0) modalState.reached[key] = true;
+    modalState.station = key;
+    refreshEditor();
   }
 
   // De-emphasised one-line summary shown under the live-preview strip.
@@ -356,31 +526,51 @@
   // a full container-level rerender(). Used for every Station B/C mutation (all of which are chip /
   // select / checkbox clicks, never a text-input keystroke). Station A keeps its own rerender()
   // path because of its focus-sensitive search <input> (see populateSearchResults). The host
-  // references are captured by renderModal() each time the modal is (re)built.
+  // references are captured by renderEditor() each time the modal is (re)built.
   function refreshEditor() {
     if (!modalState) return;
     // Clear any now-invalid strategy BEFORE the body/preview repaint, independent of the active
     // station (Station A refreshes never run renderStationB's own clear).
     normalizeModeEnablement(modalState.draft.submission);
     if (modalState.paintStepper) modalState.paintStepper();
+    if (modalState.paintNav) modalState.paintNav();
     if (modalState.bodyHost) stationBody(modalState.bodyHost);
     if (modalState.previewHost) renderPreviewStrip(modalState.previewHost);
     if (modalState.summaryHost) modalState.summaryHost.textContent = summaryLine(modalState.draft);
   }
 
-  // ---- Station A: Variations ----
+  // ---- Station A: Variations -- mirrors the Guided Workflow's buildStationA exactly. ----
+  // Empty base: "Classification" search + a "No classification code? Set the type directly:"
+  // quick-pick. Once a base variation is chosen: a picked-header (+ Change) and the grouping list
+  // for any further variations. variations[0] is always the base slot; variations[1..] are the
+  // additional (grouping) variations.
   function renderStationA(host) {
     var sub = modalState.draft.submission;
     host.appendChild(el("div", "vcl-bud-body__title", "Variations"));
-    host.appendChild(el("div", "vcl-bud-body__sub", "Which variation, or variations, are you submitting? Two or more are priced as a Grouping."));
+    host.appendChild(el("div", "vcl-bud-body__sub", "Which variation, or variations, are you submitting?"));
 
-    // Search field: focus-safe targeted-update pattern (populateSearchResults only ever rebuilds
-    // the results host below, never this input) -- see populateSearchResults for why that matters.
+    var base = sub.variations[0];
+    var baseSet = base && (base.code || base.type);
+
+    if (!baseSet) {
+      // Empty state: search + quick-pick, no grouping list yet (GW's early return).
+      renderClassificationSearch(host);
+      renderTypeQuickPick(host);
+      return;
+    }
+
+    renderPickedBaseHeader(host, base);
+    renderGroupingList(host);
+  }
+
+  // "Classification" search field (focus-safe targeted-update pattern: populateSearchResults only
+  // ever rebuilds the results host below, never this input).
+  function renderClassificationSearch(host) {
     var varField = el("div", "vcl-bud-field");
-    varField.appendChild(el("label", "vcl-bud-field-label", "Search variation"));
+    varField.appendChild(el("label", "vcl-bud-field-label", "Classification"));
     var varInput = el("input", "vcl-bud-input");
     varInput.type = "text";
-    varInput.placeholder = "Search by code or keyword ...";
+    varInput.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ...";
     varInput.value = modalState.query || "";
     varInput.addEventListener("input", function () {
       modalState.query = varInput.value;
@@ -393,53 +583,177 @@
     varField.appendChild(results);
     populateSearchResults(results);
     host.appendChild(varField);
+  }
 
-    // Quick-add without a classification code (e.g. "just a Type IB, no code yet") -- the row's
-    // type badges (all three IA/IB/II, since no entry constrains it) let the user set it after.
-    var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "+ Add variation");
-    addBtn.type = "button";
-    addBtn.addEventListener("click", function () {
-      sub.variations.push({ code: null, variantId: null, type: null });
+  // "No classification code? Set the type directly:" -- sets the base variation's type with no code.
+  function renderTypeQuickPick(host) {
+    var wrap = el("div", "vcl-bud-quicktype");
+    wrap.appendChild(el("div", "vcl-bud-quicktype__label", "No classification code? Set the type directly:"));
+    var opts = el("div", "vcl-bud-chips");
+    ["IA", "IB", "II"].forEach(function (t) {
+      var chip = el("button", "vcl-bud-chip vcl-bud-chip--type",
+        "Type " + escapeHtml(t) + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>");
+      chip.type = "button";
+      chip.addEventListener("click", function () {
+        var v = { code: null, variantId: null, type: t };
+        if (modalState.draft.submission.variations.length) modalState.draft.submission.variations[0] = v;
+        else modalState.draft.submission.variations.push(v);
+        modalState.query = "";
+        modalState.searchResults = [];
+        rerender();
+      });
+      opts.appendChild(chip);
+    });
+    wrap.appendChild(opts);
+    host.appendChild(wrap);
+  }
+
+  // Picked base header (+ Change) -- GW's buildPickedHeader / buildTypeOnlyHeader. When the picked
+  // classification entry offers more than one type, a small type chooser lets the user switch.
+  function renderPickedBaseHeader(host, base) {
+    var entry = base.code ? ENTRIES.find(function (e) { return e.code === base.code; }) : null;
+    var badge = base.type ? ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(base.type) + '">' + escapeHtml(base.type) + "</span>" : "";
+    var picked = el("div", "vcl-bud-picked");
+    var label = el("span");
+    if (entry) label.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(entry.code) + "</span> — " + escapeHtml(entry.title) + badge;
+    else if (base.code) label.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(base.code) + "</span>" + badge;
+    else label.innerHTML = "Variation type" + badge + ' <span class="vcl-bud-picked__muted">— no classification code</span>';
+    picked.appendChild(label);
+    var change = el("button", "vcl-bud-change", "Change");
+    change.type = "button";
+    change.addEventListener("click", function () {
+      // Empty the base slot (keep it at index 0 so additional variations keep their indices) --
+      // reverts to the search / quick-pick.
+      modalState.draft.submission.variations[0] = { code: null, variantId: null, type: null };
+      modalState.query = "";
+      modalState.searchResults = [];
       rerender();
     });
-    host.appendChild(addBtn);
+    picked.appendChild(change);
+    host.appendChild(picked);
 
-    var list = el("div", "vcl-bud-var-list");
-    sub.variations.forEach(function (v, idx) { list.appendChild(renderVariationRow(v, idx)); });
-    host.appendChild(list);
+    // Type chooser for a multi-type classification entry (planning-grade: the type drives the fee).
+    if (entry) {
+      var types = typesForEntry(entry);
+      if (types.length > 1) {
+        var chooser = el("div", "vcl-bud-var-row__types");
+        chooser.style.marginTop = "8px";
+        types.forEach(function (t) {
+          var b = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + typeBucketClass(t) + (t === base.type ? " is-active" : ""), escapeHtml(t));
+          b.addEventListener("click", function () { base.type = t; rerender(); });
+          chooser.appendChild(b);
+        });
+        host.appendChild(chooser);
+      }
+    }
+  }
+
+  // Additional variations (variations[1..]) -- GW's buildGroupingList. Two or more variations total
+  // are priced as a Grouping.
+  function renderGroupingList(host) {
+    var sub = modalState.draft.submission;
+    var panel = el("div", "vcl-bud-builder");
+    var head = el("div", "vcl-bud-builder__head");
+    head.appendChild(el("span", null, "Additional variations"));
+    head.appendChild(el("span", "vcl-bud-count", String(Math.max(0, sub.variations.length - 1))));
+    panel.appendChild(head);
+
+    sub.variations.slice(1).forEach(function (v, i) { panel.appendChild(renderVariationRow(v, i + 1)); });
+
+    var add = el("button", "vcl-bud-add", "＋ Add variation");
+    add.type = "button";
+    add.addEventListener("click", function () { sub.variations.push({ code: null, variantId: null, type: null, query: "" }); rerender(); });
+    panel.appendChild(add);
+    host.appendChild(panel);
 
     if (sub.variations.length >= 2) {
       host.appendChild(el("p", "vcl-bud-hint", sub.variations.length + " variations — this line is priced as a Grouping."));
     }
   }
 
+  // One additional (grouping) variation row -- mirrors the Guided Workflow's buildGroupingRow
+  // state machine: resolved (code+title+badge, or bare type) → text; a code with several types →
+  // a type chooser; empty → a per-row search + "or set the type directly:" quick-pick. The row's
+  // search rebuilds only its own matches host (focus-safe), never the whole editor.
   function renderVariationRow(v, idx) {
     var sub = modalState.draft.submission;
-    var row = el("div", "vcl-bud-var-row");
-    var entry = v.code ? ENTRIES.find(function (e) { return e.code === v.code; }) : null;
+    var row = el("div", "vcl-bud-brow");
 
-    var main = el("div", "vcl-bud-var-row__main");
-    if (entry) main.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(entry.code) + "</span> " + escapeHtml(entry.title);
-    else if (v.code) main.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(v.code) + "</span>";
-    else main.innerHTML = '<span class="vcl-bud-var-row__muted">No classification code</span>';
-    row.appendChild(main);
+    if (v.type) {
+      var main = el("div", "vcl-bud-brow__main");
+      if (v.code) {
+        var e0 = ENTRIES.find(function (x) { return x.code === v.code; });
+        main.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(v.code) + "</span> " + escapeHtml(e0 ? e0.title : "") +
+          ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(v.type) + '">' + escapeHtml(v.type) + "</span>";
+      } else {
+        main.innerHTML = 'Type <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(v.type) + '">' + escapeHtml(v.type) +
+          '</span> <span class="vcl-bud-picked__muted">— no classification code</span>';
+      }
+      row.appendChild(main);
+    } else if (v.code) {
+      // Code picked, but it has several types -- pick the type.
+      var e1 = ENTRIES.find(function (x) { return x.code === v.code; });
+      var mainC = el("div", "vcl-bud-brow__main");
+      mainC.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(v.code) + "</span> " + escapeHtml(e1 ? e1.title : "");
+      var chooser = el("div", "vcl-bud-brow__pick");
+      chooser.appendChild(el("div", "vcl-bud-hint", "pick the type:"));
+      typesForEntry(e1 || {}).forEach(function (t) {
+        var opt = el("div", "vcl-bud-variant");
+        opt.innerHTML = "<span>" + escapeHtml(t) + '</span> <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>";
+        opt.addEventListener("click", function () { v.type = t; rerender(); });
+        chooser.appendChild(opt);
+      });
+      mainC.appendChild(chooser);
+      row.appendChild(mainC);
+    } else {
+      // Empty -- search by code/title, or set the type directly (no classification).
+      var mainE = el("div", "vcl-bud-brow__main");
+      var inp = el("input", "vcl-bud-brow__input");
+      inp.type = "text";
+      inp.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ...";
+      inp.value = v.query || "";
+      inp.addEventListener("input", function () { v.query = inp.value; renderMatches(); });
+      mainE.appendChild(inp);
+      var matches = el("div", "vcl-bud-brow__matches");
+      mainE.appendChild(matches);
+      var quick = el("div", "vcl-bud-brow__variants");
+      quick.innerHTML = '<span class="vcl-bud-hint" style="margin:6px 6px 0 0;">or set the type directly:</span>';
+      ["IA", "IB", "II"].forEach(function (t) {
+        var b = el("button", "vcl-bud-chip vcl-bud-chip--type vcl-bud-chip--sm",
+          "Type " + escapeHtml(t) + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>");
+        b.type = "button";
+        b.addEventListener("click", function () { v.type = t; v.code = null; v.variantId = null; rerender(); });
+        quick.appendChild(b);
+      });
+      mainE.appendChild(quick);
+      row.appendChild(mainE);
+      renderMatches();
+      function renderMatches() {
+        matches.innerHTML = "";
+        var q = (v.query || "").trim().toLowerCase();
+        if (!q) return;
+        ENTRIES.filter(function (e) {
+          return e.code.toLowerCase().indexOf(q) !== -1 || (e.title || "").toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 6).forEach(function (e) {
+          var m = el("button", "vcl-bud-brow__match");
+          m.type = "button";
+          m.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(e.code) + "</span> " + escapeHtml(e.title);
+          m.addEventListener("click", function () {
+            v.code = e.code;
+            var ts = typesForEntry(e);
+            v.type = ts.length === 1 ? ts[0] : null; // single type resolves immediately; else pick
+            v.variantId = null;
+            rerender();
+          });
+          matches.appendChild(m);
+        });
+      }
+    }
 
-    var types = entry ? typesForEntry(entry) : ["IA", "IB", "II"];
-    var badges = el("div", "vcl-bud-var-row__types");
-    types.forEach(function (t) {
-      var badge = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + typeBucketClass(t) + (t === v.type ? " is-active" : ""), escapeHtml(t));
-      badge.addEventListener("click", function () { v.type = t; rerender(); });
-      badges.appendChild(badge);
-    });
-    row.appendChild(badges);
-
-    var rm = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger", "✕");
+    var rm = el("button", "vcl-bud-rm", "✕");
     rm.type = "button";
     rm.setAttribute("aria-label", "Remove variation");
-    rm.addEventListener("click", function () {
-      sub.variations.splice(idx, 1);
-      rerender();
-    });
+    rm.addEventListener("click", function () { sub.variations.splice(idx, 1); rerender(); });
     row.appendChild(rm);
     return row;
   }
@@ -496,62 +810,69 @@
     return row;
   }
 
-  // CMS multi-select for an MRP/DCP procedure -- reuses the budget checkbox chip style; the current
-  // RMS is excluded from the offered CMS.
-  function cmsChecks(p) {
+  // CMS multi-select for an MRP/DCP procedure -- a GW-style clickable country-code chip grid
+  // (mirrors vcl-workflow.js procEditor's vcl-wf-cgrid), NOT checkboxes. The current RMS is
+  // excluded. Composite codes ("DE - BfArM") render as the base code + a tiny authority suffix.
+  function cmsChips(p) {
     var wrap = el("div", "vcl-bud-field");
     wrap.appendChild(el("label", "vcl-bud-field-label", "CMS (Concerned Member States)"));
-    var box = el("div", "vcl-bud-cc-checks");
+    var grid = el("div", "vcl-bud-cgrid");
     countriesByRole("CMS").forEach(function (c) {
       if (c.cc === p.rms) return; // the RMS cannot also be a CMS
       var on = (p.cms || []).indexOf(c.cc) !== -1;
-      var label = el("label", "vcl-bud-cc-check");
-      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on;
-      cb.addEventListener("change", function () {
-        if (cb.checked) { if (p.cms.indexOf(c.cc) === -1) p.cms.push(c.cc); }
-        else p.cms = p.cms.filter(function (x) { return x !== c.cc; });
+      var m = /^([A-Za-z]{2})\s*[-–]\s*(.+)$/.exec(c.cc);
+      var label = m ? escapeHtml(m[1]) + '<span class="vcl-bud-cc__sfx">' + escapeHtml(m[2]) + "</span>" : escapeHtml(c.cc);
+      var chip = el("button", "vcl-bud-cc-chip-btn" + (on ? " is-on" : ""), label);
+      chip.type = "button";
+      chip.title = c.name || c.cc;
+      chip.addEventListener("click", function () {
+        if (on) p.cms = p.cms.filter(function (x) { return x !== c.cc; });
+        else if (p.cms.indexOf(c.cc) === -1) p.cms.push(c.cc);
         refreshEditor();
       });
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(" " + c.cc));
-      label.title = c.name || c.cc;
-      box.appendChild(label);
+      grid.appendChild(chip);
     });
-    wrap.appendChild(box);
+    wrap.appendChild(grid);
     return wrap;
   }
 
-  function renderProcedureRow(p, idx) {
+  // Inner content of one procedure: the kind chips (National / MRP-DCP / CP) + the country-level
+  // fields for the chosen kind. Shared by the base procedure (rendered inline under "Procedure",
+  // GW-style) and by each additional procedure card (in WS/SG).
+  function procedureBody(host, p) {
     var sub = modalState.draft.submission;
-    var card = el("div", "vcl-bud-proc-card");
-    var head = el("div", "vcl-bud-proc-card__head");
-    head.appendChild(el("span", "vcl-bud-proc-card__title", idx === 0 ? "Primary procedure" : "Procedure " + (idx + 1)));
-    // Remove only for the added procedures (procedures[1..]); the base procedure[0] is permanent.
-    if (idx >= 1) {
-      var rm = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger", "✕");
-      rm.type = "button"; rm.setAttribute("aria-label", "Remove procedure");
-      rm.addEventListener("click", function () { sub.procedures.splice(idx, 1); refreshEditor(); });
-      head.appendChild(rm);
-    }
-    card.appendChild(head);
-    card.appendChild(procKindChips(p));
-
+    host.appendChild(procKindChips(p));
     if (p.kind === "national") {
       // EU-only national list once a multi-procedure / annual-update strategy is active.
       var euOnly = SUB.multiProcedureMode(sub) || SUB.auActive(sub);
       var natList = countriesByRole("national").filter(function (c) {
         return !euOnly || NON_EU_PROCEDURE_COUNTRIES.indexOf(c.cc) === -1;
       });
-      card.appendChild(countrySelectField("Country", natList, p.nat, function (cc) { p.nat = cc; refreshEditor(); }));
+      host.appendChild(countrySelectField("Country", natList, p.nat, function (cc) { p.nat = cc; refreshEditor(); }));
     } else if (p.kind === "mrpdcp") {
-      card.appendChild(countrySelectField("RMS (Reference Member State)", countriesByRole("RMS"), p.rms, function (cc) {
+      host.appendChild(countrySelectField("RMS (Reference Member State)", countriesByRole("RMS"), p.rms, function (cc) {
         p.rms = cc; p.cms = (p.cms || []).filter(function (x) { return x !== cc; }); refreshEditor();
       }));
-      card.appendChild(cmsChecks(p));
-      card.appendChild(el("p", "vcl-bud-hint", "Each selected CMS is charged its own national fee. The RMS cannot also be a CMS."));
+      host.appendChild(cmsChips(p));
+      host.appendChild(el("p", "vcl-bud-hint", "Each selected CMS is charged its own national fee. The RMS cannot also be a CMS."));
     } else if (p.kind === "cp") {
-      card.appendChild(el("p", "vcl-bud-hint", "CP · EMA — centralised procedure, one authority (EMA), no country selection."));
+      host.appendChild(el("p", "vcl-bud-hint", "CP · EMA — centralised procedure, one authority (EMA), no country selection."));
     }
+  }
+
+  // An *additional* procedure (procedures[1..], WS/SG only) -- a removable card wrapping the shared
+  // procedureBody. The base procedure (procedures[0]) is rendered inline by renderStationB instead.
+  function renderProcedureRow(p, idx) {
+    var sub = modalState.draft.submission;
+    var card = el("div", "vcl-bud-proc-card");
+    var head = el("div", "vcl-bud-proc-card__head");
+    head.appendChild(el("span", "vcl-bud-proc-card__title", "Procedure " + (idx + 1)));
+    var rm = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger", "✕");
+    rm.type = "button"; rm.setAttribute("aria-label", "Remove procedure");
+    rm.addEventListener("click", function () { sub.procedures.splice(idx, 1); refreshEditor(); });
+    head.appendChild(rm);
+    card.appendChild(head);
+    procedureBody(card, p);
     return card;
   }
 
@@ -572,7 +893,7 @@
     // Worksharing/Super-Grouping always leads the group via the EMA (mirrors the Guided Workflow's
     // forced-EMA lead, vcl-workflow.js:2244/947 -- see renderStationB's lead block for the
     // corresponding UI lock/hint). This force must run from every normalize call-site
-    // (refreshEditor, renderModal, applyModal), not just whenever Station B happens to paint --
+    // (refreshEditor, renderEditor, applyModal), not just whenever Station B happens to paint --
     // otherwise a line persisted/migrated BEFORE this rule existed (CP + a stale non-EMA
     // sub.lead) could be re-opened and Applied from Station A/C without Station B ever
     // repainting, silently persisting a stale RMS lead that misprices.
@@ -592,59 +913,37 @@
     host.appendChild(el("div", "vcl-bud-body__title", "Procedures"));
     host.appendChild(el("div", "vcl-bud-body__sub", "How is it submitted, and where? Fees are per country, so the countries are set here."));
 
-    // --- Strategy chips (opt-in Worksharing / Super-Grouping / Annual Update) ---
-    host.appendChild(el("div", "vcl-bud-section-label", "Multi-authorisation strategy"));
+    // --- 1. Base procedure first (GW order): kind + country, rendered inline under "Procedure". ---
+    host.appendChild(el("div", "vcl-bud-section-label", "Procedure"));
+    procedureBody(host, sub.procedures[0]);
+
+    // --- 2. Submission type: Worksharing (mixed), or Super-Grouping / Annual Update (all Type IA).
+    // Only the applicable option(s) are offered, exactly as the Guided Workflow does. ---
+    host.appendChild(el("div", "vcl-bud-section-label", "Submission type"));
     var chips = el("div", "vcl-bud-chips");
-    [
-      { mode: "worksharing", label: "Worksharing", disabled: allIA },
-      { mode: "superGrouping", label: "Super-Grouping", disabled: !allIA },
-      { mode: "annualUpdate", label: "Annual Update", disabled: !allIA },
-    ].forEach(function (s) {
+    (allIA
+      ? [{ mode: "superGrouping", label: "Super-Grouping" }, { mode: "annualUpdate", label: "Annual Update" }]
+      : [{ mode: "worksharing", label: "Worksharing" }]
+    ).forEach(function (s) {
       var on = sub.mode === s.mode;
-      var chip = el("button", "vcl-bud-chip" + (on ? " is-on" : "") + (s.disabled ? " is-disabled" : ""), escapeHtml(s.label));
+      var chip = el("button", "vcl-bud-chip" + (on ? " is-on" : ""), escapeHtml(s.label));
       chip.type = "button";
-      if (s.disabled) { chip.disabled = true; }
-      else chip.addEventListener("click", function () { sub.mode = on ? null : s.mode; refreshEditor(); });
+      chip.addEventListener("click", function () { sub.mode = on ? null : s.mode; refreshEditor(); });
       chips.appendChild(chip);
     });
     host.appendChild(chips);
-
-    // With no strategy set, show the DERIVED state (Single / Grouping) as a non-interactive label.
+    host.appendChild(el("p", "vcl-bud-hint", allIA
+      ? "Available because every listed variation is Type IA. Super-Grouping shares the change across several authorisations; Annual Update keeps it within this one."
+      : "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation."));
+    // With no submission type set, show the DERIVED state (Single / Grouping) as a plain label.
     if (!sub.mode) {
       var dm = SUB.displayMode(sub); // "single" | "grouping"
       var derived = el("div", "vcl-bud-derived");
-      derived.innerHTML = "No multi-authorisation strategy — priced as <strong>" + escapeHtml(MODE_LABEL[dm]) + "</strong>.";
+      derived.innerHTML = "No submission type — priced as <strong>" + escapeHtml(MODE_LABEL[dm]) + "</strong>.";
       host.appendChild(derived);
-    } else {
-      host.appendChild(el("p", "vcl-bud-hint", allIA
-        ? "Type-IA-only: Super-Grouping shares the change across several authorisations; Annual Update keeps it within this one."
-        : "Worksharing shares the change across several procedures or authorisations."));
     }
 
-    // --- Procedure rows: base procedure always; extras only in WS/SG (multiProcedureMode) ---
-    host.appendChild(el("div", "vcl-bud-section-label", "Procedures"));
-    var list = el("div", "vcl-bud-proc-list");
-    var procs = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
-    procs.forEach(function (p, idx) { list.appendChild(renderProcedureRow(p, idx)); });
-    host.appendChild(list);
-
-    if (SUB.multiProcedureMode(sub)) {
-      var add = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "+ Add procedure");
-      add.type = "button";
-      add.addEventListener("click", function () {
-        var np = { kind: "national", nat: null, rms: null, cms: [] };
-        // Respect CP-exclusivity from the outset: if 'national' is not allowed (a CP already sits
-        // in the group), start the new procedure on the first allowed kind instead.
-        if (SUB.sgActive(sub)) {
-          var allowed = engines().sgLogic.computeAllowedProcedureKinds(sub.procedures, np);
-          if (allowed.indexOf(np.kind) === -1) np.kind = allowed[0];
-        }
-        sub.procedures.push(np);
-        refreshEditor();
-      });
-      host.appendChild(add);
-    }
-
+    // --- 3. Lead + additional procedures (WS / SG only, after the submission type is chosen). ---
     // --- Lead (WS / SG only): RMS-role authorities + the EMA, writing d.submission.lead ---
     if (SUB.leadPricingActive(sub)) {
       var leadList = countriesByRole("RMS").slice();
@@ -669,6 +968,28 @@
           ? "Automatically the EMA — this Super-Grouping consists of Centralised procedures."
           : "Automatically the EMA, because a Centralised procedure (CP) is part of the worksharing."));
       }
+    }
+
+    // Additional procedures (procedures[1..]) -- only in a multi-procedure submission (WS / SG).
+    if (SUB.multiProcedureMode(sub)) {
+      host.appendChild(el("div", "vcl-bud-section-label", "Additional procedures"));
+      var list = el("div", "vcl-bud-proc-list");
+      sub.procedures.slice(1).forEach(function (p, i) { list.appendChild(renderProcedureRow(p, i + 1)); });
+      host.appendChild(list);
+      var add = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "+ Add procedure");
+      add.type = "button";
+      add.addEventListener("click", function () {
+        var np = { kind: "national", nat: null, rms: null, cms: [] };
+        // Respect CP-exclusivity from the outset: if 'national' is not allowed (a CP already sits
+        // in the group), start the new procedure on the first allowed kind instead.
+        if (SUB.sgActive(sub)) {
+          var allowed = engines().sgLogic.computeAllowedProcedureKinds(sub.procedures, np);
+          if (allowed.indexOf(np.kind) === -1) np.kind = allowed[0];
+        }
+        sub.procedures.push(np);
+        refreshEditor();
+      });
+      host.appendChild(add);
     }
   }
 
@@ -751,24 +1072,24 @@
     host.appendChild(el("p", "vcl-bud-live-result__note", "Grouping cap & worksharing lead pricing applied automatically."));
   }
 
-  function renderModal() {
+  function renderEditor() {
     var d = modalState.draft;
     var sub = d.submission;
     // Full rerenders (e.g. Station A variation edits) land here without touching Station B, so run
     // the enablement clear BEFORE the body card and the live preview strip are built below.
     normalizeModeEnablement(sub);
-    var overlay = el("div", "vcl-bud-modal-overlay");
-    var modal = el("div", "vcl-bud-modal");
+    var wrap = el("div", "vcl-bud-editor");
 
-    // Header
-    var head = el("div", "vcl-bud-modal__head");
+    // Header: title + a ✕ that cancels back to the dashboard (discarding the draft copy).
+    var head = el("div", "vcl-bud-editor__head");
     var title = (modalState.editingId ? "Edit" : "New") + " plan line" + (d.product ? " — " + d.product : "");
     head.appendChild(el("h2", null, escapeHtml(title)));
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Cancel and return to plan");
     closeBtn.addEventListener("click", closeModal);
     head.appendChild(closeBtn);
-    modal.appendChild(head);
+    wrap.appendChild(head);
 
     // Meta row: Product / Quarter / Probability (moved out of the old single-station body)
     var metaRow = el("div", "vcl-bud-meta-row");
@@ -811,11 +1132,12 @@
     pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); rerender(); });
     pCol.appendChild(pSelect);
     metaRow.appendChild(pCol);
-    modal.appendChild(metaRow);
+    wrap.appendChild(metaRow);
 
-    // Station stepper (A · B · C) -- clicking a chip only swaps the body card's content via
-    // stationBody() and repaints the stepper's own active/done classes in place; it does not
-    // trigger a full container-level rerender() (nothing about the draft changed).
+    // Station stepper (A · B · C). Clicking a *reached* dot swaps the body card's content via a
+    // targeted refresh (no full container rerender -- nothing about the draft changed). Unreached
+    // dots are disabled until forward-navigation opens them (GW-style gating). The dot shows a ✓
+    // once the station is complete (and isn't the active one).
     var card = el("div", "vcl-bud-body");
     var stepper = el("div", "vcl-bud-stations");
     var stationButtons = {};
@@ -823,7 +1145,8 @@
       STATIONS.forEach(function (s) {
         var btn = stationButtons[s.key];
         var active = modalState.station === s.key;
-        var done = stationDone(s.key, sub);
+        var done = modalState.reached[s.key] && stationComplete(s.key, sub) && !active;
+        btn.disabled = !modalState.reached[s.key];
         btn.className = "vcl-bud-station" + (active ? " is-active" : "") + (done ? " is-done" : "");
         btn.firstChild.innerHTML = done ? '<span aria-hidden="true">✓</span>' : s.key;
       });
@@ -834,8 +1157,7 @@
       btn.appendChild(el("div", "vcl-bud-station__dot", s.key));
       btn.appendChild(el("div", "vcl-bud-station__label", escapeHtml(s.label)));
       btn.addEventListener("click", function () {
-        // Switching stations changes no draft data, so a targeted refresh is enough (and repaints
-        // the stepper's own active/done classes via refreshEditor -> paintStepper).
+        if (!modalState.reached[s.key]) return; // gated: can't jump ahead of the wizard
         modalState.station = s.key;
         refreshEditor();
       });
@@ -843,42 +1165,59 @@
       stepper.appendChild(btn);
     });
     paintStepper();
-    modal.appendChild(stepper);
+    wrap.appendChild(stepper);
 
     // Body card (Station A/B/C content)
     stationBody(card);
-    modal.appendChild(card);
+    wrap.appendChild(card);
+
+    // Bottom navigation (GW-style): Back on the left; Next on A/B, and the final Add/Save line on
+    // C. Repainted in place by refreshEditor -> paintNav so the Next/finish enablement tracks the
+    // station's completion live as the user fills it in.
+    var nav = el("div", "vcl-bud-nav");
+    function paintNav() {
+      nav.innerHTML = "";
+      var idx = STATION_ORDER.indexOf(modalState.station);
+      var back = el("button", "vcl-bud-btn", "← Back");
+      back.type = "button";
+      back.disabled = idx === 0;
+      back.addEventListener("click", function () { advanceStation(-1); });
+      nav.appendChild(back);
+      if (idx === STATION_ORDER.length - 1) {
+        var finish = el("button", "vcl-bud-btn vcl-bud-btn--primary", modalState.editingId ? "Save line" : "+ Add line");
+        finish.type = "button";
+        finish.disabled = !(stationComplete("A", sub) && stationComplete("B", sub));
+        finish.addEventListener("click", applyModal);
+        nav.appendChild(finish);
+      } else {
+        var next = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Next →");
+        next.type = "button";
+        next.disabled = !stationComplete(modalState.station, sub);
+        next.addEventListener("click", function () { advanceStation(1); });
+        nav.appendChild(next);
+      }
+    }
+    paintNav();
+    wrap.appendChild(nav);
 
     // Live preview strip
     var strip = el("div", "vcl-bud-live-result");
-    modal.appendChild(strip);
+    wrap.appendChild(strip);
     renderPreviewStrip(strip);
 
     // De-emphasised summary line
     var summaryP = el("p", "vcl-bud-modal__summary", escapeHtml(summaryLine(d)));
-    modal.appendChild(summaryP);
+    wrap.appendChild(summaryP);
 
     // Capture the live host references for refreshEditor()'s targeted (non-full-rerender) updates.
-    // Reset on every renderModal() so they always point at the current DOM nodes.
+    // Reset on every renderEditor() so they always point at the current DOM nodes.
     modalState.paintStepper = paintStepper;
+    modalState.paintNav = paintNav;
     modalState.bodyHost = card;
     modalState.previewHost = strip;
     modalState.summaryHost = summaryP;
 
-    // Footer
-    var foot = el("div", "vcl-bud-modal__foot");
-    var cancelBtn = el("button", "vcl-bud-btn", "Cancel");
-    cancelBtn.type = "button";
-    cancelBtn.addEventListener("click", closeModal);
-    var applyBtn = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Apply");
-    applyBtn.type = "button";
-    applyBtn.addEventListener("click", applyModal);
-    foot.appendChild(cancelBtn);
-    foot.appendChild(applyBtn);
-    modal.appendChild(foot);
-
-    overlay.appendChild(modal);
-    return overlay;
+    return wrap;
   }
 
   function duplicateLine(id) {
@@ -895,12 +1234,14 @@
   function deleteLine(id) {
     state.lines = state.lines.filter(function (l) { return l.id !== id; });
     delete state.resultsById[id];
+    delete state.expandedIds[id];
     saveState();
     rerender();
   }
   function clearPlan() {
     state.lines = [];
     state.resultsById = {};
+    state.expandedIds = {};
     saveState();
     rerender();
   }
@@ -923,7 +1264,7 @@
       // only the priced columns collapse to 0, mirroring the on-screen table's "Countries
       // incomplete" cell (r.complete === false).
       linesRows.push([
-        line.product || "", MODE_LABEL[mode] || mode, variationsSummary(sub), proceduresSummary(sub),
+        line.product || "", MODE_LABEL[mode] || mode, variationsText(sub), proceduresText(sub),
         line.quarter || "", line.probability, r.complete ? r.fee : 0,
         r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
       ]);
@@ -932,7 +1273,7 @@
     XLSX.utils.book_append_sheet(wb, wsLines, "Plan lines");
 
     var rollupRows = [
-      ["Annual fees (EUR)", rollup.totals.fee],
+      ["Variation fees (EUR)", rollup.totals.fee],
       ["Annual RA hours (expected)", Math.round(rollup.totals.hoursExpected)],
       ["Annual RA hours (min)", Math.round(rollup.totals.hoursMin)],
       ["Annual RA hours (max)", Math.round(rollup.totals.hoursMax)],
@@ -949,7 +1290,19 @@
     XLSX.writeFile(wb, "budget-plan-" + dateStr + ".xlsx");
   }
 
+  function toggleExpand(id) {
+    if (state.expandedIds[id]) delete state.expandedIds[id];
+    else state.expandedIds[id] = true;
+    rerender();
+  }
   function onTableClick(evt) {
+    // The Product cell toggles the line's detail row (multiple rows may be open at once).
+    var expandCell = evt.target.closest('td[data-act="expand"]');
+    if (expandCell) {
+      var trE = expandCell.closest("tr[data-line-id]");
+      if (trE && trE.dataset.lineId) toggleExpand(trE.dataset.lineId);
+      return;
+    }
     var btn = evt.target.closest("button[data-act]");
     if (!btn) return;
     var tr = btn.closest("tr[data-line-id]");

@@ -5,10 +5,14 @@
 <title>Budget Planning — dev harness</title>
 <link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css" />
 <link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css" />
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-budget-style.css" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-budget-style.css?v=6" />
 <style>
   body { margin: 0; padding: 24px; background: #EFEFEC; font-family: -apple-system, sans-serif; }
   .vclcalc-app { display: none; } /* real calculator markup kept only so vcl-calc-app.js has its DOM hooks */
+  /* Harness-only: the real page puts Budget in column 2 of a 300px+1fr grid; with the calculator
+     hidden that leaves an empty 300px column squeezing the tool. Let it span the full width here. */
+  .vcl-app .layout { grid-template-columns: 1fr; }
+  .vcl-app .budget-col { grid-column: 1; padding-right: 0; }
 </style>
 </head>
 <body>
@@ -33,7 +37,7 @@
   <script src="../../variation-fee-calculator/assets/js/vcl-sg-logic.js"></script>
   <script src="../../variation-fee-calculator/assets/js/vcl-submission.js"></script>
   <script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js"></script>
-  <script src="../../variation-fee-calculator/assets/js/vcl-budget.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-budget.js?v=6"></script>
   <script>
     window.VCL_BUDGET.render(document.getElementById("vcl-budgetCol"));
   </script>
