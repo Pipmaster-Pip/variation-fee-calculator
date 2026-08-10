@@ -33,6 +33,11 @@
 .vcl-app .vcl-bud-btn:hover { border-color: var(--budget); }
 .vcl-app .vcl-bud-btn--primary { background: var(--budget); border-color: var(--budget); color: #fff; }
 .vcl-app .vcl-bud-btn--primary:hover { background: #612941; }
+/* The dashboard "+ New line" button uses the soft-tint chip treatment (tint fill + budget text),
+   not the solid primary fill -- the attribute+class selector outranks .vcl-bud-btn--primary above.
+   The editor's Next / Add line CTAs keep the solid primary fill. */
+.vcl-app .vcl-bud-btn--primary[data-act="new-line"] { background: var(--budget-bg); border-color: var(--budget); color: var(--budget); }
+.vcl-app .vcl-bud-btn--primary[data-act="new-line"]:hover { background: #EED9E1; }
 .vcl-app .vcl-bud-btn--ghost { border-color: transparent; background: transparent; padding: 9px 10px; }
 .vcl-app .vcl-bud-btn--ghost:hover { background: var(--border-soft); border-color: transparent; }
 .vcl-app .vcl-bud-btn--small { font-size: 12px; padding: 6px 10px; }
@@ -61,6 +66,10 @@
 .vcl-app table.vcl-bud-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 880px; }
 .vcl-app table.vcl-bud-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 10px 12px; background: var(--border-soft); white-space: nowrap; }
 .vcl-app table.vcl-bud-table td { padding: 10px 12px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
+/* WordPress themes routinely add vertical cell borders to every <table>; force this table's own
+   clean look -- only horizontal row rules, never dangling vertical column lines. */
+.vcl-app table.vcl-bud-table th,
+.vcl-app table.vcl-bud-table td { border-left: 0; border-right: 0; }
 .vcl-app table.vcl-bud-table tbody tr:hover { background: var(--budget-tint); }
 .vcl-app .vcl-bud-cc-chip { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--border-soft); color: var(--muted); margin: 1px 2px 1px 0; }
 /* Mode pill (table "Mode" column) -- shared budget tint/text, with a per-mode accent border so
@@ -71,34 +80,50 @@
 .vcl-app .vcl-bud-mode-pill--worksharing { background: rgba(58, 108, 168, 0.10); color: #3A6CA8; }
 .vcl-app .vcl-bud-mode-pill--superGrouping { background: rgba(140, 90, 180, 0.10); color: #8C5AB4; }
 .vcl-app .vcl-bud-mode-pill--annualUpdate { background: rgba(60, 150, 130, 0.10); color: #2E8C77; }
-.vcl-app .vcl-bud-proc-summary { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
-/* Variations cell -- colour-coded type badge (+ code) per variation, inline. */
-.vcl-app .vcl-bud-var-cell { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vcl-app .vcl-bud-proc-summary { font-size: 12px; color: var(--muted); }
+/* Variations cell -- aggregated per type ("3 × IA, 5 × IB, 1 × II"): count + colour-coded badge. */
+.vcl-app .vcl-bud-var-cell { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.vcl-app .vcl-bud-var-agg { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-var-sep { color: var(--muted); margin-left: -4px; }
 .vcl-app .vcl-bud-var-pill { display: inline-flex; align-items: center; gap: 4px; }
 .vcl-app .vcl-bud-var-cell__code { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink); }
 .vcl-app .vcl-bud-var-cell__muted { color: var(--muted); font-style: italic; font-size: 12px; }
-/* Procedures cell -- country-code chips (RMS highlighted, CMS after a →, CP shown as CP · EMA). */
-.vcl-app .vcl-bud-proc-cell { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.vcl-app .vcl-bud-proc-grp { display: inline-flex; align-items: center; gap: 4px; }
-.vcl-app .vcl-bud-proc-arrow { color: var(--muted); }
-.vcl-app .vcl-bud-proc-sep { color: var(--ink-faint); margin: 0 2px; }
+/* Procedures cell -- procedures grouped by kind and stacked, one line per kind ("3 × nat. (HU, DE,
+   IT)" / "3 × CP" / "RMS DE (+ 5 CMS), RMS LT (+ 10 CMS)"). RMS codes highlighted. */
+.vcl-app .vcl-bud-proc-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.vcl-app .vcl-bud-proc-line { font-size: 12px; color: var(--ink); line-height: 1.5; }
+.vcl-app .vcl-bud-proc-k { color: var(--muted); }
 .vcl-app .vcl-bud-cc { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--border-soft); color: var(--muted); }
 .vcl-app .vcl-bud-cc--rms { background: var(--budget-tint); border: 1px solid var(--budget); color: var(--budget); padding: 0 5px; }
 .vcl-app .vcl-bud-cc--cp { background: var(--budget-tint); color: var(--budget); }
 .vcl-app .vcl-bud-cc-empty { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--ib); }
 .vcl-app .vcl-bud-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .vcl-app .vcl-bud-hours-band { color: var(--ink-faint); font-size: 11.5px; }
-.vcl-app .vcl-bud-row-actions { display: flex; gap: 2px; white-space: nowrap; }
+.vcl-app .vcl-bud-row-actions { display: flex; gap: 2px; white-space: nowrap; justify-content: flex-end; }
+/* Icon-only row actions: borderless (the old buttons drew a stray box), the SVG inherits the button
+   colour so hover tints it. */
+.vcl-app .vcl-bud-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; background: none; border-radius: 6px; color: var(--muted); cursor: pointer; }
+.vcl-app .vcl-bud-icon-btn:hover { background: var(--border-soft); color: var(--budget); }
+.vcl-app .vcl-bud-icon-btn--danger:hover { background: var(--ii-bg); color: var(--ii); }
+.vcl-app .vcl-bud-icon-btn svg { display: block; }
 .vcl-app .vcl-bud-warn { display: inline-flex; align-items: center; gap: 5px; color: var(--ib); font-size: 12px; font-weight: 600; }
 .vcl-app .vcl-bud-warn::before { content: "!"; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--ib-bg); font-size: 10px; }
 .vcl-app .vcl-bud-table tfoot td { padding: 11px 12px; font-weight: 600; border-top: 2px solid var(--border); background: var(--border-soft); font-variant-numeric: tabular-nums; }
+/* Round the Total row's bottom corners so its (bluish) fill ends flush with the wrapper's 12px
+   radius instead of poking square corners past the rounded border. */
+.vcl-app .vcl-bud-table tfoot tr:last-child td:first-child { border-bottom-left-radius: 11px; }
+.vcl-app .vcl-bud-table tfoot tr:last-child td:last-child { border-bottom-right-radius: 11px; }
 
-/* Expandable per-line detail (Product cell is the toggle; the detail is a full-width row below). */
-.vcl-app .vcl-bud-expcell { cursor: pointer; white-space: nowrap; }
+/* Expandable per-line detail (the whole row is the toggle; the detail is a full-width row below). */
+.vcl-app .vcl-bud-line-row { cursor: pointer; }
+.vcl-app .vcl-bud-expcell { white-space: nowrap; }
 .vcl-app .vcl-bud-chev { display: inline-block; width: 12px; color: var(--budget); font-size: 11px; margin-right: 4px; }
 .vcl-app .vcl-bud-line-row.is-expanded { background: var(--budget-tint); }
 .vcl-app .vcl-bud-line-row.is-expanded > td { border-bottom: none; }
-.vcl-app .vcl-bud-detail-row > td { padding: 0; background: var(--budget-tint); border-top: none; }
+/* Horizontal budget-coloured rules top AND bottom delimit the open detail as its own drawer -- a
+   clean "waagrechte Linie" instead of the column grid dangling down into it. The table.vcl-bud-table
+   prefix raises specificity above the generic "td { border-top: ... }" rule so the top rule sticks. */
+.vcl-app table.vcl-bud-table .vcl-bud-detail-row > td { padding: 0; background: var(--budget-tint); border-top: 1px solid var(--budget); border-bottom: 1px solid var(--budget); }
 .vcl-app .vcl-bud-detail { padding: 4px 16px 18px; }
 .vcl-app .vcl-bud-detail__grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 26px; }
 .vcl-app .vcl-bud-detail__sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; margin: 12px 0 4px; }
@@ -191,10 +216,12 @@
 .vcl-app .vcl-bud-input:focus, .vcl-app .vcl-bud-select:focus { outline: none; border-color: var(--budget); }
 /* CMS country-code chip grid (Station B, MRP/DCP) -- GW-style toggle chips, not checkboxes.
    Composite codes show a tiny authority suffix (vcl-bud-cc__sfx) after the 2-letter base. */
-.vcl-app .vcl-bud-cgrid { display: flex; flex-wrap: wrap; gap: 6px; }
-.vcl-app .vcl-bud-cc-chip-btn { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; padding: 5px 9px; border-radius: 7px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; display: inline-flex; align-items: baseline; gap: 3px; }
+.vcl-app .vcl-bud-cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 5px; }
+.vcl-app .vcl-bud-cc-chip-btn { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; padding: 5px 4px; border-radius: 6px; border: 0.5px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; display: inline-flex; align-items: baseline; justify-content: center; gap: 3px; }
 .vcl-app .vcl-bud-cc-chip-btn:hover { border-color: var(--budget); }
-.vcl-app .vcl-bud-cc-chip-btn.is-on { background: var(--budget); border-color: var(--budget); color: #fff; }
+/* Selected = soft budget tint (not a solid fill), mirroring the Guided Workflow's .vcl-wf-cc.is-on
+   geometry -- only the accent colour differs (budget red vs. the GW's green). */
+.vcl-app .vcl-bud-cc-chip-btn.is-on { background: var(--budget-bg); border-color: var(--budget); color: var(--budget); }
 .vcl-app .vcl-bud-cc__sfx { font-size: 9px; font-weight: 500; opacity: 0.7; }
 .vcl-app .vcl-bud-type-badge { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; }
 .vcl-app .vcl-bud-type-badge--ia { color: var(--ia); background: var(--ia-bg); }
@@ -245,6 +272,9 @@
    cancel (✕); the bottom nav mirrors the GW's Back / Next (with a final "Add / Save line"). --- */
 .vcl-app .vcl-bud-editor__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 0 0 16px; margin-bottom: 18px; border-bottom: 2px solid var(--budget); }
 .vcl-app .vcl-bud-editor__head h2 { font-family: "IBM Plex Serif", serif; font-size: 20px; margin: 0; font-weight: 600; }
+/* Tool-identity kicker above the New/Edit-line title, so "Budget Planning" never disappears while
+   the takeover editor is open. */
+.vcl-app .vcl-bud-editor__kicker { color: var(--budget); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 4px; }
 .vcl-app .vcl-bud-nav { display: flex; justify-content: space-between; margin-top: 18px; }
 .vcl-app .vcl-bud-btn[disabled] { opacity: 0.4; cursor: default; }
 .vcl-app .vcl-bud-btn[disabled]:hover { border-color: var(--border); background: var(--panel); }
@@ -255,9 +285,11 @@
 .vcl-app .vcl-bud-section-label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 16px 0 6px; }
 /* Opt-in chips: strategy (WS/SG/AU), procedure kind (National/MRP-DCP/CP), active substance, PI docs. */
 .vcl-app .vcl-bud-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
-.vcl-app .vcl-bud-chip { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; }
+.vcl-app .vcl-bud-chip { font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; }
 .vcl-app .vcl-bud-chip:hover { border-color: var(--budget); }
-.vcl-app .vcl-bud-chip.is-on { background: var(--budget); border-color: var(--budget); color: #fff; }
+/* Selected = soft budget tint (not a solid fill), mirroring the Guided Workflow's .vcl-wf-opt.is-on
+   -- geometry matches the GW; only the accent colour stays budget red (vs. the GW's green). */
+.vcl-app .vcl-bud-chip.is-on { background: var(--budget-bg); border-color: var(--budget); color: var(--budget); }
 .vcl-app .vcl-bud-chip.is-disabled { opacity: 0.4; pointer-events: none; }
 /* Derived (non-interactive) mode label shown when no strategy chip is chosen. */
 .vcl-app .vcl-bud-derived { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }

@@ -1318,6 +1318,10 @@
 .vcl-app .summary-footer__button--workflow { background: #EBF2E3; color: #35602A; border-color: #7CA766; }
 .vcl-app .summary-footer__button--workflow:hover { background: #E0EBD4; border-color: #41762F; }
 
+/* Hand-off to the Budget Planning tool carries that tool's budget-red identity. */
+.vcl-app .summary-footer__button--budget { background: #F5E9EE; color: #7A3350; border-color: #C79AAC; }
+.vcl-app .summary-footer__button--budget:hover { background: #EED9E1; border-color: #7A3350; }
+
 /* --- Grouping guidance: occupies the same grid cell as .detail-col/.summary-col
    (only one of the three is ever visible at a time). --- */
 .vcl-app .grouping-col {

@@ -39,6 +39,18 @@
   <script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js"></script>
   <script src="../../variation-fee-calculator/assets/js/vcl-budget.js?v=6"></script>
   <script>
+    // Optional demo data for a quick populated preview: open ...budget-harness.html?demo=1
+    // (seeds one grouping line with mixed variations + an MRP/DCP procedure, then renders).
+    if (/[?&]demo=1/.test(location.search)) {
+      localStorage.setItem("vcl_budget_plan_v2", JSON.stringify({ version: 2, hoursPerHead: 1600, lines: [{
+        id: "line-demo", product: "Ibuprofen", quarter: "Q2", probability: 100,
+        submission: { mode: null,
+          variations: [{ code: null, variantId: null, type: "IB" }, { code: null, variantId: null, type: "II" }, { code: null, variantId: null, type: "IA" }],
+          procedures: [{ kind: "mrpdcp", nat: null, rms: "DE", cms: ["BE", "LT", "LU", "HR", "CY", "DK", "EE"] }],
+          lead: null, raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+          strengths: { default: 1, overrides: {} }, specials: { line: {}, ws: {}, lead: null } }
+      }] }));
+    }
     window.VCL_BUDGET.render(document.getElementById("vcl-budgetCol"));
   </script>
 </body>

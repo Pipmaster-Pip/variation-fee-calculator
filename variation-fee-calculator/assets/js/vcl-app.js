@@ -130,6 +130,7 @@
     summaryPrint: document.getElementById("vcl-summaryPrint"),
     summaryExportCalculator: document.getElementById("vcl-summaryExportCalculator"),
     summaryExportWorkflow: document.getElementById("vcl-summaryExportWorkflow"),
+    summaryExportBudget: document.getElementById("vcl-summaryExportBudget"),
     groupingCol: document.getElementById("vcl-groupingCol"),
     preciseScopeCol: document.getElementById("vcl-preciseScopeCol"),
     qaCol: document.getElementById("vcl-qaCol"),
@@ -2043,30 +2044,6 @@
     workflowDivider.className = "tabs-divider tabs-divider--flush";
     el.browseTree.appendChild(workflowDivider);
 
-    const budgetBtn = document.createElement("button");
-    budgetBtn.type = "button";
-    budgetBtn.className = "tab" + (state.view === "budget" ? " tab--active" : "");
-    budgetBtn.style.setProperty("--accent", "var(--budget)");
-    budgetBtn.style.setProperty("--tint", "var(--budget-tint)");
-    budgetBtn.style.setProperty("--tab-bg", "var(--budget-bg)");
-    budgetBtn.innerHTML = `
-      <span class="tab__code">Budget Planning</span>
-      <span class="tab__title">Plan next year's fees and RA effort across your portfolio.</span>
-    `;
-    budgetBtn.addEventListener("click", () => {
-      state.view = "budget";
-      state.classifyOpen = false;
-      state.guidanceOpen = false;
-      renderBrowse();
-      switchViewVisibility();
-      if (window.VCL_BUDGET) window.VCL_BUDGET.render(el.budgetCol);
-      jumpToTop();
-    });
-    el.browseTree.appendChild(budgetBtn);
-    const budgetDivider = document.createElement("div");
-    budgetDivider.className = "tabs-divider tabs-divider--flush";
-    el.browseTree.appendChild(budgetDivider);
-
     const totalQty = totalSelectedQty();
     // Summary only appears once there's actually something to summarize -- before the first
     // variation is selected, it would just be an empty page one click away for no reason.
@@ -2247,6 +2224,33 @@
       jumpToTop();
     });
     el.browseTree.appendChild(timetablesBtn);
+
+    // Budget Planning sits at the very bottom of the nav (below the reference views), per the
+    // user's layout preference -- a divider separates it from the Timetables row above.
+    const budgetDivider = document.createElement("div");
+    budgetDivider.className = "tabs-divider tabs-divider--flush";
+    el.browseTree.appendChild(budgetDivider);
+
+    const budgetBtn = document.createElement("button");
+    budgetBtn.type = "button";
+    budgetBtn.className = "tab" + (state.view === "budget" ? " tab--active" : "");
+    budgetBtn.style.setProperty("--accent", "var(--budget)");
+    budgetBtn.style.setProperty("--tint", "var(--budget-tint)");
+    budgetBtn.style.setProperty("--tab-bg", "var(--budget-bg)");
+    budgetBtn.innerHTML = `
+      <span class="tab__code">Budget Planning</span>
+      <span class="tab__title">Plan next year's fees and RA effort across your portfolio.</span>
+    `;
+    budgetBtn.addEventListener("click", () => {
+      state.view = "budget";
+      state.classifyOpen = false;
+      state.guidanceOpen = false;
+      renderBrowse();
+      switchViewVisibility();
+      if (window.VCL_BUDGET) window.VCL_BUDGET.render(el.budgetCol);
+      jumpToTop();
+    });
+    el.browseTree.appendChild(budgetBtn);
   }
 
   function conditionKey(entryCode, variantId) {
@@ -2522,6 +2526,27 @@
       });
     }
     goToDestination("workflow");
+  });
+
+  // Hand the selected variations over to the Budget Planning tool as ONE new plan line (all
+  // variations as a single Grouping) -- VCL_BUDGET.prefill opens its takeover editor seeded at
+  // Station A so the user completes procedures/countries, then goToDestination paints it.
+  el.summaryExportBudget.addEventListener("click", () => {
+    const items = buildSummaryLineItems();
+    if (items.length === 0) {
+      window.alert("No variations selected yet -- nothing to hand over.");
+      return;
+    }
+    if (window.VCL_BUDGET && window.VCL_BUDGET.prefill) {
+      window.VCL_BUDGET.prefill({
+        variations: items.map((it) => ({
+          code: it.entry.code,
+          variantId: it.variant.id,
+          type: effectiveVariantType(it.entry, it.variant).label,
+        })),
+      });
+    }
+    goToDestination("budget");
   });
 
   async function exportSummaryToDocx() {

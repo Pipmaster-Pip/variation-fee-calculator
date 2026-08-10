@@ -28,15 +28,33 @@
   // ---- per-submission summary helpers for the plan-lines table (pure) ----
   var SUB = window.VCL_SUBMISSION;
   // Variations cell: one colour-coded type-badge (+ classification code, if any) per variation,
-  // inline. Replaces the old "n · 1 IB·1 II" count string with the actual variations at a glance.
+  // inline. Aggregated by type ("3 × IA, 5 × IB, 1 × II") -- one colour-coded badge per distinct
+  // type with its count, ordered IA < IB < II, rather than one pill per individual variation.
+  function aggregateVariationTypes(sub) {
+    var rank = { ia: 0, ib: 1, ii: 2 };
+    var counts = {}, order = [];
+    (sub.variations || []).forEach(function (v) {
+      var t = v.type || "?";
+      if (!(t in counts)) { counts[t] = 0; order.push(t); }
+      counts[t]++;
+    });
+    return order.map(function (t) { return { type: t, count: counts[t] }; })
+      .sort(function (a, b) {
+        var ra = rank[typeBucketClass(a.type)]; var rb = rank[typeBucketClass(b.type)];
+        if (ra == null) ra = 9; if (rb == null) rb = 9;
+        if (ra !== rb) return ra - rb;
+        return a.type < b.type ? -1 : (a.type > b.type ? 1 : 0);
+      });
+  }
   function variationsSummary(sub) {
     if (!sub.variations.length) return "—";
-    var pills = sub.variations.map(function (v) {
-      var t = v.type || "";
-      var badge = t ? '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>" : "";
-      var code = v.code ? '<span class="vcl-bud-var-cell__code">' + escapeHtml(v.code) + "</span>" : "";
-      var body = (badge + code) || '<span class="vcl-bud-var-cell__muted">variation</span>';
-      return '<span class="vcl-bud-var-pill">' + body + "</span>";
+    var groups = aggregateVariationTypes(sub);
+    var pills = groups.map(function (g, i) {
+      var badge = '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(g.type) + '">' + escapeHtml(g.type) + "</span>";
+      // Comma is kept INSIDE the group so it never wraps onto its own line -- a normal comma list
+      // that stays tidy when the narrow column forces the groups to stack.
+      var comma = (i < groups.length - 1) ? '<span class="vcl-bud-var-sep">,</span>' : "";
+      return '<span class="vcl-bud-var-agg">' + g.count + " × " + badge + comma + "</span>";
     }).join("");
     return '<span class="vcl-bud-var-cell">' + pills + "</span>";
   }
@@ -47,57 +65,77 @@
     var m = /^([A-Za-z]{2})/.exec(s);
     return m ? m[1] : s;
   }
-  // Procedures cell: a country-code chip per procedure (RMS highlighted, CMS as plain chips after a
-  // "→", CP shown as "CP · EMA"). Only the *visible* procedures are shown -- extras beyond the base
+  // Procedures cell: the procedures grouped by kind and stacked, one line per kind, so the *number*
+  // of procedures is legible at a glance (i. e. "3 × nat. (HU, DE, IT)" / "3 × CP" / "RMS DE (+ 5
+  // CMS), RMS LT (+ 10 CMS)"). Only the *visible* procedures are counted -- extras beyond the base
   // exist only in a multi-procedure (WS/SG) submission -- so this never over-counts hidden ones.
+  function groupProcedures(sub) {
+    var visible = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
+    var nat = [], cp = 0, mrp = [];
+    visible.forEach(function (p) {
+      if (p.kind === "national") nat.push(p.nat ? ccShort(p.nat) : "?");
+      else if (p.kind === "cp") cp++;
+      else if (p.kind === "mrpdcp") mrp.push(p);
+    });
+    return { nat: nat, cp: cp, mrp: mrp };
+  }
   function proceduresSummary(sub) {
     if (!sub.procedures.length) return "—";
-    var visible = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
-    var parts = visible.map(function (p) {
-      if (p.kind === "cp") return '<span class="vcl-bud-cc vcl-bud-cc--cp">CP · EMA</span>';
-      if (p.kind === "national") {
-        return p.nat
-          ? '<span class="vcl-bud-cc">' + escapeHtml(ccShort(p.nat)) + "</span>"
-          : '<span class="vcl-bud-cc-empty">national?</span>';
-      }
-      if (p.kind === "mrpdcp") {
+    var g = groupProcedures(sub);
+    var lines = [];
+    if (g.nat.length) {
+      var chips = g.nat.map(function (cc) {
+        return cc === "?" ? '<span class="vcl-bud-cc-empty">?</span>' : '<span class="vcl-bud-cc">' + escapeHtml(cc) + "</span>";
+      }).join("");
+      lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">' + g.nat.length + " × nat.</span> " + chips + "</span>");
+    }
+    if (g.cp) {
+      lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">' + g.cp + " × CP</span></span>");
+    }
+    if (g.mrp.length) {
+      var parts = g.mrp.map(function (p) {
         var rms = p.rms
           ? '<span class="vcl-bud-cc vcl-bud-cc--rms">' + escapeHtml(ccShort(p.rms)) + "</span>"
           : '<span class="vcl-bud-cc-empty">RMS?</span>';
-        var cmsList = p.cms || [];
-        var arrow = cmsList.length ? '<span class="vcl-bud-proc-arrow">→</span>' : "";
-        var cms = cmsList.map(function (cc) { return '<span class="vcl-bud-cc">' + escapeHtml(ccShort(cc)) + "</span>"; }).join("");
-        return '<span class="vcl-bud-proc-grp">' + rms + arrow + cms + "</span>";
-      }
-      return "";
-    });
-    return '<span class="vcl-bud-proc-cell">' + parts.join('<span class="vcl-bud-proc-sep">·</span>') + "</span>";
+        var n = (p.cms || []).length;
+        return '<span class="vcl-bud-proc-k">RMS</span> ' + rms + ' <span class="vcl-bud-proc-k">(+ ' + n + " CMS)</span>";
+      }).join('<span class="vcl-bud-proc-k">, </span>');
+      lines.push('<span class="vcl-bud-proc-line">' + parts + "</span>");
+    }
+    return '<span class="vcl-bud-proc-cell">' + lines.join("") + "</span>";
   }
   // Plain-text variants of the two cell summaries, for the Excel export (the on-screen ones return
   // HTML markup, which a spreadsheet cell must never receive).
   function variationsText(sub) {
     if (!sub.variations.length) return "—";
-    return sub.variations.map(function (v) {
-      return [v.type, v.code].filter(Boolean).join(" ") || "variation";
-    }).join(", ");
+    return aggregateVariationTypes(sub).map(function (g) { return g.count + " × " + g.type; }).join(", ");
   }
   function proceduresText(sub) {
     if (!sub.procedures.length) return "—";
-    var visible = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
-    return visible.map(function (p) {
-      if (p.kind === "cp") return "CP EMA";
-      if (p.kind === "national") return "National " + (ccShort(p.nat) || "?");
-      if (p.kind === "mrpdcp") {
-        var cms = (p.cms || []).map(ccShort).join(", ");
-        return "MRP/DCP " + (ccShort(p.rms) || "?") + (cms ? " → " + cms : "");
-      }
-      return "";
-    }).join(" · ");
+    var g = groupProcedures(sub);
+    var parts = [];
+    if (g.nat.length) parts.push(g.nat.length + " × nat. (" + g.nat.join(", ") + ")");
+    if (g.cp) parts.push(g.cp + " × CP");
+    g.mrp.forEach(function (p) {
+      parts.push("RMS " + (ccShort(p.rms) || "?") + " (+ " + (p.cms || []).length + " CMS)");
+    });
+    return parts.join("; ");
   }
   var MODE_LABEL = { worksharing: "Worksharing", superGrouping: "Super-Grouping", annualUpdate: "Annual Update", grouping: "Grouping", single: "Single" };
 
+  // Inline SVG row-action icons (16px, stroke = currentColor) -- render identically on every
+  // platform, unlike the glyph characters they replace (the ⧉ duplicate glyph fell back to a
+  // "tofu" box on some systems -- see renderTable).
+  var SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  var ICON = {
+    duplicate: SVG + '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    edit: SVG + '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    del: SVG + '<path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  };
+
   var plan = BUD.loadPlan(window.localStorage);
-  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedIds: {} };
+  // expandedId: id of the single currently-open detail row (only one line may be open at a time).
+  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
 
@@ -266,7 +304,7 @@
     section("Compilation & submission", d.items.compilation, d.sections.compilation);
     var tot = el("div", "vcl-bud-detail__total");
     tot.appendChild(el("span", null, "RA workload total"));
-    tot.appendChild(el("span", null, Math.round(r.hours.expected) + " h · " + hBand(d.sections.total)));
+    tot.appendChild(el("span", null, Math.round(r.hours.expected) + " h (" + hBand(d.sections.total) + ")"));
     left.appendChild(tot);
     grid.appendChild(left);
 
@@ -311,7 +349,13 @@
 
     var tableWrap = el("div", "vcl-bud-table-wrap");
     var table = el("table", "vcl-bud-table");
+    // Column widths: Procedures is now the widest (it carries the grouped, multi-line procedure
+    // summary), and Quarter / Fee / Hours are trimmed to make room. Set as <col> hints so the
+    // auto table-layout still lets Mode/Product grow for their content when needed.
     table.innerHTML =
+      '<colgroup><col style="width:13%"><col style="width:11%"><col style="width:12%">' +
+      '<col style="width:29%"><col style="width:7%"><col style="width:9%">' +
+      '<col style="width:9%"><col style="width:10%"></colgroup>' +
       "<thead><tr><th>Product</th><th>Mode</th><th>Variations</th><th>Procedures</th>" +
       "<th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
       "<th style=\"text-align:right\">Hours (PERT)</th><th></th></tr></thead>";
@@ -319,7 +363,7 @@
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
-      var expanded = !!state.expandedIds[line.id];
+      var expanded = state.expandedId === line.id;
       var tr = el("tr", "vcl-bud-line-row" + (expanded ? " is-expanded" : ""));
       var mode = SUB.displayMode(sub);
       var modePill = '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--' + mode + '">' + escapeHtml(MODE_LABEL[mode]) + "</span>";
@@ -330,19 +374,21 @@
         ? '<td class="vcl-bud-num">' + Math.round(r.hours.expected) + ' h<div class="vcl-bud-hours-band">' +
           Math.round(r.hours.min) + "–" + Math.round(r.hours.max) + "</div></td>"
         : '<td class="vcl-bud-num">—</td>';
-      // The Product cell carries a chevron and is the expand toggle (data-act="expand"); the row
-      // detail (fee + RA-hours breakdown) is appended below when open. Multiple rows may be open.
+      // The whole row is the expand toggle (handled in onTableClick, which excludes the action
+      // buttons); the chevron in the Product cell is just the affordance. Only one row is open at a
+      // time. Action icons are inline SVG (not glyph characters) so they render identically on every
+      // platform -- the old ⧉ duplicate glyph fell back to a "tofu" box on some systems.
       tr.innerHTML =
-        '<td class="vcl-bud-expcell" data-act="expand"><span class="vcl-bud-chev" aria-hidden="true">' + (expanded ? "▾" : "▸") + "</span>" + escapeHtml(line.product || "—") + "</td>" +
+        '<td class="vcl-bud-expcell"><span class="vcl-bud-chev" aria-hidden="true">' + (expanded ? "▾" : "▸") + "</span>" + escapeHtml(line.product || "—") + "</td>" +
         "<td>" + modePill + "</td>" +
         "<td>" + variationsSummary(sub) + "</td>" +
         "<td class=\"vcl-bud-proc-summary\">" + proceduresSummary(sub) + "</td>" +
         "<td>" + escapeHtml(line.quarter || "—") + "</td>" +
         feeCell + hoursCell +
         '<td class="vcl-bud-row-actions">' +
-        '<button type="button" class="vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small" data-act="duplicate" title="Duplicate">⧉</button>' +
-        '<button type="button" class="vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small" data-act="edit" title="Edit">✎</button>' +
-        '<button type="button" class="vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger" data-act="delete" title="Delete">✕</button>' +
+        '<button type="button" class="vcl-bud-icon-btn" data-act="duplicate" aria-label="Duplicate" title="Duplicate">' + ICON.duplicate + "</button>" +
+        '<button type="button" class="vcl-bud-icon-btn" data-act="edit" aria-label="Edit" title="Edit">' + ICON.edit + "</button>" +
+        '<button type="button" class="vcl-bud-icon-btn vcl-bud-icon-btn--danger" data-act="delete" aria-label="Delete" title="Delete">' + ICON.del + "</button>" +
         "</td>";
       tr.dataset.lineId = line.id;
       tbody.appendChild(tr);
@@ -1080,10 +1126,16 @@
     normalizeModeEnablement(sub);
     var wrap = el("div", "vcl-bud-editor");
 
-    // Header: title + a ✕ that cancels back to the dashboard (discarding the draft copy).
+    // Header: a "Budget Planning for <year>" kicker (so the tool identity never disappears while a
+    // line is being edited -- the editor is a full takeover of the dashboard) above the New/Edit
+    // line title, and a ✕ that cancels back to the dashboard (discarding the draft copy).
     var head = el("div", "vcl-bud-editor__head");
+    var titleWrap = el("div");
+    var editorYear = new Date().getFullYear() + 1;
+    titleWrap.appendChild(el("div", "vcl-bud-editor__kicker", "Budget Planning for " + editorYear));
     var title = (modalState.editingId ? "Edit" : "New") + " plan line" + (d.product ? " — " + d.product : "");
-    head.appendChild(el("h2", null, escapeHtml(title)));
+    titleWrap.appendChild(el("h2", null, escapeHtml(title)));
+    head.appendChild(titleWrap);
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Cancel and return to plan");
@@ -1234,14 +1286,14 @@
   function deleteLine(id) {
     state.lines = state.lines.filter(function (l) { return l.id !== id; });
     delete state.resultsById[id];
-    delete state.expandedIds[id];
+    if (state.expandedId === id) state.expandedId = null;
     saveState();
     rerender();
   }
   function clearPlan() {
     state.lines = [];
     state.resultsById = {};
-    state.expandedIds = {};
+    state.expandedId = null;
     saveState();
     rerender();
   }
@@ -1290,26 +1342,26 @@
     XLSX.writeFile(wb, "budget-plan-" + dateStr + ".xlsx");
   }
 
+  // Only one line's detail is open at a time: opening a different line closes the previous one.
   function toggleExpand(id) {
-    if (state.expandedIds[id]) delete state.expandedIds[id];
-    else state.expandedIds[id] = true;
+    state.expandedId = (state.expandedId === id) ? null : id;
     rerender();
   }
   function onTableClick(evt) {
-    // The Product cell toggles the line's detail row (multiple rows may be open at once).
-    var expandCell = evt.target.closest('td[data-act="expand"]');
-    if (expandCell) {
-      var trE = expandCell.closest("tr[data-line-id]");
-      if (trE && trE.dataset.lineId) toggleExpand(trE.dataset.lineId);
+    // An action button (duplicate / edit / delete) takes precedence and never toggles the row.
+    var btn = evt.target.closest("button[data-act]");
+    if (btn) {
+      var trB = btn.closest("tr[data-line-id]");
+      var id = trB && trB.dataset.lineId;
+      if (btn.dataset.act === "duplicate" && id) duplicateLine(id);
+      if (btn.dataset.act === "delete" && id) deleteLine(id);
+      if (btn.dataset.act === "edit" && id) openModalFor(id);
       return;
     }
-    var btn = evt.target.closest("button[data-act]");
-    if (!btn) return;
-    var tr = btn.closest("tr[data-line-id]");
-    var id = tr && tr.dataset.lineId;
-    if (btn.dataset.act === "duplicate" && id) duplicateLine(id);
-    if (btn.dataset.act === "delete" && id) deleteLine(id);
-    if (btn.dataset.act === "edit" && id) openModalFor(id);
+    // Anywhere else on a line row toggles that line's detail (the whole row is the target, not just
+    // the chevron). The detail row itself carries no data-line-id, so clicks inside it are ignored.
+    var tr = evt.target.closest("tr.vcl-bud-line-row[data-line-id]");
+    if (tr && tr.dataset.lineId) toggleExpand(tr.dataset.lineId);
   }
   function onHeaderClick(evt) {
     var btn = evt.target.closest("button[data-act]");
@@ -1327,6 +1379,27 @@
       container.removeEventListener("click", onHeaderClick);
       container.addEventListener("click", onHeaderClick);
       rerender();
+    },
+    // Hand the Summary's selected variations over as ONE new plan line (all variations as a single
+    // Grouping, mirroring the Guided Workflow hand-off). We open the takeover editor on a fresh
+    // draft seeded at Station A so the user still completes the procedures/countries the pricing
+    // needs -- render() (called right after by the caller via VCL_APP.goTo) paints it. Cancelling
+    // discards the draft, so nothing half-priced is left in the plan.
+    prefill: function (payload) {
+      var vars = (payload && payload.variations) || [];
+      var draft = BUD.newLine("line-" + Date.now() + "-" + Math.floor(Math.random() * 1000));
+      draft.submission.variations = vars.map(function (v) {
+        return { code: v.code || null, variantId: (v.variantId != null ? v.variantId : null), type: v.type || null };
+      });
+      modalState = {
+        editingId: null,
+        draft: draft,
+        station: "A",
+        reached: { A: true, B: false, C: false },
+        query: "",
+        searchResults: [],
+      };
+      if (container) rerender();
     },
   };
 })();

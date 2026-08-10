@@ -386,7 +386,8 @@ function vcl_shortcode( $atts ) {
 	    </div>
 	    <div class="summary-list" id="vcl-summaryList"></div>
 	    <div class="summary-footer">
-	      <button type="button" id="vcl-summaryExportWorkflow" class="summary-footer__button summary-footer__button--workflow">Open in Guided Workflow &rarr;</button>
+	      <button type="button" id="vcl-summaryExportWorkflow" class="summary-footer__button summary-footer__button--workflow">Export to Guided Workflow &rarr;</button>
+	      <button type="button" id="vcl-summaryExportBudget" class="summary-footer__button summary-footer__button--budget">Export to Budget Planning Tool &rarr;</button>
 	      <button type="button" id="vcl-summaryExportCalculator" class="summary-footer__button">Export to Variation Fee Calculator &rarr;</button>
 	    </div>
 	  </div>
