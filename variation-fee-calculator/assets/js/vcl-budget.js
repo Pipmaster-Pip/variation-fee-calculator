@@ -49,12 +49,11 @@
   function variationsSummary(sub) {
     if (!sub.variations.length) return "—";
     var groups = aggregateVariationTypes(sub);
-    var pills = groups.map(function (g, i) {
+    var pills = groups.map(function (g) {
       var badge = '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(g.type) + '">' + escapeHtml(g.type) + "</span>";
-      // Comma is kept INSIDE the group so it never wraps onto its own line -- a normal comma list
-      // that stays tidy when the narrow column forces the groups to stack.
-      var comma = (i < groups.length - 1) ? '<span class="vcl-bud-var-sep">,</span>' : "";
-      return '<span class="vcl-bud-var-agg">' + g.count + " × " + badge + comma + "</span>";
+      // No comma separators: the narrow column stacks the groups one per line, where commas would
+      // read as trailing punctuation.
+      return '<span class="vcl-bud-var-agg">' + g.count + " × " + badge + "</span>";
     }).join("");
     return '<span class="vcl-bud-var-cell">' + pills + "</span>";
   }
@@ -92,16 +91,15 @@
     if (g.cp) {
       lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">' + g.cp + " × CP</span></span>");
     }
-    if (g.mrp.length) {
-      var parts = g.mrp.map(function (p) {
-        var rms = p.rms
-          ? '<span class="vcl-bud-cc vcl-bud-cc--rms">' + escapeHtml(ccShort(p.rms)) + "</span>"
-          : '<span class="vcl-bud-cc-empty">RMS?</span>';
-        var n = (p.cms || []).length;
-        return '<span class="vcl-bud-proc-k">RMS</span> ' + rms + ' <span class="vcl-bud-proc-k">(+ ' + n + " CMS)</span>";
-      }).join('<span class="vcl-bud-proc-k">, </span>');
-      lines.push('<span class="vcl-bud-proc-line">' + parts + "</span>");
-    }
+    // Each MRP/DCP procedure gets its OWN line (national all-in-one, CP all-in-one, then one line per
+    // MRP/DCP) so the column can be narrow and each procedure stays legible on its own row.
+    g.mrp.forEach(function (p) {
+      var rms = p.rms
+        ? '<span class="vcl-bud-cc vcl-bud-cc--rms">' + escapeHtml(ccShort(p.rms)) + "</span>"
+        : '<span class="vcl-bud-cc-empty">RMS?</span>';
+      var n = (p.cms || []).length;
+      lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">RMS</span> ' + rms + ' <span class="vcl-bud-proc-k">(+ ' + n + " CMS)</span></span>");
+    });
     return '<span class="vcl-bud-proc-cell">' + lines.join("") + "</span>";
   }
   // Plain-text variants of the two cell summaries, for the Excel export (the on-screen ones return
@@ -162,7 +160,12 @@
     };
     rerender();
   }
-  function closeModal() { modalState = null; rerender(); }
+  function closeModal() { modalState = null; rerender(); scrollToTop(); }
+  // After navigating to a new station (or back to the results) the viewport is still scrolled down at
+  // the Next/finish button; bring the top of the tool back into view so the user starts at the top.
+  function scrollToTop() {
+    if (container && container.scrollIntoView) container.scrollIntoView({ block: "start" });
+  }
   function applyModal() {
     // Final guard: never persist a strategy that is no longer allowed for the current variations.
     normalizeModeEnablement(modalState.draft.submission);
@@ -173,6 +176,7 @@
     modalState = null;
     saveState();
     rerender();
+    scrollToTop();
   }
 
   function saveState() {
@@ -349,13 +353,13 @@
 
     var tableWrap = el("div", "vcl-bud-table-wrap");
     var table = el("table", "vcl-bud-table");
-    // Column widths: Procedures is now the widest (it carries the grouped, multi-line procedure
-    // summary), and Quarter / Fee / Hours are trimmed to make room. Set as <col> hints so the
-    // auto table-layout still lets Mode/Product grow for their content when needed.
+    // Column widths: Product gets more room (long names were overrunning Mode), Procedures is
+    // narrower now that each procedure sits on its own compact line, and Variations gets a touch
+    // more for the single-row aggregated badges. <col> hints; auto table-layout still lets cells grow.
     table.innerHTML =
-      '<colgroup><col style="width:13%"><col style="width:11%"><col style="width:12%">' +
-      '<col style="width:29%"><col style="width:7%"><col style="width:9%">' +
-      '<col style="width:9%"><col style="width:10%"></colgroup>' +
+      '<colgroup><col style="width:16%"><col style="width:12%"><col style="width:15%">' +
+      '<col style="width:20%"><col style="width:6%"><col style="width:9%">' +
+      '<col style="width:12%"><col style="width:10%"></colgroup>' +
       "<thead><tr><th>Product</th><th>Mode</th><th>Variations</th><th>Procedures</th>" +
       "<th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
       "<th style=\"text-align:right\">Hours (PERT)</th><th></th></tr></thead>";
@@ -366,20 +370,29 @@
       var expanded = state.expandedId === line.id;
       var tr = el("tr", "vcl-bud-line-row" + (expanded ? " is-expanded" : ""));
       var mode = SUB.displayMode(sub);
-      var modePill = '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--' + mode + '">' + escapeHtml(MODE_LABEL[mode]) + "</span>";
+      // A Worksharing (or any explicit multi-procedure mode) that also bundles several variations is
+      // ALSO a Grouping -- name both, since the mode pill alone would hide the grouping. Annual Update
+      // and Super-Grouping carry their multi-variation intrinsically, so they get no extra pill; a
+      // plain multi-variation line already reports "grouping" via displayMode (guarded below).
+      var alsoGrouped = sub.variations.length > 1 && sub.mode !== "annualUpdate" && sub.mode !== "superGrouping";
+      var modePill = '<span class="vcl-bud-mode-cell">';
+      if (alsoGrouped && mode !== "grouping") {
+        modePill += '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--grouping">' + escapeHtml(MODE_LABEL.grouping) + "</span>";
+      }
+      modePill += '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--' + mode + '">' + escapeHtml(MODE_LABEL[mode]) + "</span></span>";
       var feeCell = r.complete
         ? '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(r.fee)) + "</td>"
         : '<td class="vcl-bud-num"><span class="vcl-bud-warn">Countries incomplete</span></td>';
       var hoursCell = r.complete
-        ? '<td class="vcl-bud-num">' + Math.round(r.hours.expected) + ' h<div class="vcl-bud-hours-band">' +
-          Math.round(r.hours.min) + "–" + Math.round(r.hours.max) + "</div></td>"
+        ? '<td class="vcl-bud-num">' + Math.round(r.hours.expected) + ' h<div class="vcl-bud-hours-band">(' +
+          Math.round(r.hours.min) + "–" + Math.round(r.hours.max) + " h)</div></td>"
         : '<td class="vcl-bud-num">—</td>';
       // The whole row is the expand toggle (handled in onTableClick, which excludes the action
-      // buttons); the chevron in the Product cell is just the affordance. Only one row is open at a
-      // time. Action icons are inline SVG (not glyph characters) so they render identically on every
+      // buttons); only one row is open at a time -- no chevron affordance (removed per request).
+      // Action icons are inline SVG (not glyph characters) so they render identically on every
       // platform -- the old ⧉ duplicate glyph fell back to a "tofu" box on some systems.
       tr.innerHTML =
-        '<td class="vcl-bud-expcell"><span class="vcl-bud-chev" aria-hidden="true">' + (expanded ? "▾" : "▸") + "</span>" + escapeHtml(line.product || "—") + "</td>" +
+        '<td class="vcl-bud-expcell">' + escapeHtml(line.product || "—") + "</td>" +
         "<td>" + modePill + "</td>" +
         "<td>" + variationsSummary(sub) + "</td>" +
         "<td class=\"vcl-bud-proc-summary\">" + proceduresSummary(sub) + "</td>" +
@@ -470,12 +483,6 @@
     var ema = all.find(function (c) { return c.roles.indexOf("EMA") !== -1; });
     return ema ? ema.cc : null;
   }
-  function typesForEntry(entry) {
-    var seen = {};
-    (entry.variants || []).forEach(function (v) { if (v.type) seen[v.type] = true; });
-    return Object.keys(seen);
-  }
-
   // Targeted update: rebuilds only the results host, leaving the search <input> (and its focus/
   // caret) untouched. A full rerender() on every keystroke would recreate the input and drop focus.
   // Picking a result APPENDS a new variation onto d.submission.variations (Station A can hold
@@ -489,8 +496,11 @@
       var item = el("button", "vcl-bud-search-result", escapeHtml(entry.code + " — " + entry.title));
       item.type = "button";
       item.addEventListener("click", function () {
-        var types = typesForEntry(entry);
-        var v = { code: entry.code, variantId: null, type: types[0] || null };
+        // Match the Guided Workflow: a single-variant code resolves immediately; a multi-variant
+        // code leaves the base unresolved so Station A can show the descriptive variant list.
+        var variants = entry.variants || [];
+        var only = variants.length === 1 ? variants[0] : null;
+        var v = { code: entry.code, variantId: only ? only.id : null, type: only ? only.type : null };
         // Picking sets the BASE variation (variations[0]); additional variations for a Grouping are
         // added via the grouping list once a base is chosen. If a (possibly emptied) base slot
         // already exists it's replaced in place so any additional variations keep their indices.
@@ -544,6 +554,7 @@
     if (dir > 0) modalState.reached[key] = true;
     modalState.station = key;
     refreshEditor();
+    scrollToTop();
   }
 
   // De-emphasised one-line summary shown under the live-preview strip.
@@ -605,8 +616,35 @@
       return;
     }
 
+    // A classification code is picked but its specific variant/type isn't chosen yet: show the
+    // Guided-Workflow-exact descriptive variant list (title left, type badge right) and stop --
+    // no grouping list until the base variation is fully resolved. Mirrors vcl-workflow.js
+    // buildStationA's `if (!variant)` branch (which shows entry.variants, then returns early).
+    var entry = base.code ? ENTRIES.find(function (e) { return e.code === base.code; }) : null;
+    if (entry && !base.type) {
+      renderPickedBaseHeader(host, base);
+      renderVariantChooser(host, entry, base);
+      return;
+    }
+
     renderPickedBaseHeader(host, base);
     renderGroupingList(host);
+  }
+
+  // Guided-Workflow-exact variant list for a picked classification code: one full-width row per
+  // variant (descriptive label left, type badge right), same structure as vcl-workflow.js
+  // buildStationA. Picking a row resolves the base variation's variant id + type. Same look as the
+  // GW, in the budget colour (via .vcl-bud-variant).
+  function renderVariantChooser(host, entry, base) {
+    var chooser = el("div", "vcl-bud-variants");
+    (entry.variants || []).forEach(function (v) {
+      var row = el("div", "vcl-bud-variant");
+      row.innerHTML = '<span class="vcl-bud-variant__label">' + escapeHtml(v.label || entry.title) + "</span> " +
+        '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(v.type) + '">' + escapeHtml(v.type) + "</span>";
+      row.addEventListener("click", function () { base.variantId = v.id; base.type = v.type; rerender(); });
+      chooser.appendChild(row);
+    });
+    host.appendChild(chooser);
   }
 
   // "Classification" search field (focus-safe targeted-update pattern: populateSearchResults only
@@ -677,21 +715,6 @@
     });
     picked.appendChild(change);
     host.appendChild(picked);
-
-    // Type chooser for a multi-type classification entry (planning-grade: the type drives the fee).
-    if (entry) {
-      var types = typesForEntry(entry);
-      if (types.length > 1) {
-        var chooser = el("div", "vcl-bud-var-row__types");
-        chooser.style.marginTop = "8px";
-        types.forEach(function (t) {
-          var b = el("span", "vcl-bud-type-badge vcl-bud-type-badge--" + typeBucketClass(t) + (t === base.type ? " is-active" : ""), escapeHtml(t));
-          b.addEventListener("click", function () { base.type = t; rerender(); });
-          chooser.appendChild(b);
-        });
-        host.appendChild(chooser);
-      }
-    }
   }
 
   // Additional variations (variations[1..]) -- GW's buildGroupingList. Two or more variations total
@@ -726,6 +749,7 @@
     var row = el("div", "vcl-bud-brow");
 
     if (v.type) {
+      row.classList.add("vcl-bud-brow--compact"); // single resolved line -> compact, vertically centered
       var main = el("div", "vcl-bud-brow__main");
       if (v.code) {
         var e0 = ENTRIES.find(function (x) { return x.code === v.code; });
@@ -737,16 +761,17 @@
       }
       row.appendChild(main);
     } else if (v.code) {
-      // Code picked, but it has several types -- pick the type.
+      // Code picked, but its variant isn't chosen -- Guided-Workflow-exact descriptive variant
+      // list (label left, type badge right), mirroring vcl-workflow.js buildGroupingRow.
       var e1 = ENTRIES.find(function (x) { return x.code === v.code; });
       var mainC = el("div", "vcl-bud-brow__main");
       mainC.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(v.code) + "</span> " + escapeHtml(e1 ? e1.title : "");
-      var chooser = el("div", "vcl-bud-brow__pick");
-      chooser.appendChild(el("div", "vcl-bud-hint", "pick the type:"));
-      typesForEntry(e1 || {}).forEach(function (t) {
+      var chooser = el("div", "vcl-bud-brow__pick vcl-bud-variants");
+      (e1 && e1.variants ? e1.variants : []).forEach(function (variant) {
         var opt = el("div", "vcl-bud-variant");
-        opt.innerHTML = "<span>" + escapeHtml(t) + '</span> <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>";
-        opt.addEventListener("click", function () { v.type = t; rerender(); });
+        opt.innerHTML = '<span class="vcl-bud-variant__label">' + escapeHtml(variant.label || (e1 ? e1.title : "")) + "</span> " +
+          '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(variant.type) + '">' + escapeHtml(variant.type) + "</span>";
+        opt.addEventListener("click", function () { v.variantId = variant.id; v.type = variant.type; rerender(); });
         chooser.appendChild(opt);
       });
       mainC.appendChild(chooser);
@@ -785,10 +810,12 @@
           m.type = "button";
           m.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(e.code) + "</span> " + escapeHtml(e.title);
           m.addEventListener("click", function () {
+            // Single-variant code resolves immediately; else leave it for the variant list.
             v.code = e.code;
-            var ts = typesForEntry(e);
-            v.type = ts.length === 1 ? ts[0] : null; // single type resolves immediately; else pick
-            v.variantId = null;
+            var variants = e.variants || [];
+            var only = variants.length === 1 ? variants[0] : null;
+            v.variantId = only ? only.id : null;
+            v.type = only ? only.type : null;
             rerender();
           });
           matches.appendChild(m);
@@ -1132,9 +1159,11 @@
     var head = el("div", "vcl-bud-editor__head");
     var titleWrap = el("div");
     var editorYear = new Date().getFullYear() + 1;
-    titleWrap.appendChild(el("div", "vcl-bud-editor__kicker", "Budget Planning for " + editorYear));
-    var title = (modalState.editingId ? "Edit" : "New") + " plan line" + (d.product ? " — " + d.product : "");
-    titleWrap.appendChild(el("h2", null, escapeHtml(title)));
+    // Same heading as the dashboard/result ("Budget Planning for <year>") so the editor reads as the
+    // exact same tool; the New/Edit context becomes the subtitle (the dashboard's subtitle slot).
+    titleWrap.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + editorYear + "</span>"));
+    var subtitle = (modalState.editingId ? "Edit" : "New") + " plan line";
+    titleWrap.appendChild(el("p", "vcl-bud-editor__subtitle", escapeHtml(subtitle)));
     head.appendChild(titleWrap);
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
@@ -1184,7 +1213,7 @@
     pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); rerender(); });
     pCol.appendChild(pSelect);
     metaRow.appendChild(pCol);
-    wrap.appendChild(metaRow);
+    // metaRow is appended INSIDE the station card below (above the station heading), not here.
 
     // Station stepper (A · B · C). Clicking a *reached* dot swaps the body card's content via a
     // targeted refresh (no full container rerender -- nothing about the draft changed). Unreached
@@ -1212,6 +1241,7 @@
         if (!modalState.reached[s.key]) return; // gated: can't jump ahead of the wizard
         modalState.station = s.key;
         refreshEditor();
+        scrollToTop();
       });
       stationButtons[s.key] = btn;
       stepper.appendChild(btn);
@@ -1219,8 +1249,15 @@
     paintStepper();
     wrap.appendChild(stepper);
 
-    // Body card (Station A/B/C content)
-    stationBody(card);
+    // Body card: the Product / Quarter / Probability meta fields sit at the TOP of the white station
+    // card (above the station heading), then a divider. They live OUTSIDE the per-station body host
+    // so station navigation (refreshEditor repaints only bodyInner) never wipes them or drops the
+    // Product input's focus mid-typing.
+    card.appendChild(metaRow);
+    card.appendChild(el("div", "vcl-bud-meta-divider"));
+    var bodyInner = el("div", "vcl-bud-body__inner");
+    card.appendChild(bodyInner);
+    stationBody(bodyInner);
     wrap.appendChild(card);
 
     // Bottom navigation (GW-style): Back on the left; Next on A/B, and the final Add/Save line on
@@ -1265,7 +1302,7 @@
     // Reset on every renderEditor() so they always point at the current DOM nodes.
     modalState.paintStepper = paintStepper;
     modalState.paintNav = paintNav;
-    modalState.bodyHost = card;
+    modalState.bodyHost = bodyInner;
     modalState.previewHost = strip;
     modalState.summaryHost = summaryP;
 
