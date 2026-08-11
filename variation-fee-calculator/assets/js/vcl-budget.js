@@ -48,14 +48,12 @@
   }
   function variationsSummary(sub) {
     if (!sub.variations.length) return "—";
-    var groups = aggregateVariationTypes(sub);
-    var pills = groups.map(function (g) {
-      var badge = '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(g.type) + '">' + escapeHtml(g.type) + "</span>";
-      // No comma separators: the narrow column stacks the groups one per line, where commas would
-      // read as trailing punctuation.
-      return '<span class="vcl-bud-var-agg">' + g.count + " × " + badge + "</span>";
+    // Plain text, neutral colour, one aggregated type per line ("2 × IB" / "1 × II") -- the colour-
+    // coded badges read as visual noise in a dense table, so the type is spelled out inline.
+    var rows = aggregateVariationTypes(sub).map(function (g) {
+      return '<span class="vcl-bud-var-agg">' + g.count + " × " + escapeHtml(g.type) + "</span>";
     }).join("");
-    return '<span class="vcl-bud-var-cell">' + pills + "</span>";
+    return '<span class="vcl-bud-var-cell">' + rows + "</span>";
   }
   // The country code stored for a procedure can be composite ("DE - BfArM"); the table cell shows
   // just the 2-letter base so every chip stays compact.
@@ -80,25 +78,23 @@
   }
   function proceduresSummary(sub) {
     if (!sub.procedures.length) return "—";
+    // Plain text, neutral colour, one procedure-kind per line ("2 × nat. (PL, SE)" / "3 × CP" / one
+    // line per MRP/DCP "RMS DE (+ 6 CMS)") -- the country chips read as visual noise, so codes are
+    // spelled out inline.
     var g = groupProcedures(sub);
     var lines = [];
     if (g.nat.length) {
-      var chips = g.nat.map(function (cc) {
-        return cc === "?" ? '<span class="vcl-bud-cc-empty">?</span>' : '<span class="vcl-bud-cc">' + escapeHtml(cc) + "</span>";
-      }).join("");
-      lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">' + g.nat.length + " × nat.</span> " + chips + "</span>");
+      lines.push('<span class="vcl-bud-proc-line">' + g.nat.length + " × nat. (" + escapeHtml(g.nat.join(", ")) + ")</span>");
     }
     if (g.cp) {
-      lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">' + g.cp + " × CP</span></span>");
+      lines.push('<span class="vcl-bud-proc-line">' + g.cp + " × CP</span>");
     }
     // Each MRP/DCP procedure gets its OWN line (national all-in-one, CP all-in-one, then one line per
     // MRP/DCP) so the column can be narrow and each procedure stays legible on its own row.
     g.mrp.forEach(function (p) {
-      var rms = p.rms
-        ? '<span class="vcl-bud-cc vcl-bud-cc--rms">' + escapeHtml(ccShort(p.rms)) + "</span>"
-        : '<span class="vcl-bud-cc-empty">RMS?</span>';
+      var rms = p.rms ? escapeHtml(ccShort(p.rms)) : "?";
       var n = (p.cms || []).length;
-      lines.push('<span class="vcl-bud-proc-line"><span class="vcl-bud-proc-k">RMS</span> ' + rms + ' <span class="vcl-bud-proc-k">(+ ' + n + " CMS)</span></span>");
+      lines.push('<span class="vcl-bud-proc-line">RMS ' + rms + " (+ " + n + " CMS)</span>");
     });
     return '<span class="vcl-bud-proc-cell">' + lines.join("") + "</span>";
   }

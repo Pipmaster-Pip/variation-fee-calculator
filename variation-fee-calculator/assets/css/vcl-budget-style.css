@@ -60,7 +60,7 @@
 .vcl-app .vcl-bud-table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .vcl-app .vcl-bud-table-head h3 { font-size: 15px; margin: 0; font-weight: 600; font-family: "IBM Plex Serif", serif; }
 .vcl-app .vcl-bud-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
-.vcl-app table.vcl-bud-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 880px; }
+.vcl-app table.vcl-bud-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
 .vcl-app table.vcl-bud-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 10px 12px; background: var(--border-soft); white-space: nowrap; }
 .vcl-app table.vcl-bud-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
 /* WordPress themes routinely add vertical cell borders to every <table>; force this table's own
@@ -92,8 +92,8 @@
 /* Aggregated types stay on ONE row for the common case ("1× IA  1× IB  1× II"), but MAY wrap to a
    second line if the column is tight -- wrapping (not overflowing into the Procedures column) is the
    fallback, so the content never bleeds across the cell border. */
-.vcl-app .vcl-bud-var-cell { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
-.vcl-app .vcl-bud-var-agg { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-var-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.vcl-app .vcl-bud-var-agg { font-size: 12px; color: var(--ink); line-height: 1.5; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-var-pill { display: inline-flex; align-items: center; gap: 4px; }
 .vcl-app .vcl-bud-var-cell__code { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink); }
 .vcl-app .vcl-bud-var-cell__muted { color: var(--muted); font-style: italic; font-size: 12px; }
