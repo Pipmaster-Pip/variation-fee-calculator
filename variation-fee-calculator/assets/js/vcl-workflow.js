@@ -456,10 +456,14 @@
   // ---- station gating ----
   function stationIndex(key) { return STATIONS.findIndex((s) => s.key === key); }
   function stationComplete(key) {
-    if (key === "A") return hasVariation();                          // active substance moved to "RA tasks"
+    // Base variation resolved AND no half-entered additional variation left dangling.
+    if (key === "A") return hasVariation() && state.grouping.every(function (g) { return !!g.type; });
     // Type-IA-only submissions must choose a bundling mode (Super-Grouping /
     // Annual Update) before advancing -- a Type IA is never submitted on its own.
-    if (key === "B") return procComplete(state.procedure) && (!allVariationsAreIA() || !!state.submission.mode);
+    // Worksharing / Super-Grouping additionally require the lead authority.
+    if (key === "B") return procComplete(state.procedure)
+      && (!allVariationsAreIA() || !!state.submission.mode)
+      && (!leadPricingActive() || !!state.worksharingLead);
     if (key === "C") return !state.cmcInRA || !!state.activeSubstance; // CMC dossier needs a substance
     return true; // D (Date & Timeline) / E (Fees): no gating
   }
@@ -862,6 +866,8 @@
 
     const add = el("button", "vcl-wf-add", "＋ Add variation");
     add.type = "button";
+    // Block piling up empty rows: no new variation until the current ones carry a type.
+    add.disabled = state.grouping.some((g) => !g.type);
     add.addEventListener("click", () => { state.grouping.push({ code: null, variantId: undefined, type: null, query: "" }); rerender(); });
     panel.appendChild(add);
     host.appendChild(panel);

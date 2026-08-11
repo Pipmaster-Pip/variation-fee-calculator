@@ -728,6 +728,8 @@
 
     var add = el("button", "vcl-bud-add", "＋ Add variation");
     add.type = "button";
+    // Block piling up empty rows: no new variation until the additional ones carry a type.
+    add.disabled = sub.variations.slice(1).some(function (v) { return !v.type; });
     add.addEventListener("click", function () { sub.variations.push({ code: null, variantId: null, type: null, query: "" }); rerender(); });
     panel.appendChild(add);
     host.appendChild(panel);
