@@ -348,7 +348,6 @@
     var wrap = el("div");
     var head = el("div", "vcl-bud-table-head");
     head.appendChild(el("h3", null, "Plan lines"));
-    head.appendChild(el("span", null, state.lines.length + " lines"));
     wrap.appendChild(head);
 
     var tableWrap = el("div", "vcl-bud-table-wrap");
@@ -357,8 +356,8 @@
     // narrower now that each procedure sits on its own compact line, and Variations gets a touch
     // more for the single-row aggregated badges. <col> hints; auto table-layout still lets cells grow.
     table.innerHTML =
-      '<colgroup><col style="width:16%"><col style="width:12%"><col style="width:15%">' +
-      '<col style="width:20%"><col style="width:6%"><col style="width:9%">' +
+      '<colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%">' +
+      '<col style="width:17%"><col style="width:6%"><col style="width:9%">' +
       '<col style="width:12%"><col style="width:10%"></colgroup>' +
       "<thead><tr><th>Product</th><th>Mode</th><th>Variations</th><th>Procedures</th>" +
       "<th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
@@ -1354,7 +1353,7 @@
       // incomplete" cell (r.complete === false).
       linesRows.push([
         line.product || "", MODE_LABEL[mode] || mode, variationsText(sub), proceduresText(sub),
-        line.quarter || "", line.probability, r.complete ? r.fee : 0,
+        line.quarter || "", line.probability, r.complete ? Math.round(r.fee * 100) / 100 : 0,
         r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
       ]);
     });
