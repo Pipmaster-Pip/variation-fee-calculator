@@ -352,9 +352,9 @@
     // narrower now that each procedure sits on its own compact line, and Variations gets a touch
     // more for the single-row aggregated badges. <col> hints; auto table-layout still lets cells grow.
     table.innerHTML =
-      '<colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%">' +
+      '<colgroup><col style="width:14%"><col style="width:12%"><col style="width:17%">' +
       '<col style="width:17%"><col style="width:6%"><col style="width:9%">' +
-      '<col style="width:12%"><col style="width:10%"></colgroup>' +
+      '<col style="width:12%"><col style="width:13%"></colgroup>' +
       "<thead><tr><th>Product</th><th>Mode</th><th>Variations</th><th>Procedures</th>" +
       "<th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
       "<th style=\"text-align:right\">Hours (PERT)</th><th></th></tr></thead>";

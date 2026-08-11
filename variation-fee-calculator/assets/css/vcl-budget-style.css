@@ -60,7 +60,13 @@
 .vcl-app .vcl-bud-table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .vcl-app .vcl-bud-table-head h3 { font-size: 15px; margin: 0; font-weight: 600; font-family: "IBM Plex Serif", serif; }
 .vcl-app .vcl-bud-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
-.vcl-app table.vcl-bud-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+/* The tool lives in a `.layout` grid ("300px 1fr": browse-col + content-col). A grid item defaults
+   to min-width:auto, so a wide min-content in the content column can't shrink and instead blows the
+   whole grid past the viewport -- a page-level horizontal scrollbar. Let the budget column shrink,
+   and lay the table out `fixed` so its columns follow the colgroup percentages and wrap instead of
+   forcing a min-content floor. The table-wrap keeps overflow-x:auto only as a graceful last resort. */
+.vcl-app .budget-col { min-width: 0; }
+.vcl-app table.vcl-bud-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
 .vcl-app table.vcl-bud-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 10px 12px; background: var(--border-soft); white-space: nowrap; }
 .vcl-app table.vcl-bud-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
 /* WordPress themes routinely add vertical cell borders to every <table>; force this table's own
@@ -110,12 +116,12 @@
 .vcl-app .vcl-bud-hours-band { color: var(--ink-faint); font-size: 11.5px; }
 /* Keep this a real table-cell (not flex) so the cell's vertical-align:middle centers the icons in
    tall rows; buttons are inline-flex and align via vertical-align. */
-.vcl-app td.vcl-bud-row-actions { text-align: right; white-space: nowrap; }
+.vcl-app td.vcl-bud-row-actions { text-align: right; white-space: nowrap; padding-left: 0; padding-right: 6px; }
 .vcl-app td.vcl-bud-row-actions .vcl-bud-icon-btn { vertical-align: middle; }
-.vcl-app td.vcl-bud-row-actions .vcl-bud-icon-btn + .vcl-bud-icon-btn { margin-left: 2px; }
+.vcl-app td.vcl-bud-row-actions .vcl-bud-icon-btn + .vcl-bud-icon-btn { margin-left: 1px; }
 /* Icon-only row actions: borderless (the old buttons drew a stray box), the SVG inherits the button
    colour so hover tints it. */
-.vcl-app .vcl-bud-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; background: none; border-radius: 6px; color: var(--muted); cursor: pointer; }
+.vcl-app .vcl-bud-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: none; background: none; border-radius: 6px; color: var(--muted); cursor: pointer; }
 .vcl-app .vcl-bud-icon-btn:hover { background: var(--border-soft); color: var(--budget); }
 .vcl-app .vcl-bud-icon-btn--danger:hover { background: var(--ii-bg); color: var(--ii); }
 .vcl-app .vcl-bud-icon-btn svg { display: block; }
