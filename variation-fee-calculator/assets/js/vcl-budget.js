@@ -532,7 +532,9 @@
         return p.kind === "cp" || (p.kind === "national" && p.nat) || (p.kind === "mrpdcp" && p.rms);
       });
       var leadOk = !SUB.leadPricingActive(sub) || !!sub.lead;
-      return procsOk && leadOk;
+      // Type-IA-only submissions must choose a bundling mode before the line is complete.
+      var modeOk = !SUB.allVariationsAreIA(sub, engines()) || !!sub.mode;
+      return procsOk && leadOk && modeOk;
     }
     return true;
   }
@@ -1003,8 +1005,12 @@
     host.appendChild(el("p", "vcl-bud-hint", allIA
       ? "Available because every listed variation is Type IA. Super-Grouping shares the change across several authorisations; Annual Update keeps it within this one."
       : "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation."));
+    if (allIA && !sub.mode) {
+      host.appendChild(el("p", "vcl-bud-hint vcl-bud-hint--req", "Select Super-Grouping or Annual Update to continue — a Type IA is never submitted on its own."));
+    }
     // With no submission type set, show the DERIVED state (Single / Grouping) as a plain label.
-    if (!sub.mode) {
+    // Suppressed while a mode is required (all-IA): the required hint above already governs.
+    if (!sub.mode && !allIA) {
       var dm = SUB.displayMode(sub); // "single" | "grouping"
       var derived = el("div", "vcl-bud-derived");
       derived.innerHTML = "No submission type — priced as <strong>" + escapeHtml(MODE_LABEL[dm]) + "</strong>.";

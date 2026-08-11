@@ -159,6 +159,9 @@
 /* Divider between the meta fields and the station heading, both inside the white station card. */
 .vcl-app .vcl-bud-meta-divider { border-top: 1px solid var(--border-soft); margin: 0 0 16px; }
 .vcl-app .vcl-bud-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+/* Required-action variant: a Type-IA-only line must pick a mode before it can be saved.
+   Tool accent colour + weight lifts it out of the neutral hint grey. */
+.vcl-app .vcl-bud-hint--req { color: var(--budget); font-weight: 600; }
 
 /* --- Station indicator (A B C) -- geometry copied verbatim from vcl-workflow-style.css:36-83
    (.vcl-wf-stations et al.), swapping only the colour token (--workflow -> --budget) and the

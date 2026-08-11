@@ -256,6 +256,9 @@
 .vcl-app .vcl-wf-result__code { font-weight: 600; color: var(--workflow); font-size: 12px; white-space: nowrap; }
 .vcl-app .vcl-wf-result__title { font-size: 12px; color: var(--muted); }
 .vcl-app .vcl-wf-hint { font-size: 12px; color: var(--ink-faint, #8a8a83); margin: 6px 0 0; }
+/* Required-action variant: a Type-IA-only submission must pick a mode before Next enables.
+   Tool accent colour + weight lifts it out of the neutral hint grey. */
+.vcl-app .vcl-wf-hint--req { color: var(--workflow); font-weight: 600; }
 
 /* Chapter-C multi-RMS Super-Grouping warning -- the one new visual element this feature
    introduces; warm/amber accent + left stripe keeps it calm alongside vcl-wf-hint above. */

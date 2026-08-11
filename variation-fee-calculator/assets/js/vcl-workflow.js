@@ -457,7 +457,9 @@
   function stationIndex(key) { return STATIONS.findIndex((s) => s.key === key); }
   function stationComplete(key) {
     if (key === "A") return hasVariation();                          // active substance moved to "RA tasks"
-    if (key === "B") return procComplete(state.procedure);
+    // Type-IA-only submissions must choose a bundling mode (Super-Grouping /
+    // Annual Update) before advancing -- a Type IA is never submitted on its own.
+    if (key === "B") return procComplete(state.procedure) && (!allVariationsAreIA() || !!state.submission.mode);
     if (key === "C") return !state.cmcInRA || !!state.activeSubstance; // CMC dossier needs a substance
     return true; // D (Date & Timeline) / E (Fees): no gating
   }
@@ -744,6 +746,9 @@
       opts.appendChild(auChip);
       body.appendChild(opts);
       body.appendChild(el("p", "vcl-wf-hint", "Available because every listed variation is Type IA — Worksharing is not offered here. Super-Grouping shares the same Type IA change(s) across several authorisations; Annual Update keeps them within this one."));
+      if (!state.submission.mode) {
+        body.appendChild(el("p", "vcl-wf-hint vcl-wf-hint--req", "Select Super-Grouping or Annual Update to continue — a Type IA is never submitted on its own."));
+      }
     } else {
       const wsChip = el("button", "vcl-wf-opt" + (wsActive() ? " is-on" : ""), "Worksharing");
       wsChip.type = "button";
