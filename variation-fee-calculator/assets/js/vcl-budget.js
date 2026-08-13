@@ -192,6 +192,49 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
+
+  // Reference / "Last updated" note for the budget headers -- Budget Planning prices the same
+  // official fees as the Fee Calculator, so it mirrors the calculator's admin-editable VCL_CONFIG
+  // keys with the fee-data date as the fallback (same pattern as the Guided Workflow head).
+  function appendCalcRefLines(host) {
+    var cfg = window.VCL_CONFIG || {};
+    var ref = (cfg.referenceText && cfg.referenceText.calculator) || "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).";
+    var upd = (cfg.lastUpdated && cfg.lastUpdated.calculator) || (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
+    host.appendChild(el("p", "ref-line", "Reference: " + escapeHtml(ref)));
+    host.appendChild(el("p", "ref-updated", "Last updated in Variation Toolbox: " + escapeHtml(upd)));
+  }
+
+  // Year choices for a plan line: the current year plus the next two (budgeting usually targets next
+  // year, but the current year must be coverable too).
+  function budgetYearOptions() {
+    var y = new Date().getFullYear();
+    return [y, y + 1, y + 2];
+  }
+
+  // Dashboard heading year label: the distinct years actually present across the plan lines. A
+  // contiguous run collapses to "min–max" (e.g. "2026–2028"); gaps are listed ("2026, 2028"); an
+  // empty plan falls back to next year (the default budgeting horizon).
+  function planYearLabel() {
+    var years = [];
+    (state.lines || []).forEach(function (l) {
+      if (typeof l.year === "number" && years.indexOf(l.year) === -1) years.push(l.year);
+    });
+    if (years.length === 0) return String(new Date().getFullYear() + 1);
+    years.sort(function (a, b) { return a - b; });
+    if (years.length === 1) return String(years[0]);
+    var contiguous = years[years.length - 1] - years[0] === years.length - 1;
+    return contiguous ? years[0] + "–" + years[years.length - 1] : years.join(", ");
+  }
+
+  // Selectable quarters for a given plan year. For the current year only the remaining quarters
+  // (from the one we're in) are offered -- you can't plan a submission into a quarter already gone.
+  function quartersForYear(year) {
+    var now = new Date();
+    var start = (year <= now.getFullYear()) ? (Math.floor(now.getMonth() / 3) + 1) : 1;
+    var out = [];
+    for (var q = start; q <= 4; q++) out.push("Q" + q);
+    return out;
+  }
   function fmtEUR(v) {
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
   }
@@ -391,7 +434,7 @@
         "<td>" + modePill + "</td>" +
         "<td>" + variationsSummary(sub) + "</td>" +
         "<td class=\"vcl-bud-proc-summary\">" + proceduresSummary(sub) + "</td>" +
-        "<td>" + escapeHtml(line.quarter || "—") + "</td>" +
+        "<td>" + escapeHtml(line.quarter ? line.quarter + " " + line.year : (line.year ? String(line.year) : "—")) + "</td>" +
         feeCell + hoursCell +
         '<td class="vcl-bud-row-actions">' +
         '<button type="button" class="vcl-bud-icon-btn" data-act="duplicate" aria-label="Duplicate" title="Duplicate">' + ICON.duplicate + "</button>" +
@@ -440,11 +483,11 @@
     var rollup = BUD.computeRollup(state.lines, state.resultsById);
     var header = el("div", "vcl-bud-header");
     var left = el("div", "vcl-bud-header__intro");
-    // Budget planning is done for the coming year (e.g. in 2026 you plan 2027), so surface the
-    // plan year right in the heading.
-    var planYear = new Date().getFullYear() + 1;
-    left.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + planYear + "</span>"));
+    // The heading names the year(s) the plan actually covers, derived from the lines' own Year field
+    // (empty plan falls back to next year, the usual budgeting horizon).
+    left.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + escapeHtml(planYearLabel()) + "</span>"));
     left.appendChild(el("p", null, "Portfolio-wide annual plan: fees &amp; RA effort across all products and markets."));
+    appendCalcRefLines(left);
     header.appendChild(left);
     var actions = el("div", "vcl-bud-header__actions");
     actions.innerHTML =
@@ -562,7 +605,7 @@
     var nProc = sub.procedures.length;
     return MODE_LABEL[mode] + " · " + nVar + " variation" + (nVar === 1 ? "" : "s") +
       " · " + nProc + " procedure" + (nProc === 1 ? "" : "s") +
-      " · " + (sub.lead || "—") + " · " + (d.quarter || "—");
+      " · " + (sub.lead || "—") + " · " + (d.quarter ? d.quarter + " " + d.year : (d.year || "—"));
   }
 
   // Dispatches on modalState.station and (re)builds only the body card's contents -- used both
@@ -836,7 +879,9 @@
   function countrySelectField(labelText, list, current, onPick, disabled) {
     var field = el("div", "vcl-bud-field");
     field.appendChild(el("label", "vcl-bud-field-label", escapeHtml(labelText)));
-    var sel = el("select", "vcl-bud-select");
+    // --country caps the width to the Guided Workflow's select measure (380px) so the country
+    // picker doesn't stretch across the full station card.
+    var sel = el("select", "vcl-bud-select vcl-bud-select--country");
     if (disabled) sel.disabled = true; // locked field (e.g. CP-forced EMA lead) -- shows current, no picking
     var opt0 = el("option", null, "— select —"); opt0.value = "";
     if (!current) opt0.selected = true;
@@ -1161,12 +1206,14 @@
     // line title, and a ✕ that cancels back to the dashboard (discarding the draft copy).
     var head = el("div", "vcl-bud-editor__head");
     var titleWrap = el("div");
-    var editorYear = new Date().getFullYear() + 1;
+    // Header year tracks the line's own Year field so the kicker names the year being planned; the
+    // year select's change handler rerenders, so this heading updates live as the user picks a year.
+    var editorYear = d.year || (new Date().getFullYear() + 1);
     // Same heading as the dashboard/result ("Budget Planning for <year>") so the editor reads as the
-    // exact same tool; the New/Edit context becomes the subtitle (the dashboard's subtitle slot).
+    // exact same tool. The New/Edit context is NOT shown here (the header carries only the always-same
+    // identity + reference); it becomes a kicker under the header divider, above the stepper (below).
     titleWrap.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + editorYear + "</span>"));
-    var subtitle = (modalState.editingId ? "Edit" : "New") + " plan line";
-    titleWrap.appendChild(el("p", "vcl-bud-editor__subtitle", escapeHtml(subtitle)));
+    appendCalcRefLines(titleWrap);
     head.appendChild(titleWrap);
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
@@ -1175,26 +1222,51 @@
     head.appendChild(closeBtn);
     wrap.appendChild(head);
 
+    // New/Edit context as a small kicker below the header divider, directly above the A·B·C stepper
+    // (the header itself stays identical across every line, so this is where "which line" belongs).
+    wrap.appendChild(el("p", "vcl-bud-editor__kicker", (modalState.editingId ? "Edit" : "New") + " plan line"));
+
     // Meta row: Product / Quarter / Probability (moved out of the old single-station body)
     var metaRow = el("div", "vcl-bud-meta-row");
     var productCol = el("div", "vcl-bud-field");
     productCol.appendChild(el("label", "vcl-bud-field-label", "Product"));
-    var productInput = el("input", "vcl-bud-input");
+    var productInput = el("input", "vcl-bud-input" + (d.product ? "" : " vcl-bud-input--empty"));
     productInput.type = "text"; productInput.value = d.product;
     // No rerender() here: this is a text input, same focus-safety rule as the search field --
     // rebuilding the DOM per keystroke would drop focus/caret mid-typing.
-    productInput.addEventListener("input", function () { d.product = productInput.value; });
+    productInput.addEventListener("input", function () {
+      d.product = productInput.value;
+      productInput.classList.toggle("vcl-bud-input--empty", !productInput.value);
+    });
     productCol.appendChild(productInput);
     metaRow.appendChild(productCol);
+
+    // Year: sits between Product and Quarter. Changing it re-derives which quarters are valid (and
+    // clears a now-invalid quarter), then rerenders so the header kicker and the quarter list follow.
+    if (!d.year) d.year = new Date().getFullYear() + 1;
+    var yCol = el("div", "vcl-bud-field");
+    yCol.appendChild(el("label", "vcl-bud-field-label", "Year"));
+    var ySelect = el("select", "vcl-bud-select");
+    budgetYearOptions().forEach(function (y) {
+      var opt = el("option", null, String(y)); opt.value = String(y);
+      if (d.year === y) opt.selected = true;
+      ySelect.appendChild(opt);
+    });
+    ySelect.addEventListener("change", function () {
+      d.year = parseInt(ySelect.value, 10);
+      // Drop a quarter that no longer exists for the new year (e.g. Q1 when switching to the current year)
+      // and default to the first valid quarter instead of leaving it empty.
+      if (!d.quarter || quartersForYear(d.year).indexOf(d.quarter) === -1) d.quarter = quartersForYear(d.year)[0] || null;
+      rerender();
+    });
+    yCol.appendChild(ySelect);
+    metaRow.appendChild(yCol);
 
     var qCol = el("div", "vcl-bud-field");
     qCol.appendChild(el("label", "vcl-bud-field-label", "Quarter"));
     var qSelect = el("select", "vcl-bud-select");
-    var qPlaceholder = el("option", null, "—");
-    qPlaceholder.value = "";
-    if (!d.quarter) qPlaceholder.selected = true;
-    qSelect.appendChild(qPlaceholder);
-    ["Q1", "Q2", "Q3", "Q4"].forEach(function (q) {
+    if (!d.quarter || quartersForYear(d.year).indexOf(d.quarter) === -1) d.quarter = quartersForYear(d.year)[0] || null;
+    quartersForYear(d.year).forEach(function (q) {
       var opt = el("option", null, q); opt.value = q;
       if (d.quarter === q) opt.selected = true;
       qSelect.appendChild(opt);
@@ -1347,7 +1419,7 @@
 
     var wb = XLSX.utils.book_new();
 
-    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Quarter", "Probability", "Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
+    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
@@ -1357,7 +1429,7 @@
       // incomplete" cell (r.complete === false).
       linesRows.push([
         line.product || "", MODE_LABEL[mode] || mode, variationsText(sub), proceduresText(sub),
-        line.quarter || "", line.probability, r.complete ? Math.round(r.fee * 100) / 100 : 0,
+        line.year || "", line.quarter || "", line.probability, r.complete ? Math.round(r.fee * 100) / 100 : 0,
         r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
       ]);
     });

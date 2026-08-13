@@ -41,7 +41,9 @@ What this script does:
        anchor 'Exchange rates'!$B$9, referenced by the Slovenian rows) and
        replaces them with the concrete numeric value, so the in-browser
        formula interpreter never needs to understand foreign-sheet syntax.
-    4. Writes FEE_ROWS and COUNTRY_NAMES out as window.VFC_DATA in vfc-data.js.
+    4. Writes FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES and ANNUAL_FEES
+       (sheet "Annual Fees": per-country/role annual fee, if any) out as
+       window.VFC_DATA in vfc-data.js.
 
 Important if the table structure changes in a future Excel version (new
 columns, shifted rows, new cross-sheet references): this script assumes
@@ -68,6 +70,7 @@ except ImportError:
 SHEET_NAME = "Variation fee calculator"
 IMPRINT_SHEET_NAME = "Imprint"
 HA_SHEET_NAME = "HA fee websites"
+ANNUAL_SHEET_NAME = "Annual Fees"
 FIRST_DATA_ROW = 4
 # The last data row is detected automatically (see find_last_data_row), so new
 # fee rows can be appended to the Excel sheet without ever editing this script.
@@ -382,6 +385,36 @@ def load_ha_websites(xlsx_path: Path):
     return entries
 
 
+def load_annual_fees(xlsx_path: Path):
+    """Reads the 'Annual Fees' sheet: column A = country code, B = has annual
+    fee (yes/no), C = role (RMS/CMS/national/n.a., may combine several as
+    'RMS/CMS/national'), D = annual fee amount (numeric or 'n.a.'), E =
+    additional-strength fee (numeric or 'n.a.'), F = free-text comments (e.g.
+    fee basis for countries without a flat amount). Starts at row 2 (row 1 is
+    the header). Stops at the first row where column A is empty."""
+    wb_vals = openpyxl.load_workbook(xlsx_path, data_only=True)
+    if ANNUAL_SHEET_NAME not in wb_vals.sheetnames:
+        print(f"  Note: sheet '{ANNUAL_SHEET_NAME}' not found — no annual fee data will be included.")
+        return []
+
+    ws = wb_vals[ANNUAL_SHEET_NAME]
+    entries = []
+    for r in range(2, 500):
+        cc = ws.cell(row=r, column=1).value
+        if cc is None:
+            break
+        has_annual_val = ws.cell(row=r, column=2).value
+        entries.append({
+            "cc": cc,
+            "has_annual": str(has_annual_val).strip().lower() == "yes" if has_annual_val is not None else None,
+            "role": ws.cell(row=r, column=3).value,
+            "fee": num(ws.cell(row=r, column=4).value),
+            "additional_strength": num(ws.cell(row=r, column=5).value),
+            "comments": ws.cell(row=r, column=6).value,
+        })
+    return entries
+
+
 def main():
     parser = argparse.ArgumentParser(description="Converts the Variation Fee Calculator Excel file into assets/js/vfc-data.js")
     parser.add_argument("xlsx_path", type=str, help="Path to the Excel file (.xlsx)")
@@ -407,6 +440,10 @@ def main():
 
     static_rates = load_exchange_rates(xlsx_path)
     print(f"  {len(static_rates)} static fallback exchange rate(s) loaded from Excel.")
+
+    annual_fees = load_annual_fees(xlsx_path)
+    if annual_fees:
+        print(f"  {len(annual_fees)} annual fee entries found.")
 
     replaced, unknown_refs = resolve_sheet_refs(rows)
     if replaced:
@@ -441,7 +478,8 @@ def main():
     js += "IMPRINT: " + json.dumps(imprint, ensure_ascii=False, separators=(",", ":")) + ",\n"
     js += "HA_WEBSITES: " + json.dumps(ha_websites, ensure_ascii=False, separators=(",", ":")) + ",\n"
     js += "CC_TO_CURRENCY: " + json.dumps(CC_TO_CURRENCY, separators=(",", ":")) + ",\n"
-    js += "STATIC_FX_RATES: " + json.dumps(static_rates, separators=(",", ":")) + "\n"
+    js += "STATIC_FX_RATES: " + json.dumps(static_rates, separators=(",", ":")) + ",\n"
+    js += "ANNUAL_FEES: " + json.dumps(annual_fees, ensure_ascii=False, separators=(",", ":")) + "\n"
     js += "};\n"
     js += "})();\n"
     out_path.write_text(js, encoding="utf-8")

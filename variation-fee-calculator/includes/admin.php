@@ -273,7 +273,7 @@ function vfc_render_admin_page() {
 
 		<p>
 			Dies ist die Arbeitsmappe hinter den RA-Stunden und Zeiten des Workload-Planning-Tools
-			(<code>Workload_RA_Stunden_Faktoren.xlsx</code>) — dieselbe Mappe, die der Abschnitt
+			(<code>RA-CMC-hours.xlsx</code>) — dieselbe Mappe, die der Abschnitt
 			„How this estimate is built" im Tool erklärt. Lade sie in die Mediathek hoch, kopiere
 			ihre Datei-URL und trage sie hier ein; das Tool zeigt dann einen Download-Link darauf.
 			Feld leer lassen = kein Link.
@@ -281,9 +281,9 @@ function vfc_render_admin_page() {
 		<p>
 			<strong>Wichtig:</strong> Die Faktoren stehen im Code (<code>assets/js/vcl-workload-hours-data.js</code>),
 			sie werden <em>nicht</em> aus dieser Datei gelesen. Wenn Du hier eine geänderte Mappe
-			verlinkst, müssen die Zahlen im Code nachgezogen und das Prüfdatum
-			(<code>F_META.lastChecked</code>) aktualisiert werden — sonst zeigt das Tool etwas
-			anderes an als die Datei, die daneben zum Download steht.
+			verlinkst, müssen die Zahlen im Code nachgezogen und das Generierungsdatum
+			(<code>VCL_WORKLOAD_HD.meta.generated</code>) aktualisiert werden — sonst zeigt das Tool
+			etwas anderes an als die Datei, die daneben zum Download steht.
 		</p>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -293,7 +293,7 @@ function vfc_render_admin_page() {
 				<tr>
 					<th scope="row"><label for="vcl_workload_excel_url">Excel-Datei-URL</label></th>
 					<td>
-						<input type="url" id="vcl_workload_excel_url" name="vcl_workload_excel_url" value="<?php echo esc_attr( $workload_excel_url ); ?>" class="regular-text" placeholder="https://…/wp-content/uploads/…/Workload_RA_Stunden_Faktoren.xlsx">
+						<input type="url" id="vcl_workload_excel_url" name="vcl_workload_excel_url" value="<?php echo esc_attr( $workload_excel_url ); ?>" class="regular-text" placeholder="https://…/wp-content/uploads/…/RA-CMC-hours.xlsx">
 						<?php if ( $workload_excel_url ) : ?>
 							<p class="description" style="margin-top:8px;">Aktueller Link: <a href="<?php echo esc_url( $workload_excel_url ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $workload_excel_url ); ?></a></p>
 						<?php endif; ?>

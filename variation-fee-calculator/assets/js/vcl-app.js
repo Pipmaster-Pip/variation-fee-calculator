@@ -72,6 +72,8 @@
     classifyOpen: false, // whether the "Classification of Variations" chapter branch is expanded
     guidanceOpen: false, // whether the "Guidance on Variations" sub-nav branch is expanded
     guidanceHub: false, // whether the detail area shows the Guidance hub (its three documents as cards) instead of the welcome overview
+    guidanceReturn: null, // {view, scrollY} set after a code-chip jump so Classification can offer "back to guidance"
+    focusCode: null, // one-shot: when set, the next renderBrowse shows ONLY this entry (deep-link / guidance code jump), then clears itself so later tree/search navigation is normal
     activeChapter: null, // no chapter expanded at first -- only E/Q/C/M show, all collapsed
     activeSection: null, // e.g. "I", "II" ... within a chapter that has SECTIONS (currently only Q)
     query: "",
@@ -313,7 +315,11 @@
   }
 
   function jumpToTop() {
-    el.appRoot.scrollIntoView({ block: "start", behavior: "auto" });
+    // Scroll the window to the top of the toolbox (its masthead), deterministically -- scrollIntoView
+    // only nudges when the element is partly off-screen, so from deep inside a tall tool (e.g. Budget)
+    // it wouldn't lift the page far enough. Compute the app's absolute document offset and go there.
+    const top = el.appRoot.getBoundingClientRect().top + window.pageYOffset;
+    window.scrollTo({ top: Math.max(0, top - 12), behavior: "auto" });
   }
 
   // Deep-linking: reflects the currently open entry in the page URL (?code=Q.I.a) via
@@ -339,6 +345,10 @@
   function openEntryByCode(code, variantId) {
     const entry = ENTRIES.find((e) => e.code === code);
     if (!entry) return false;
+    // Show ONLY this entry (not the whole section) -- a deep link / guidance code chip means
+    // "take me to this one variation". One-shot: renderBrowse consumes and clears it, so any later
+    // tree/search navigation reverts to the normal multi-entry listing.
+    state.focusCode = code;
     state.classifyOpen = true;
     state.guidanceOpen = false;
     state.activeChapter = entry.chapter;
@@ -636,6 +646,8 @@
         }
       });
     });
+
+    wireGuidanceCodeChips(el.groupingCol, "grouping");
   }
 
   // Escapes the literal "<...>"/"{...}" bracket-choice placeholders used throughout the source
@@ -724,6 +736,8 @@
         }
       });
     });
+
+    wireGuidanceCodeChips(el.preciseScopeCol, "precisescope");
   }
 
   // ==========================================================================================
@@ -773,6 +787,59 @@
   // literal angle brackets, and unescaped they would be parsed as (content-swallowing) tags.
   function qaText(text) {
     return qaLinkifyCodes(escapePreciseScopeText(text));
+  }
+
+  // ----- Guidance -> Classification code links (shared by Grouping, Precise scope, Q&A) --------
+  // Jump from a guidance view into the Classification box on `code` (optionally a variant), and
+  // remember where we came from so renderDetail() can offer a one-click way back to that exact spot.
+  function jumpToClassificationFromGuidance(code, variantId, returnView) {
+    const scrollY = window.pageYOffset;
+    if (!openEntryByCode(code, variantId)) return;
+    state.guidanceReturn = { view: returnView, scrollY: scrollY };
+    renderBrowse();
+    switchViewVisibility();
+    renderDetail();
+    jumpToTop();
+  }
+
+  // Turns the pre-rendered <span class="code-chip">CODE</span> chips in a guidance container into
+  // links to their Classification entry. Codes the Classification transcription doesn't carry stay
+  // muted and non-clickable (code-chip--plain), exactly as the Q&A view already treats them.
+  function wireGuidanceCodeChips(container, returnView) {
+    if (!container) return;
+    container.querySelectorAll(".code-chip").forEach((chip) => {
+      if (chip.classList.contains("code-chip--link") || chip.classList.contains("code-chip--plain")) return;
+      const hit = qaResolveCode(chip.textContent.trim());
+      if (!hit) { chip.classList.add("code-chip--plain"); return; }
+      chip.classList.add("code-chip--link");
+      chip.setAttribute("role", "link");
+      chip.setAttribute("tabindex", "0");
+      chip.title = "Open " + chip.textContent.trim() + " in Classification";
+      const go = () => jumpToClassificationFromGuidance(hit.code, hit.variantId, returnView);
+      chip.addEventListener("click", go);
+      chip.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); }
+      });
+    });
+  }
+
+  // Returns from the Classification detail back to the guidance view a code chip was clicked in,
+  // scrolled to the exact spot. Rendered as a subtle text link UNDER the breadcrumb inside
+  // el.detail (see renderDetail), not as a filled bar in the header.
+  function returnToGuidance() {
+    const ret = state.guidanceReturn;
+    state.guidanceReturn = null;
+    if (!ret) return;
+    state.classifyOpen = false;
+    state.guidanceOpen = true;
+    state.activeVariant = null;
+    state.view = ret.view;
+    if (ret.view === "precisescope") renderPreciseScope();
+    else if (ret.view === "qa") renderQA();
+    else renderGrouping();
+    renderBrowse();
+    switchViewVisibility();
+    window.scrollTo({ top: ret.scrollY || 0 });
   }
 
   function qaMatches(q, needle) {
@@ -874,11 +941,7 @@
     el.qaCol.querySelectorAll("[data-qa-code]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const variant = btn.dataset.qaVariant;
-        if (!openEntryByCode(btn.dataset.qaCode, variant === "" ? null : variant)) return;
-        renderBrowse();
-        switchViewVisibility();
-        renderDetail();
-        jumpToTop();
+        jumpToClassificationFromGuidance(btn.dataset.qaCode, variant === "" ? null : variant, "qa");
       });
     });
 
@@ -2000,7 +2063,7 @@
           <span class="tab__code">Variation Fee Calculator</span>
           <span class="tab--calc__chip">&euro; Fees</span>
         </span>
-        <span class="tab__title">The classic calculator for variation fees w/o worksharing.</span>
+        <span class="tab__title">The classic calculator for variation fees.</span>
       `;
       calcBtn.addEventListener("click", () => {
         state.view = "calculator";
@@ -2028,7 +2091,7 @@
     workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
     workflowBtn.innerHTML = `
       <span class="tab__code">Guided Workflow</span>
-      <span class="tab__title">Step by step from classification to fees with worksharing.</span>
+      <span class="tab__title">Step by step from classification, through the calculation of RA hours to fees.</span>
     `;
     workflowBtn.addEventListener("click", () => {
       state.view = "workflow";
@@ -2144,6 +2207,12 @@
         // Overrides whatever the (still-rendered) chapter tree contributed above -- while
         // searching, the detail panel always reflects the search, not incidental tree state.
         visibleEntries = ENTRIES.filter((e) => entryMatchesQuery(e, q));
+      } else if (state.focusCode) {
+        // Deep-link / guidance code jump: show ONLY the one entry. One-shot -- consumed here so a
+        // later tree click or search (which re-runs renderBrowse) falls back to the normal listing.
+        const fe = ENTRIES.find((e) => e.code === state.focusCode);
+        state.focusCode = null;
+        if (fe) visibleEntries = [fe];
       }
     }
 
@@ -3239,6 +3308,7 @@
   // Shared navigation used by both the top nav buttons and the first-load overview cards.
   function goToDestination(dest) {
     state.query = ""; el.search.value = "";
+    state.guidanceReturn = null; // explicit nav supersedes any pending "back to guidance" context
     state.classifyOpen = false;
     state.guidanceOpen = false;
     state.guidanceHub = dest === "guidance";
@@ -3274,8 +3344,8 @@
   // nav and overview read identically). The three guidance documents no longer get cards of
   // their own -- they live behind the "Guidance on Variations" card (see guidanceHubHtml).
   const OVERVIEW_DESTINATIONS = [
-    { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "The classic calculator for variation fees w/o worksharing." },
-    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Step by step from classification to fees with worksharing." },
+    { dest: "calculator", label: "Variation Fee Calculator", color: "#8f6e2e", desc: "The classic calculator for variation fees." },
+    { dest: "workflow", label: "Guided Workflow", color: "var(--workflow)", desc: "Step by step from classification, through the calculation of RA hours to fees." },
     { dest: "budget", label: "Budget Planning", color: "var(--budget)", desc: "Plan next year's fees and RA effort across your portfolio." },
     { dest: "classification", label: "Classification of Variations", color: "var(--classify)", desc: "Browse the Classification Guideline by chapter E, Q, C, M, Art. 5." },
     { dest: "guidance", label: "Guidance on Variations", color: "var(--group)", desc: "Procedural guidance and Q&amp;A on variations." },
@@ -3324,6 +3394,10 @@
 
   function renderDetail() {
     syncUrlToState();
+    // Subtle "back to guidance" link, sits UNDER the breadcrumb inside el.detail (see below).
+    const guidanceBackHtml = state.guidanceReturn
+      ? '<button type="button" class="vcl-guidance-return" id="vcl-guidanceReturn"><span aria-hidden="true">&larr;</span> Back to Guidance on Variations</button>'
+      : "";
 
     // Nothing in scope: either the user is standing on a chapter/section whose children are the
     // level below (-> show that level, see buildLevelNav) or they are nowhere in particular
@@ -3376,6 +3450,7 @@
     el.detail.innerHTML =
       searchCountHtml +
       buildBreadcrumbHtml() +
+      guidanceBackHtml +
       visibleEntries
         .map((entry) => {
           const isEntryOpen = !!(state.activeVariant && state.activeVariant.code === entry.code);
@@ -3407,6 +3482,9 @@
         .join("");
 
     wireBreadcrumb(el.detail);
+
+    const guidanceBackBtn = el.detail.querySelector("#vcl-guidanceReturn");
+    if (guidanceBackBtn) guidanceBackBtn.addEventListener("click", returnToGuidance);
 
     el.detail.querySelectorAll(".entry-summary[data-entry-code]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -3535,6 +3613,12 @@
     slot.appendChild(document.createTextNode(" · "));
     slot.appendChild(link);
   }
+
+  // Home button in the masthead: returns to the first-load welcome overview (browse view, no
+  // query/branch open). "home" is not a real destination, so goToDestination falls through to the
+  // browse overview -- exactly the start page.
+  const homeBtn = document.getElementById("vcl-homeBtn");
+  if (homeBtn) homeBtn.addEventListener("click", () => goToDestination("home"));
 
   openEntryFromUrl();
   fillContactSlots();

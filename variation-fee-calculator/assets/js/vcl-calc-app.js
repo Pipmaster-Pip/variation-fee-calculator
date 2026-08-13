@@ -579,6 +579,60 @@ function tileName(cc) {
   return /^[A-Za-z]{2}\s*[-–]/.test(cc) ? n.replace(/\s*\([^)]*\)\s*$/, '') : n;
 }
 
+// Change history + HA-websites info panels. Shown at the bottom of every calculator step (not just
+// the result), so the fee-data provenance and the HA links are reachable from anywhere in the flow.
+// Only one step renders at a time (contentEl.innerHTML is replaced), so the fixed IDs stay unique.
+function calcInfoPanelsHtml() {
+  return `
+    ${(typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) ? `
+    <div class="panel" style="margin-bottom:18px;">
+      <button class="btn ghost" id="vclcalc-toggleChangelog" style="padding-left:0;">📋 View change history (${IMPRINT.length} entries)</button>
+      <div id="vclcalc-changelogPanel" style="display:none; margin-top:14px;"></div>
+    </div>
+    ` : ''}
+    ${(typeof HA_WEBSITES !== 'undefined' && HA_WEBSITES.length > 0) ? `
+    <div class="panel" style="margin-bottom:18px;">
+      <button class="btn ghost" id="vclcalc-toggleHaWebsites" style="padding-left:0;">🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)</button>
+      <div id="vclcalc-haWebsitesPanel" style="display:none; margin-top:14px;"></div>
+    </div>
+    ` : ''}
+  `;
+}
+
+// Wires the toggles produced by calcInfoPanelsHtml(). Call after each step sets contentEl.innerHTML.
+function wireCalcInfoPanels() {
+  const changelogBtn = document.getElementById('vclcalc-toggleChangelog');
+  if (changelogBtn) {
+    changelogBtn.addEventListener('click', () => {
+      const panel = document.getElementById('vclcalc-changelogPanel');
+      const isOpen = panel.style.display !== 'none';
+      if (isOpen) {
+        panel.style.display = 'none';
+        changelogBtn.textContent = `📋 View change history (${IMPRINT.length} entries)`;
+      } else {
+        panel.innerHTML = renderChangelogList();
+        panel.style.display = '';
+        changelogBtn.textContent = `📋 Hide change history`;
+      }
+    });
+  }
+  const haWebsitesBtn = document.getElementById('vclcalc-toggleHaWebsites');
+  if (haWebsitesBtn) {
+    haWebsitesBtn.addEventListener('click', () => {
+      const panel = document.getElementById('vclcalc-haWebsitesPanel');
+      const isOpen = panel.style.display !== 'none';
+      if (isOpen) {
+        panel.style.display = 'none';
+        haWebsitesBtn.textContent = `🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)`;
+      } else {
+        panel.innerHTML = renderHaWebsitesList();
+        panel.style.display = '';
+        haWebsitesBtn.textContent = `🔗 Hide update status and link to HA websites`;
+      }
+    });
+  }
+}
+
 // ---- Step 0: select one or more countries ----
 function renderStepCountries() {
   const codes = Object.keys(COUNTRY_NAMES).sort((a,b) => COUNTRY_NAMES[a].localeCompare(COUNTRY_NAMES[b],'en'));
@@ -605,6 +659,7 @@ function renderStepCountries() {
         `).join('')}
       </div>
     </div>
+    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <span class="hint" style="margin:0;">${n} countr${n===1?'y':'ies'} selected</span>
       <button class="btn primary" id="vclcalc-toStep2" ${n===0?'disabled':''}>Continue</button>
@@ -647,6 +702,7 @@ function renderStepCountries() {
     });
   });
   document.getElementById('vclcalc-toStep2').addEventListener('click', () => setStep(1));
+  wireCalcInfoPanels();
 }
 
 // ---- Step 1: per-country role + strengths ----
@@ -657,8 +713,9 @@ function renderStepCountryDetails() {
       <p class="hint">Choose the applicable procedure role and the number of authorised strengths for each country — these can differ from country to country (e.g. one country may have 2 authorised strengths where another only has 1).</p>
       <div id="vclcalc-countryDetailList"></div>
     </div>
+    ${calcInfoPanelsHtml()}
     <div class="nav-row">
-      <button class="btn ghost" id="vclcalc-back1">← Back</button>
+      <button class="btn primary" id="vclcalc-back1">← Back</button>
       <button class="btn primary" id="vclcalc-toStep3">Continue</button>
     </div>
   `;
@@ -705,6 +762,7 @@ function renderStepCountryDetails() {
 
   document.getElementById('vclcalc-back1').addEventListener('click', () => setStep(0));
   document.getElementById('vclcalc-toStep3').addEventListener('click', () => setStep(2));
+  wireCalcInfoPanels();
 }
 
 // ---- Step 2: global variations (type + count), with optional per-country special override ----
@@ -720,8 +778,9 @@ function renderStepVariations() {
       <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per type below — countries without that distinction automatically use their standard fee.</p>
       <div id="vclcalc-specialBlocks"></div>
     </div>
+    ${calcInfoPanelsHtml()}
     <div class="nav-row">
-      <button class="btn ghost" id="vclcalc-back2">← Back</button>
+      <button class="btn primary" id="vclcalc-back2">← Back</button>
       <button class="btn primary" id="vclcalc-toResult" ${totalVariationCount()===0?'disabled':''}>Calculate fees</button>
     </div>
   `;
@@ -748,6 +807,7 @@ function renderStepVariations() {
     computeResult();
     setStep(3);
   });
+  wireCalcInfoPanels();
 }
 
 function totalVariationCount() {
@@ -1425,25 +1485,13 @@ function renderStepResult() {
       </button>
     </div>
 
-    ${(typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) ? `
-    <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vclcalc-toggleChangelog" style="padding-left:0;">📋 View change history (${IMPRINT.length} entries)</button>
-      <div id="vclcalc-changelogPanel" style="display:none; margin-top:14px;"></div>
-    </div>
-    ` : ''}
-
-    ${(typeof HA_WEBSITES !== 'undefined' && HA_WEBSITES.length > 0) ? `
-    <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vclcalc-toggleHaWebsites" style="padding-left:0;">🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)</button>
-      <div id="vclcalc-haWebsitesPanel" style="display:none; margin-top:14px;"></div>
-    </div>
-    ` : ''}
+    ${calcInfoPanelsHtml()}
 
     ${anyNoData ? `<div class="note-box">One or more countries did not return a fee for the selected combination. Please double-check the role/variation selection for the affected country.</div>` : ''}
 
     <div class="nav-row">
-      <button class="btn ghost" id="vclcalc-back3">← Edit selection</button>
-      <button class="btn" id="vclcalc-restart">New calculation</button>
+      <button class="btn primary" id="vclcalc-back3">← Edit selection</button>
+      <button class="btn primary" id="vclcalc-restart">New calculation</button>
     </div>
   `;
 
@@ -1475,37 +1523,7 @@ function renderStepResult() {
   // ── Export Excel ──
   document.getElementById('vclcalc-btnExcel').addEventListener('click', () => exportExcel(res));
 
-  const changelogBtn = document.getElementById('vclcalc-toggleChangelog');
-  if (changelogBtn) {
-    changelogBtn.addEventListener('click', () => {
-      const panel = document.getElementById('vclcalc-changelogPanel');
-      const isOpen = panel.style.display !== 'none';
-      if (isOpen) {
-        panel.style.display = 'none';
-        changelogBtn.textContent = `📋 View change history (${IMPRINT.length} entries)`;
-      } else {
-        panel.innerHTML = renderChangelogList();
-        panel.style.display = '';
-        changelogBtn.textContent = `📋 Hide change history`;
-      }
-    });
-  }
-
-  const haWebsitesBtn = document.getElementById('vclcalc-toggleHaWebsites');
-  if (haWebsitesBtn) {
-    haWebsitesBtn.addEventListener('click', () => {
-      const panel = document.getElementById('vclcalc-haWebsitesPanel');
-      const isOpen = panel.style.display !== 'none';
-      if (isOpen) {
-        panel.style.display = 'none';
-        haWebsitesBtn.textContent = `🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)`;
-      } else {
-        panel.innerHTML = renderHaWebsitesList();
-        panel.style.display = '';
-        haWebsitesBtn.textContent = `🔗 Hide update status and link to HA websites`;
-      }
-    });
-  }
+  wireCalcInfoPanels();
 
   document.getElementById('vclcalc-restart').addEventListener('click', () => {
     appState.selectedCountries = [];

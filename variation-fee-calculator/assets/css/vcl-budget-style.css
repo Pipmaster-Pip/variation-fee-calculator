@@ -155,7 +155,7 @@
 .vcl-app .vcl-bud-modal__summary { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 .vcl-app .vcl-bud-field { margin-bottom: 14px; }
 .vcl-app .vcl-bud-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.vcl-app .vcl-bud-meta-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.vcl-app .vcl-bud-meta-row { display: grid; grid-template-columns: 2fr 0.9fr 0.9fr 1.2fr; gap: 12px; margin-bottom: 16px; }
 /* Divider between the meta fields and the station heading, both inside the white station card. */
 .vcl-app .vcl-bud-meta-divider { border-top: 1px solid var(--border-soft); margin: 0 0 16px; }
 .vcl-app .vcl-bud-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
@@ -241,6 +241,10 @@
    (the WP theme otherwise renders inputs and selects at different heights). */
 .vcl-app .vcl-bud-input, .vcl-app .vcl-bud-select { box-sizing: border-box; height: 40px; width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.4; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--paper); color: var(--ink); }
 .vcl-app .vcl-bud-input:focus, .vcl-app .vcl-bud-select:focus { outline: none; border-color: var(--budget); }
+/* Leeres Pflichtfeld: zarter Budget-Tint + kräftigerer Rahmen (Tool-Farbe), verschwindet beim Ausfüllen. */
+.vcl-app .vcl-bud-input--empty { background: var(--budget-bg); border-color: var(--budget); }
+/* Country picker (Station B) is capped to the Guided Workflow's select width so it doesn't span the full card. */
+.vcl-app .vcl-bud-select--country { max-width: 380px; }
 /* CMS country-code chip grid (Station B, MRP/DCP) -- GW-style toggle chips, not checkboxes.
    Composite codes show a tiny authority suffix (vcl-bud-cc__sfx) after the 2-letter base. */
 .vcl-app .vcl-bud-cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 5px; }
@@ -307,6 +311,9 @@
 /* Match the dashboard/result heading exactly (see .vcl-bud-header h2): same serif, size and year tint. */
 .vcl-app .vcl-bud-editor__head h2 { font-family: "IBM Plex Serif", serif; font-size: 22px; margin: 0 0 6px; font-weight: 600; }
 .vcl-app .vcl-bud-editor__subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+/* New/Edit "plan line" kicker: sits under the header divider, above the stepper. Small, uppercase,
+   budget-tinted -- names which line is being edited without repeating in the always-same header. */
+.vcl-app .vcl-bud-editor__kicker { margin: 0 0 14px; color: var(--budget); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .vcl-app .vcl-bud-nav { display: flex; justify-content: space-between; margin-top: 18px; }
 .vcl-app .vcl-bud-btn[disabled] { opacity: 0.4; cursor: default; }
 .vcl-app .vcl-bud-btn[disabled]:hover { border-color: var(--border); background: var(--panel); }

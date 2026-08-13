@@ -337,6 +337,10 @@ function vcl_shortcode( $atts ) {
 	<div class="page-shell">
 
 	<header class="app-header">
+	  <button type="button" class="app-header__home" id="vcl-homeBtn" aria-label="Back to start" title="Back to start">
+	    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+	    <span>Start</span>
+	  </button>
 	  <h1>Variation Toolbox</h1>
 	  <p class="app-header__copyright">
 	    &copy; Dr. Tom Deutschle

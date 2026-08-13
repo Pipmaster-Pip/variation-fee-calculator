@@ -22,8 +22,14 @@
     };
   }
 
+  // Plan lines default to next year (the usual budgeting horizon: in 2026 you plan 2027), but the
+  // year is now a per-line choice so the current year can be covered too (see the editor's Year field).
+  function defaultPlanYear() {
+    return new Date().getFullYear() + 1;
+  }
+
   function newLine(id) {
-    return { id: id, product: "", quarter: null, probability: 100, submission: emptySubmission() };
+    return { id: id, product: "", year: defaultPlanYear(), quarter: null, probability: 100, submission: emptySubmission() };
   }
 
   // engines = { SUB, computeFees, countries, feeRows, workload, workloadData, sgLogic } —
@@ -167,6 +173,7 @@
     return {
       id: id,
       product: typeof raw.product === "string" ? raw.product : "",
+      year: (typeof raw.year === "number" && raw.year > 0) ? raw.year : defaultPlanYear(),
       quarter: (typeof raw.quarter === "string" || raw.quarter === null) ? raw.quarter : null,
       probability: typeof raw.probability === "number" ? raw.probability : 100,
       submission: submission,

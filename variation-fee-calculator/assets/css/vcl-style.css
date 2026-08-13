@@ -104,7 +104,29 @@
 .vcl-app header.app-header {
   padding: 28px 0 20px;
   border-bottom: 1px solid var(--border);
+  position: relative;
 }
+
+/* Home button: sits top-right of the masthead, returns to the welcome overview (start page). */
+.vcl-app .app-header__home {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.vcl-app .app-header__home:hover { color: var(--ink); border-color: var(--ink); }
+.vcl-app .app-header__home svg { flex-shrink: 0; }
 
 .vcl-app .app-header__eyebrow {
   font-family: "IBM Plex Mono", monospace;
@@ -1582,6 +1604,24 @@
 }
 .vcl-app .code-chip--link:hover { background: var(--classify); color: var(--panel); }
 .vcl-app .code-chip--plain { color: var(--muted); background: var(--border-soft); }
+
+/* "Back to Guidance on Variations" link: a subtle text link directly under the breadcrumb after a
+   code-chip jump -- muted by default, classification color on hover. Not a filled header bar. */
+.vcl-app .vcl-guidance-return {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 0 12px;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color .12s;
+}
+.vcl-app .vcl-guidance-return:hover { color: var(--classify); text-decoration: underline; }
 
 .vcl-app .qa-revisions { margin-top: 26px; }
 .vcl-app .qa-revisions h4 {
