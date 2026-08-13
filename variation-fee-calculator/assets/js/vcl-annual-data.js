@@ -30,9 +30,10 @@
     ] },
     { cc: "EE", hasAnnual: true, turnoverBased: false, note: "", tariffs: [
       { id: "rms", label: "RMS", role: "RMS", base: 600, addStrength: null, ccy: "EUR" },
-      { id: "cmsnat", label: "CMS/national", role: null, base: 320, addStrength: null, ccy: "EUR" },
+      { id: "cms", label: "CMS", role: "CMS", base: 320, addStrength: null, ccy: "EUR" },
+      { id: "national", label: "national", role: "national", base: 320, addStrength: null, ccy: "EUR" },
     ] },
-    { cc: "EL", hasAnnual: true, turnoverBased: true, note: "Turnover-based annual fee", tariffs: [] },
+    { cc: "EL", hasAnnual: true, turnoverBased: true, note: "depending on the national tariff system/turnover", tariffs: [] },
     { cc: "EU", hasAnnual: true, turnoverBased: false, note: "", tariffs: [
       { id: "reference", label: "Reference / innovative", role: null, base: 232400, addStrength: null, ccy: "EUR" },
       { id: "art10", label: "Art. 10(1)/(3) & 10c", role: null, base: 60300, addStrength: null, ccy: "EUR", isDefault: true },
@@ -72,16 +73,19 @@
     ] },
     { cc: "MT", hasAnnual: true, turnoverBased: false, note: "", tariffs: [
       { id: "rms", label: "RMS", role: "RMS", base: 900, addStrength: 900, ccy: "EUR" },
-      { id: "cmsnat", label: "CMS/national", role: null, base: 275, addStrength: 275, ccy: "EUR" },
+      { id: "cms", label: "CMS", role: "CMS", base: 275, addStrength: 275, ccy: "EUR" },
+      { id: "national", label: "national", role: "national", base: 275, addStrength: 275, ccy: "EUR" },
     ] },
     { cc: "NL", hasAnnual: true, turnoverBased: false, note: "", tariffs: [
       { id: "rms", label: "RMS", role: "RMS", base: 2330, addStrength: 2330, ccy: "EUR" },
-      { id: "cmsnat", label: "CMS/national", role: null, base: 1830, addStrength: 1830, ccy: "EUR" },
+      { id: "cms", label: "CMS", role: "CMS", base: 1830, addStrength: 1830, ccy: "EUR" },
+      { id: "national", label: "national", role: "national", base: 1830, addStrength: 1830, ccy: "EUR" },
     ] },
     { cc: "NO", hasAnnual: false, turnoverBased: false, note: "", tariffs: [] },
     { cc: "PL", hasAnnual: true, turnoverBased: false, note: "", tariffs: [
       { id: "rms", label: "RMS", role: "RMS", base: 2730, addStrength: 2730, ccy: "PLN" },
-      { id: "cmsnat", label: "CMS/national", role: null, base: 2100, addStrength: 2100, ccy: "PLN" },
+      { id: "cms", label: "CMS", role: "CMS", base: 2100, addStrength: 2100, ccy: "PLN" },
+      { id: "national", label: "national", role: "national", base: 2100, addStrength: 2100, ccy: "PLN" },
     ] },
     { cc: "PT", hasAnnual: false, turnoverBased: false, note: "", tariffs: [] },
     { cc: "RO", hasAnnual: true, turnoverBased: false, note: "", tariffs: [
