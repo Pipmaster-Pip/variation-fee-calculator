@@ -219,6 +219,47 @@
     }
   }
 
+  function slug(s) { return String(s == null ? "" : s).trim().toLowerCase(); }
+
+  // Dedup identity of an annual-fee row. anchor = country (national) | RMS (mrpdcp) | "" (cp).
+  function registrationKey(product, kind, anchor) {
+    return slug(product) + "|" + slug(kind) + "|" + slug(anchor);
+  }
+
+  // One annual row per marketing-authorisation registration inside a submission.
+  function seedAnnualRowsFromSubmission(submission, product) {
+    var sub = (submission && typeof submission === "object") ? submission : {};
+    var procs = Array.isArray(sub.procedures) ? sub.procedures : [];
+    var strengths = (sub.strengths && sub.strengths.default >= 1) ? Math.floor(sub.strengths.default) : 1;
+    var rows = [];
+    procs.forEach(function (p) {
+      p = p || {};
+      if (p.kind === "national") {
+        if (!p.nat) return;
+        rows.push(makeSeed(product, "national", p.nat, p.nat, [p.nat], strengths));
+      } else if (p.kind === "mrpdcp") {
+        if (!p.rms) return;
+        var countries = [p.rms].concat(Array.isArray(p.cms) ? p.cms : []);
+        rows.push(makeSeed(product, "mrpdcp", p.rms, p.rms, countries, strengths));
+      } else if (p.kind === "cp") {
+        rows.push(makeSeed(product, "cp", "", null, [], strengths));
+      }
+    });
+    return rows;
+  }
+
+  function makeSeed(product, kind, anchor, rms, countries, strengths) {
+    return {
+      key: registrationKey(product, kind, anchor),
+      origin: "auto",
+      product: product || "",
+      procedure: { kind: kind, rms: rms, countries: countries },
+      strengths: strengths,
+      tariffPicks: {},
+      coverage: { mode: "full", fromQuarter: null },
+    };
+  }
+
   var api = {
     newLine: newLine,
     emptySubmission: emptySubmission,
@@ -230,6 +271,8 @@
     normalizeLine: normalizeLine,
     loadPlan: loadPlan,
     savePlan: savePlan,
+    registrationKey: registrationKey,
+    seedAnnualRowsFromSubmission: seedAnnualRowsFromSubmission,
     STORAGE_KEY: STORAGE_KEY,
   };
 
