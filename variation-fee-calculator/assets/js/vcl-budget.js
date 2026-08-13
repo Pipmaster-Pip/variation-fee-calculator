@@ -177,10 +177,27 @@
     if (idx === -1) state.lines.push(modalState.draft);
     else state.lines[idx] = modalState.draft;
     recomputeLine(modalState.draft);
+    seedAnnualForLine(modalState.draft);
     modalState = null;
     saveState();
     rerender();
     scrollToTop();
+  }
+
+  // After a variation line is saved, ensure each of its registrations exists once in the annual
+  // table. Never duplicates (keyed by registrationKey); auto rows can later be edited/removed.
+  function seedAnnualForLine(line) {
+    if (!line || !line.product) return;
+    var existing = {};
+    state.annualLines.forEach(function (a) { existing[a.key] = true; });
+    var seeds = BUD.seedAnnualRowsFromSubmission(line.submission, line.product);
+    seeds.forEach(function (s) {
+      if (!existing[s.key]) {
+        s.id = "annual-" + Date.now() + "-" + Math.floor(Math.random() * 1e5);
+        state.annualLines.push(s);
+        existing[s.key] = true;
+      }
+    });
   }
 
   function saveState() {
