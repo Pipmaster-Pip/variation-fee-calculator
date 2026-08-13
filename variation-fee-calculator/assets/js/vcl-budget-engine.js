@@ -260,6 +260,72 @@
     };
   }
 
+  function prorationFactor(coverage) {
+    coverage = coverage || {};
+    if (coverage.mode !== "partial") return 1;
+    var n = parseInt(String(coverage.fromQuarter || "").replace(/[^0-9]/g, ""), 10);
+    if (!(n >= 1 && n <= 4)) return 1;
+    return (5 - n) / 4;
+  }
+
+  function findAnnualCountry(countries, cc) {
+    var list = countries || [];
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].cc === cc) return list[i];
+    return null;
+  }
+
+  // Picks the tariff for one country: explicit pick > role match > sole tariff > default/first (needs-pick).
+  function pickTariff(entry, role, pickedId) {
+    var ts = entry.tariffs || [];
+    var byId = null, byRole = null, def = null, i;
+    for (i = 0; i < ts.length; i++) {
+      if (pickedId && ts[i].id === pickedId) byId = ts[i];
+      if (role && ts[i].role === role) byRole = ts[i];
+      if (ts[i].isDefault) def = ts[i];
+    }
+    if (byId) return { tariff: byId, needsPick: false };
+    if (byRole) return { tariff: byRole, needsPick: false };
+    if (ts.length === 1) return { tariff: ts[0], needsPick: false };
+    return { tariff: def || ts[0] || null, needsPick: ts.length > 1 };
+  }
+
+  function computeAnnualRow(row, countries, fxByCurrency) {
+    row = row || {};
+    var proc = row.procedure || {};
+    var strengths = (row.strengths >= 1) ? Math.floor(row.strengths) : 1;
+    var factor = prorationFactor(row.coverage);
+    var fx = fxByCurrency || {};
+    var ccs = proc.kind === "cp" ? ["EU"] : (Array.isArray(proc.countries) ? proc.countries : []);
+    var out = { total: 0, byCountry: [], computable: true, needsPick: [] };
+    ccs.forEach(function (cc) {
+      var entry = findAnnualCountry(countries, cc);
+      if (!entry || entry.hasAnnual === false) {
+        out.byCountry.push({ cc: cc, role: null, tariffId: null, amountLocal: 0, ccy: "EUR", amountEur: 0, status: "no-annual" });
+        return;
+      }
+      if (entry.turnoverBased) {
+        out.computable = false;
+        out.byCountry.push({ cc: cc, role: null, tariffId: null, amountLocal: 0, ccy: entry.tariffs[0] ? entry.tariffs[0].ccy : "EUR", amountEur: 0, status: "turnover" });
+        return;
+      }
+      var role = null;
+      if (proc.kind === "mrpdcp") role = (cc === proc.rms) ? "RMS" : "CMS";
+      else if (proc.kind === "national") role = "national";
+      var picked = pickTariff(entry, role, (row.tariffPicks || {})[cc]);
+      var t = picked.tariff;
+      if (!t) { out.byCountry.push({ cc: cc, role: role, tariffId: null, amountLocal: 0, ccy: "EUR", amountEur: 0, status: "no-annual" }); return; }
+      var addUnit = (typeof t.addStrength === "number") ? t.addStrength : 0;
+      var local = (t.base + Math.max(0, strengths - 1) * addUnit) * factor;
+      var rate = t.ccy === "EUR" ? 1 : (fx[t.ccy] || null);
+      var eur = rate ? local / rate : 0;
+      if (picked.needsPick && out.needsPick.indexOf(cc) === -1) out.needsPick.push(cc);
+      out.byCountry.push({ cc: cc, role: role, tariffId: t.id, amountLocal: local, ccy: t.ccy, amountEur: eur,
+        status: picked.needsPick ? "needs-pick" : "ok" });
+      out.total += eur;
+    });
+    return out;
+  }
+
   var api = {
     newLine: newLine,
     emptySubmission: emptySubmission,
@@ -273,6 +339,9 @@
     savePlan: savePlan,
     registrationKey: registrationKey,
     seedAnnualRowsFromSubmission: seedAnnualRowsFromSubmission,
+    prorationFactor: prorationFactor,
+    findAnnualCountry: findAnnualCountry,
+    computeAnnualRow: computeAnnualRow,
     STORAGE_KEY: STORAGE_KEY,
   };
 

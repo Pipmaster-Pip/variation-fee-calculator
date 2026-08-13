@@ -35,5 +35,59 @@ eq(mrpRows[0].procedure.countries, ["DE", "NL", "CZ"], "mrpdcp row lists rms fir
 var natKey = BUD.registrationKey("Aspirin Plus C", "national", "DE");
 eq(mrpRows[0].key !== natKey, true, "mrpdcp RMS-DE key differs from national DE key");
 
+// --- computeAnnualRow
+require("../variation-fee-calculator/assets/js/vcl-annual-data.js");
+var CC = global.window.VCL_ANNUAL_DATA.COUNTRIES;
+var FX = { CZK: 25, SEK: 11.25, GBP: 0.8, DKK: 7.45, HUF: 390, ISK: 150, PLN: 4.3 };
+
+function row(over) {
+  var base = { key: "k", origin: "auto", product: "P", strengths: 1,
+    procedure: { kind: "national", rms: null, countries: ["AT"] },
+    tariffPicks: {}, coverage: { mode: "full", fromQuarter: null } };
+  for (var k in (over || {})) base[k] = over[k];
+  return base;
+}
+
+approx(BUD.prorationFactor({ mode: "full" }), 1, "proration full = 1");
+approx(BUD.prorationFactor({ mode: "partial", fromQuarter: "Q3" }), 0.5, "proration Q3 = 0.5");
+
+// AT national, 2 strengths: 1709 + 1*1709 = 3418 EUR
+approx(BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["AT"] } }), CC, FX).total,
+  3418, "AT national 2 strengths = 3418 EUR");
+
+// mrpdcp RMS AT + CMS AT-role: use role split. RMS AT (3965) + CMS NL (1830), 1 strength
+approx(BUD.computeAnnualRow(row({ procedure: { kind: "mrpdcp", rms: "AT", countries: ["AT", "NL"] } }), CC, FX).total,
+  3965 + 1830, "mrpdcp RMS AT + CMS NL, 1 strength");
+
+// SE, 2 strengths: 60000 + 30000 = 90000 SEK / 11.25 = 8000 EUR
+approx(BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["SE"] } }), CC, FX).total,
+  8000, "SE 2 strengths = 8000 EUR via FX");
+
+// IT, 3 strengths, addStrength null => 1879 (no scaling)
+approx(BUD.computeAnnualRow(row({ strengths: 3, procedure: { kind: "national", rms: null, countries: ["IT"] } }), CC, FX).total,
+  1879, "IT does not scale by strengths");
+
+// UK reduced pick, 1 strength: 1450 GBP / 0.8 = 1812.5 EUR
+approx(BUD.computeAnnualRow(row({ procedure: { kind: "national", rms: null, countries: ["UK"] }, tariffPicks: { UK: "reduced" } }), CC, FX).total,
+  1812.5, "UK reduced pick converted via GBP");
+
+// DE => no annual fee
+var deRes = BUD.computeAnnualRow(row({ procedure: { kind: "national", rms: null, countries: ["DE"] } }), CC, FX);
+approx(deRes.total, 0, "DE contributes 0");
+eq(deRes.byCountry[0].status, "no-annual", "DE flagged no-annual");
+
+// BE => turnover-based, uncomputable
+var beRes = BUD.computeAnnualRow(row({ procedure: { kind: "national", rms: null, countries: ["BE"] } }), CC, FX);
+eq(beRes.byCountry[0].status, "turnover", "BE flagged turnover");
+
+// EU multi-tariff without a pick => needs-pick, uses default (art10 60300)
+var euRes = BUD.computeAnnualRow(row({ procedure: { kind: "cp", rms: null, countries: ["EU"] } }), CC, FX);
+eq(euRes.needsPick.indexOf("EU") !== -1, true, "EU without pick flags needs-pick");
+approx(euRes.total, 60300, "EU falls back to the default tariff");
+
+// AT national 2 strengths prorated Q3 = 3418 * 0.5 = 1709
+approx(BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["AT"] }, coverage: { mode: "partial", fromQuarter: "Q3" } }), CC, FX).total,
+  1709, "AT prorated Q3 halves the fee");
+
 console.log("\n" + (failures ? failures + " FAILED" : "All passed"));
 process.exit(failures ? 1 : 0);
