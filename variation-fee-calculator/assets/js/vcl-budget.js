@@ -1852,7 +1852,16 @@
 
   function annualStationComplete(key, draft) {
     if (key === "A") return !!(draft.product && draft.product.trim());
-    return true; // Station B has no hard gate of its own -- Save's collision check is the real guard.
+    if (key === "B") {
+      // A valid anchor market is required before Save -- otherwise a national/mrpdcp registration
+      // with no country/RMS picked would save as a "ghost" €0 row (product|national| etc).
+      var proc = draft.procedure || {};
+      if (proc.kind === "national") return !!(proc.countries && proc.countries.length >= 1);
+      if (proc.kind === "mrpdcp") return !!proc.rms; // CMS list may stay empty, RMS is the anchor
+      if (proc.kind === "cp") return true; // priced as EU -- countries is intentionally empty
+      return false;
+    }
+    return true;
   }
 
   function advanceAnnualStation(dir) {
@@ -2188,7 +2197,7 @@
       if (idx === ANNUAL_STATION_ORDER.length - 1) {
         var save = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Save product");
         save.type = "button";
-        save.disabled = !annualStationComplete("A", d);
+        save.disabled = !annualStationComplete("A", d) || !annualStationComplete("B", d);
         save.addEventListener("click", saveAnnualProduct);
         nav.appendChild(save);
       } else {
