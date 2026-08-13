@@ -100,7 +100,7 @@
     }).slice(0, 20);
   }
 
-  function defaultPlan() { return { version: 2, hoursPerHead: 1500, lines: [] }; }
+  function defaultPlan() { return { version: 3, hoursPerHead: 1500, lines: [], annualLines: [] }; }
 
   // v1 lines carried RA-task flags in `modules` (booleans only) plus top-level `piDocs`/
   // `activeSubstance`; the v2 Submission moves all of that under `submission.raTasks`.
@@ -188,6 +188,15 @@
     };
   }
 
+  // Funnels every successful loadPlan() return through the v2->v3 migration: stamps version 3
+  // and normalizes annualLines (defaulting to [] when absent/malformed).
+  function withAnnual(plan, rawAnnual) {
+    plan.version = 3;
+    var arr = Array.isArray(rawAnnual) ? rawAnnual : [];
+    plan.annualLines = arr.map(function (a, i) { return normalizeAnnualLine(a, "annual-recovered-" + i); });
+    return plan;
+  }
+
   function loadPlan(storage) {
     try {
       var raw = storage && storage.getItem(STORAGE_KEY);
@@ -197,13 +206,13 @@
         if (!oldRaw) return defaultPlan();
         var oldParsed = JSON.parse(oldRaw);
         if (!oldParsed || !Array.isArray(oldParsed.lines)) return defaultPlan();
-        return { version: 2, hoursPerHead: oldParsed.hoursPerHead || 1500,
-          lines: oldParsed.lines.map(function (l, i) { return normalizeLine(l, "line-migrated-" + i); }) };
+        return withAnnual({ version: 3, hoursPerHead: oldParsed.hoursPerHead || 1500,
+          lines: oldParsed.lines.map(function (l, i) { return normalizeLine(l, "line-migrated-" + i); }) }, []);
       }
       var parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.lines)) return defaultPlan();
-      parsed.version = 2;
       parsed.lines = parsed.lines.map(function (l, i) { return normalizeLine(l, "line-recovered-" + i); });
+      parsed = withAnnual(parsed, parsed.annualLines);
       return parsed;
     } catch (e) {
       return defaultPlan();
@@ -257,6 +266,29 @@
       strengths: strengths,
       tariffPicks: {},
       coverage: { mode: "full", fromQuarter: null },
+    };
+  }
+
+  // Accepts a raw persisted annual row (or malformed input) and always returns a valid one.
+  // Never throws -- recovers to a safe empty national row with origin:"manual".
+  function normalizeAnnualLine(raw, fallbackId) {
+    raw = (raw && typeof raw === "object") ? raw : {};
+    var proc = (raw.procedure && typeof raw.procedure === "object") ? raw.procedure : {};
+    var kind = (proc.kind === "mrpdcp" || proc.kind === "cp") ? proc.kind : "national";
+    var countries = Array.isArray(proc.countries) ? proc.countries.filter(function (c) { return typeof c === "string"; }) : [];
+    var product = typeof raw.product === "string" ? raw.product : "";
+    var anchor = kind === "national" ? (countries[0] || "") : (kind === "mrpdcp" ? (proc.rms || "") : "");
+    return {
+      id: (typeof raw.id === "string" && raw.id) || fallbackId || ("annual-" + Date.now() + "-" + Math.floor(Math.random() * 1e5)),
+      key: typeof raw.key === "string" && raw.key ? raw.key : registrationKey(product, kind, anchor),
+      origin: raw.origin === "auto" ? "auto" : "manual",
+      product: product,
+      procedure: { kind: kind, rms: proc.rms || null, countries: countries },
+      strengths: (typeof raw.strengths === "number" && raw.strengths >= 1) ? Math.floor(raw.strengths) : 1,
+      tariffPicks: (raw.tariffPicks && typeof raw.tariffPicks === "object") ? raw.tariffPicks : {},
+      coverage: (raw.coverage && raw.coverage.mode === "partial")
+        ? { mode: "partial", fromQuarter: raw.coverage.fromQuarter || null }
+        : { mode: "full", fromQuarter: null },
     };
   }
 
@@ -326,6 +358,20 @@
     return out;
   }
 
+  // Aggregates a set of persisted annual rows into total/byMarket/byProduct, reusing
+  // computeAnnualRow for the per-row fee split and sortDesc for the desc-sorted breakdowns.
+  function computeAnnualRollup(annualLines, countries, fxByCurrency) {
+    var totalEur = 0, byMarket = {}, byProduct = {};
+    (annualLines || []).forEach(function (row) {
+      var res = computeAnnualRow(row, countries, fxByCurrency);
+      totalEur += res.total;
+      var product = row.product || "(unnamed product)";
+      byProduct[product] = (byProduct[product] || 0) + res.total;
+      res.byCountry.forEach(function (c) { byMarket[c.cc] = (byMarket[c.cc] || 0) + c.amountEur; });
+    });
+    return { totalEur: totalEur, byMarket: sortDesc(byMarket), byProduct: sortDesc(byProduct) };
+  }
+
   var api = {
     newLine: newLine,
     emptySubmission: emptySubmission,
@@ -342,6 +388,8 @@
     prorationFactor: prorationFactor,
     findAnnualCountry: findAnnualCountry,
     computeAnnualRow: computeAnnualRow,
+    normalizeAnnualLine: normalizeAnnualLine,
+    computeAnnualRollup: computeAnnualRollup,
     STORAGE_KEY: STORAGE_KEY,
   };
 

@@ -89,5 +89,21 @@ approx(euRes.total, 60300, "EU falls back to the default tariff");
 approx(BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["AT"] }, coverage: { mode: "partial", fromQuarter: "Q3" } }), CC, FX).total,
   1709, "AT prorated Q3 halves the fee");
 
+// --- rollup + migration
+var lines = [
+  row({ product: "Aspirin", procedure: { kind: "national", rms: null, countries: ["AT"] }, strengths: 1 }),
+  row({ product: "Aspirin", procedure: { kind: "national", rms: null, countries: ["NL"] }, strengths: 1 }),
+];
+var rollup = BUD.computeAnnualRollup(lines, CC, FX);
+approx(rollup.totalEur, 1709 + 1830, "rollup sums AT national + NL national");
+eq(rollup.byMarket[0].key, "NL", "byMarket sorted desc, NL first (1830 > 1709)");
+
+// migration: a v2 plan (no annualLines) gains an empty array
+var store = (function () { var m = {}; return { getItem: function (k){return m[k]||null;}, setItem: function (k,v){m[k]=v;} }; })();
+store.setItem("vcl_budget_plan_v2", JSON.stringify({ version: 2, hoursPerHead: 1500, lines: [] }));
+var loaded = BUD.loadPlan(store);
+eq(Array.isArray(loaded.annualLines), true, "loadPlan adds annualLines to a v2 plan");
+eq(loaded.annualLines.length, 0, "migrated annualLines is empty");
+
 console.log("\n" + (failures ? failures + " FAILED" : "All passed"));
 process.exit(failures ? 1 : 0);
