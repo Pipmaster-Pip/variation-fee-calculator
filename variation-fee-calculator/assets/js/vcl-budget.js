@@ -125,11 +125,19 @@
     duplicate: SVG + '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     edit: SVG + '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     del: SVG + '<path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+    // Annual table's origin markers: link = auto (seeded from a variation line), pin = manual
+    // (added via "+ Add product"). Same inline-SVG treatment as the row-action icons above, for the
+    // same reason -- the 🔗/📌 glyphs they stand in for in prose fall back to tofu on some systems.
+    link: SVG + '<path d="M9 17H7a5 5 0 0 1 0-10h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+    pin: SVG + '<path d="M20.5 10c0 7-8.5 12-8.5 12s-8.5-5-8.5-12a8.5 8.5 0 0 1 17 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
   };
 
   var plan = BUD.loadPlan(window.localStorage);
   // expandedId: id of the single currently-open detail row (only one line may be open at a time).
-  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc" };
+  // annualLines: the second "Plan lines" table (annual maintenance fees) -- persisted alongside the
+  // variation lines but priced by a wholly separate pure function (computeAnnualRow), so it gets no
+  // resultsById cache: each render just calls the (cheap, pure) engine fresh per row.
+  var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc" };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
 
@@ -176,7 +184,7 @@
   }
 
   function saveState() {
-    var ok = BUD.savePlan(window.localStorage, { version: 2, hoursPerHead: state.hoursPerHead, lines: state.lines });
+    var ok = BUD.savePlan(window.localStorage, { version: 3, hoursPerHead: state.hoursPerHead, lines: state.lines, annualLines: state.annualLines });
     if (!ok && state.storageOk) { state.storageOk = false; rerender(); }
     else if (ok && !state.storageOk) { state.storageOk = true; }
   }
@@ -237,6 +245,42 @@
   }
   function fmtEUR(v) {
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
+  }
+
+  // 1 EUR = X local units, keyed by ISO currency -- the shape computeAnnualRow's fxByCurrency param
+  // expects. Reuses the calculator's static FX table (vcl-calc-app.js's own STATIC_FX_RATES fallback
+  // is keyed by *country* code, same as here) and, when the calculator already did a same-day live
+  // fetch in this browser, its cached live rates (keyed by *currency*, Frankfurter's shape) take
+  // precedence -- mirrors vcl-calc-app.js's own getEffectiveRate (live first, static fallback). EUR
+  // is implied (factor 1, never entered). Missing rate => that row shows local only and contributes 0
+  // to the EUR total (mirrors the engine's own behaviour for an unresolvable rate).
+  function fxByCurrency() {
+    var out = {};
+    var D = window.VCLCALC_DATA || {};
+    var ccToCcy = D.CC_TO_CURRENCY || {};
+    var staticFx = D.STATIC_FX_RATES || {};
+    var live = {};
+    try {
+      var cached = window.localStorage && window.localStorage.getItem("vclcalc_fx_rates");
+      if (cached) {
+        var parsed = JSON.parse(cached);
+        var today = new Date().toISOString().slice(0, 10);
+        if (parsed && parsed.date === today && parsed.rates) live = parsed.rates;
+      }
+    } catch (e) { /* no localStorage, or a malformed cache entry -- the static table still covers it */ }
+    Object.keys(ccToCcy).forEach(function (cc) {
+      var ccy = ccToCcy[cc];
+      if (!ccy || ccy === "EUR" || out[ccy]) return;
+      if (live[ccy]) out[ccy] = live[ccy];
+      else if (staticFx[cc]) out[ccy] = staticFx[cc];
+    });
+    return out;
+  }
+
+  // The annual reference-data module (COUNTRIES) is optional at parse time (mirrors ENTRIES/DATA
+  // above) so this file never throws if it loads before vcl-annual-data.js for any reason.
+  function annualCountries() {
+    return (window.VCL_ANNUAL_DATA && window.VCL_ANNUAL_DATA.COUNTRIES) || [];
   }
   // The real dataset's type vocabulary (IA, IAIN, IB, "IB (unforeseen)", II) is wider than the
   // 3-value badge CSS (--ia/--ib/--ii). Bucket into those three rather than lowercasing the raw
@@ -386,7 +430,7 @@
   function renderTable(rollup) {
     var wrap = el("div");
     var head = el("div", "vcl-bud-table-head");
-    head.appendChild(el("h3", null, "Plan lines"));
+    head.appendChild(el("h3", null, "Plan lines — Variations"));
     wrap.appendChild(head);
 
     var tableWrap = el("div", "vcl-bud-table-wrap");
@@ -505,6 +549,145 @@
     return wrap;
   }
 
+  // ---- Annual maintenance-fees table (second "Plan lines" section) ----
+
+  function annualTrackLabel(kind) {
+    if (kind === "mrpdcp") return "MRP/DCP";
+    if (kind === "cp") return "CP";
+    return "national";
+  }
+
+  function annualOriginCell(row) {
+    var isAuto = row.origin === "auto";
+    var cls = "vcl-bud-annual__origin " + (isAuto ? "vcl-bud-annual__origin--auto" : "vcl-bud-annual__origin--manual");
+    var label = isAuto ? "Auto (seeded from a variation line)" : "Manual (added via + Add product)";
+    return '<span class="' + cls + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '">' +
+      (isAuto ? ICON.link : ICON.pin) + "</span>";
+  }
+
+  function annualProductCell(row) {
+    var kind = row.procedure && row.procedure.kind;
+    return '<span class="vcl-bud-expcell">' + escapeHtml(row.product || "—") +
+      ' <span class="vcl-bud-annual__track">· ' + escapeHtml(annualTrackLabel(kind)) + "</span></span>";
+  }
+
+  // Country chips for the Markets cell -- RMS highlighted, no-annual/turnover markets dimmed, capped
+  // at 6 visible with a "+N" overflow (mirrors renderBreakdownPanel's own slice(0, 6) cap).
+  function annualMarketsCell(res) {
+    var MAX_VISIBLE = 6;
+    var list = res.byCountry || [];
+    if (!list.length) return '<span class="vcl-bud-annual__track">—</span>';
+    var shown = list.slice(0, MAX_VISIBLE);
+    var extra = list.length - shown.length;
+    var html = shown.map(function (c) {
+      var cls = "vcl-bud-cc-chip";
+      if (c.role === "RMS") cls += " vcl-bud-cc-chip--rms";
+      if (c.status === "no-annual" || c.status === "turnover") cls += " vcl-bud-cc-chip--dim";
+      return '<span class="' + cls + '">' + escapeHtml(c.cc) + "</span>";
+    }).join("");
+    if (extra > 0) html += '<span class="vcl-bud-annual__track">+' + extra + "</span>";
+    return html;
+  }
+
+  // Special case / tariff cell: a <select> per market that actually has more than one tariff variant
+  // to choose from (writes back to row.tariffPicks on change -- see onAnnualChange), a muted "auto"
+  // label where only one tariff applies, and a muted status note for no-annual/turnover-based markets.
+  function annualTariffCell(row, res) {
+    var list = res.byCountry || [];
+    var countries = annualCountries();
+    var multi = list.length > 1;
+    var parts = list.map(function (c) {
+      var inner;
+      if (c.status === "no-annual") {
+        inner = '<span class="vcl-bud-annual__track">no fee</span>';
+      } else if (c.status === "turnover") {
+        inner = '<span class="vcl-bud-annual__track">turnover-based</span>';
+      } else {
+        var entry = BUD.findAnnualCountry(countries, c.cc);
+        if (entry && entry.tariffs && entry.tariffs.length > 1) {
+          var opts = entry.tariffs.map(function (t) {
+            return '<option value="' + escapeHtml(t.id) + '"' + (t.id === c.tariffId ? " selected" : "") + ">" +
+              escapeHtml(t.label) + "</option>";
+          }).join("");
+          inner = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
+            '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
+        } else {
+          inner = '<span class="vcl-bud-annual__track">auto</span>';
+        }
+      }
+      return multi ? ('<div class="vcl-bud-proc-line"><span class="vcl-bud-cc">' + escapeHtml(c.cc) + "</span> " + inner + "</div>") : inner;
+    });
+    return '<div class="vcl-bud-proc-cell">' + parts.join("") + "</div>";
+  }
+
+  function renderAnnualTable() {
+    var wrap = el("div", "vcl-bud-annual");
+    var head = el("div", "vcl-bud-table-head");
+    head.appendChild(el("h3", null, "Plan lines — Annual maintenance fees"));
+    var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--primary", "+ Add product");
+    addBtn.type = "button";
+    addBtn.dataset.act = "add-annual";
+    head.appendChild(addBtn);
+    wrap.appendChild(head);
+
+    var countries = annualCountries();
+    var fx = fxByCurrency();
+
+    var tableWrap = el("div", "vcl-bud-table-wrap");
+    var table = el("table", "vcl-bud-table");
+    table.innerHTML =
+      '<colgroup><col style="width:5%"><col style="width:22%"><col style="width:24%">' +
+      '<col style="width:6%"><col style="width:18%"><col style="width:14%"><col style="width:11%"></colgroup>' +
+      "<thead><tr>" +
+      "<th></th><th>Product</th><th>Markets</th><th>Str.</th>" +
+      '<th>Special case / tariff</th><th style="text-align:right">Annual fee</th><th></th>' +
+      "</tr></thead>";
+
+    var tbody = el("tbody");
+    var totalEur = 0;
+    (state.annualLines || []).forEach(function (row) {
+      var res = BUD.computeAnnualRow(row, countries, fx);
+      totalEur += res.total;
+      var feeHtml = escapeHtml(fmtEUR(res.total));
+      if (!res.computable) feeHtml += ' <span class="vcl-bud-annual__track">+ turnover-based</span>';
+      var tr = el("tr", "vcl-bud-annual-row");
+      tr.innerHTML =
+        "<td>" + annualOriginCell(row) + "</td>" +
+        "<td>" + annualProductCell(row) + "</td>" +
+        "<td>" + annualMarketsCell(res) + "</td>" +
+        '<td class="vcl-bud-num">' + (row.strengths || 1) + "</td>" +
+        "<td>" + annualTariffCell(row, res) + "</td>" +
+        '<td class="vcl-bud-num">' + feeHtml + "</td>" +
+        '<td class="vcl-bud-row-actions"></td>';
+      tr.dataset.lineId = row.id;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    var tfoot = el("tfoot");
+    var totalTr = el("tr");
+    totalTr.innerHTML =
+      '<td colspan="5">Total annual (recurring / yr)</td>' +
+      '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(totalEur)) + "</td>" +
+      "<td></td>";
+    tfoot.appendChild(totalTr);
+    table.appendChild(tfoot);
+
+    tableWrap.appendChild(table);
+    wrap.appendChild(tableWrap);
+
+    // Origin legend -- explains the 🔗/📌 icon rendered per row above.
+    var legend = el("div", "vcl-bud-annual__legend");
+    legend.innerHTML =
+      '<span class="vcl-bud-annual__legend-item"><span class="vcl-bud-annual__origin vcl-bud-annual__origin--auto">' +
+      ICON.link + "</span>auto — seeded from a variation line</span>" +
+      '<span class="vcl-bud-annual__legend-item"><span class="vcl-bud-annual__origin vcl-bud-annual__origin--manual">' +
+      ICON.pin + "</span>manual — added via + Add product</span>";
+    wrap.appendChild(legend);
+
+    return wrap;
+  }
+
   function rerender() {
     if (!container) return;
 
@@ -545,6 +728,7 @@
     container.appendChild(breakdown);
 
     container.appendChild(renderTable(rollup));
+    container.appendChild(renderAnnualTable());
   }
 
   // Worksharing / Super-Grouping / Annual Update are EU-only procedures: these three authorities
@@ -1572,6 +1756,22 @@
     if (btn.dataset.act === "new-line") openModalFor(null);
     if (btn.dataset.act === "export") exportExcel(); // Task 6
     if (btn.dataset.act === "clear-plan") clearPlan();
+    // "+ Add product" (annual table): placeholder only -- the two-station "Add product" editor that
+    // actually opens here is built in Task 7.
+    if (btn.dataset.act === "add-annual") { /* no-op for now */ }
+  }
+
+  // Special case / tariff <select> inside the annual table (annualTariffCell): writes the pick
+  // straight into the row's own tariffPicks and re-prices, same as any other in-place edit here.
+  function onAnnualChange(evt) {
+    var sel = evt.target.closest && evt.target.closest("select[data-line-id][data-cc]");
+    if (!sel) return;
+    var row = (state.annualLines || []).find(function (r) { return r.id === sel.dataset.lineId; });
+    if (!row) return;
+    row.tariffPicks = row.tariffPicks || {};
+    row.tariffPicks[sel.dataset.cc] = sel.value;
+    saveState();
+    rerender();
   }
 
   window.VCL_BUDGET = {
@@ -1581,6 +1781,8 @@
       container.addEventListener("click", onTableClick);
       container.removeEventListener("click", onHeaderClick);
       container.addEventListener("click", onHeaderClick);
+      container.removeEventListener("change", onAnnualChange);
+      container.addEventListener("change", onAnnualChange);
       rerender();
     },
     // Hand the Summary's selected variations over as ONE new plan line (all variations as a single
