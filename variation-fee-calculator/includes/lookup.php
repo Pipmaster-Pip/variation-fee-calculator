@@ -206,13 +206,22 @@ function vcl_register_assets() {
 		true
 	);
 
+	$annual_data_file = VFC_PLUGIN_DIR . 'assets/js/vcl-annual-data.js';
+	wp_register_script(
+		'vcl-annual-data',
+		VFC_PLUGIN_URL . 'assets/js/vcl-annual-data.js',
+		array(),
+		file_exists( $annual_data_file ) ? filemtime( $annual_data_file ) : false,
+		true
+	);
+
 	$budget_engine_file = VFC_PLUGIN_DIR . 'assets/js/vcl-budget-engine.js';
 	$budget_engine_ver  = file_exists( $budget_engine_file ) ? filemtime( $budget_engine_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-budget-engine',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget-engine.js',
-		array(),
+		array( 'vcl-annual-data' ),
 		$budget_engine_ver,
 		true
 	);
@@ -223,7 +232,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-budget',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget.js',
-		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic' ),
+		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic' ),
 		$budget_app_ver,
 		true
 	);
@@ -307,6 +316,7 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_script( 'vcl-submission' );
 	wp_enqueue_script( 'vcl-workflow' );
 	wp_enqueue_script( 'vcl-calc-app' );
+	wp_enqueue_script( 'vcl-annual-data' );
 	wp_enqueue_script( 'vcl-budget-engine' );
 	wp_enqueue_script( 'vcl-budget' );
 	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
