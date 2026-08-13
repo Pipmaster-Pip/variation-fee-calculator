@@ -349,6 +349,14 @@
       var addUnit = (typeof t.addStrength === "number") ? t.addStrength : 0;
       var local = (t.base + Math.max(0, strengths - 1) * addUnit) * factor;
       var rate = t.ccy === "EUR" ? 1 : (fx[t.ccy] || null);
+      if (t.ccy !== "EUR" && !rate) {
+        // No FX rate resolvable for this tariff's currency: surface it as a visible "no-rate"
+        // status (local amount + ccy still populated) instead of silently pricing to EUR 0, and
+        // flag the whole row uncomputable so callers don't treat the total as complete.
+        out.computable = false;
+        out.byCountry.push({ cc: cc, role: role, tariffId: t.id, amountLocal: local, ccy: t.ccy, amountEur: 0, status: "no-rate" });
+        return;
+      }
       var eur = rate ? local / rate : 0;
       if (picked.needsPick && out.needsPick.indexOf(cc) === -1) out.needsPick.push(cc);
       out.byCountry.push({ cc: cc, role: role, tariffId: t.id, amountLocal: local, ccy: t.ccy, amountEur: eur,

@@ -106,7 +106,13 @@
     ] },
   ];
 
-  var api = { updated: "2026-08-13", COUNTRIES: COUNTRIES };
+  // Static fallback FX (1 EUR = X local units), used only when neither a live rate nor the
+  // calculator's own STATIC_FX_RATES cover a currency the annual dataset prices in (CZK/DKK/HUF/
+  // ISK/PLN/SEK/GBP -- see vcl-budget.js's fxByCurrency). Approximate point-in-time values; refresh
+  // alongside the fee data above, not on any other schedule.
+  var FALLBACK_FX = { CZK: 25.3, DKK: 7.46, HUF: 395, ISK: 152, PLN: 4.30, SEK: 11.3, GBP: 0.84 };
+
+  var api = { updated: "2026-08-13", COUNTRIES: COUNTRIES, FALLBACK_FX: FALLBACK_FX };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.VCL_ANNUAL_DATA = api;
 })(typeof window !== "undefined" ? window : this);

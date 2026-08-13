@@ -89,6 +89,19 @@ approx(euRes.total, 60300, "EU falls back to the default tariff");
 approx(BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["AT"] }, coverage: { mode: "partial", fromQuarter: "Q3" } }), CC, FX).total,
   1709, "AT prorated Q3 halves the fee");
 
+// --- no-rate status: a foreign-currency tariff whose currency has no resolvable FX rate must not
+// silently price to EUR 0 -- see vcl-budget-engine.js computeAnnualRow / the annual-fees blocker fix.
+var seNoFxRes = BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["SE"] } }), CC, {});
+eq(seNoFxRes.byCountry[0].status, "no-rate", "SE with no SEK rate flagged no-rate");
+eq(seNoFxRes.total, 0, "SE no-rate contributes 0 to total");
+eq(seNoFxRes.computable, false, "SE no-rate row marked uncomputable");
+
+// Same SE row, but with the FALLBACK_FX rate supplied (as vcl-budget.js's fxByCurrency now merges
+// in when live/static rates are missing) -- prices normally via that fallback rate.
+var seFallbackRes = BUD.computeAnnualRow(row({ strengths: 2, procedure: { kind: "national", rms: null, countries: ["SE"] } }), CC, { SEK: 11.3 });
+approx(seFallbackRes.total, 90000 / 11.3, "SE 2 strengths prices via FALLBACK_FX SEK rate (90000/11.3)");
+eq(seFallbackRes.byCountry[0].status, "ok", "SE with fallback SEK rate flagged ok");
+
 // --- rollup + migration
 var lines = [
   row({ product: "Aspirin", procedure: { kind: "national", rms: null, countries: ["AT"] }, strengths: 1 }),

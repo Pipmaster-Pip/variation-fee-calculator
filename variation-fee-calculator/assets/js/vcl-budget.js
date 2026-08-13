@@ -267,14 +267,21 @@
   function fmtEUR(v) {
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
   }
+  // Plain "12,345 CCY" formatting for the annual fee cell's local-currency line (no currency
+  // symbol -- fmtEUR already owns the €-prefixed number, this is the muted secondary amount).
+  function fmtLocalAmount(v, ccy) {
+    return new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 }).format(v || 0) + " " + ccy;
+  }
 
   // 1 EUR = X local units, keyed by ISO currency -- the shape computeAnnualRow's fxByCurrency param
   // expects. Reuses the calculator's static FX table (vcl-calc-app.js's own STATIC_FX_RATES fallback
   // is keyed by *country* code, same as here) and, when the calculator already did a same-day live
   // fetch in this browser, its cached live rates (keyed by *currency*, Frankfurter's shape) take
   // precedence -- mirrors vcl-calc-app.js's own getEffectiveRate (live first, static fallback). EUR
-  // is implied (factor 1, never entered). Missing rate => that row shows local only and contributes 0
-  // to the EUR total (mirrors the engine's own behaviour for an unresolvable rate).
+  // is implied (factor 1, never entered). STATIC_FX_RATES only covers a handful of currencies (HUF
+  // among them), so any annual currency still missing after that (CZK/DKK/ISK/PLN/SEK/GBP typically)
+  // is filled from vcl-annual-data.js's own FALLBACK_FX -- live/static always take precedence, the
+  // fallback only plugs gaps so an annual row never silently prices to EUR 0 for want of a rate.
   function fxByCurrency() {
     var out = {};
     var D = window.VCLCALC_DATA || {};
@@ -294,6 +301,10 @@
       if (!ccy || ccy === "EUR" || out[ccy]) return;
       if (live[ccy]) out[ccy] = live[ccy];
       else if (staticFx[cc]) out[ccy] = staticFx[cc];
+    });
+    var fallbackFx = (window.VCL_ANNUAL_DATA && window.VCL_ANNUAL_DATA.FALLBACK_FX) || {};
+    Object.keys(fallbackFx).forEach(function (ccy) {
+      if (!out[ccy]) out[ccy] = fallbackFx[ccy];
     });
     return out;
   }
@@ -664,6 +675,29 @@
     return '<div class="vcl-bud-proc-cell">' + parts.join("") + "</div>";
   }
 
+  // Extra markup appended after the EUR total in the Annual fee cell: a muted "+ turnover-based" /
+  // "+ rate unavailable" note when the row isn't fully computable (mirrors the existing
+  // turnover-based note; "rate unavailable" covers computeAnnualRow's "no-rate" status -- a market
+  // priced in a foreign currency with no FX rate resolvable, see vcl-budget-engine.js), plus a
+  // compact secondary line listing the local-currency amount per foreign-currency market ("in local
+  // currency where applicable") so a CZK/DKK/HUF/ISK/PLN/SEK/GBP fee is never shown as a bare EUR
+  // figure with no way to sanity-check the conversion.
+  function annualFeeCellNotes(res) {
+    var list = res.byCountry || [];
+    var html = "";
+    if (!res.computable) {
+      var hasTurnover = list.some(function (c) { return c.status === "turnover"; });
+      var hasNoRate = list.some(function (c) { return c.status === "no-rate"; });
+      if (hasTurnover) html += ' <span class="vcl-bud-annual__track">+ turnover-based</span>';
+      if (hasNoRate) html += ' <span class="vcl-bud-annual__track">+ rate unavailable</span>';
+    }
+    var localParts = list.filter(function (c) {
+      return c.ccy && c.ccy !== "EUR" && (c.status === "ok" || c.status === "needs-pick" || c.status === "no-rate");
+    }).map(function (c) { return c.cc + " " + fmtLocalAmount(c.amountLocal, c.ccy); });
+    if (localParts.length) html += '<div class="vcl-bud-annual__track">' + escapeHtml(localParts.join(", ")) + "</div>";
+    return html;
+  }
+
   function renderAnnualTable() {
     var wrap = el("div", "vcl-bud-annual");
     var head = el("div", "vcl-bud-table-head");
@@ -692,8 +726,7 @@
     (state.annualLines || []).forEach(function (row) {
       var res = BUD.computeAnnualRow(row, countries, fx);
       totalEur += res.total;
-      var feeHtml = escapeHtml(fmtEUR(res.total));
-      if (!res.computable) feeHtml += ' <span class="vcl-bud-annual__track">+ turnover-based</span>';
+      var feeHtml = escapeHtml(fmtEUR(res.total)) + annualFeeCellNotes(res);
       var tr = el("tr", "vcl-bud-annual-row");
       tr.innerHTML =
         "<td>" + annualOriginCell(row) + "</td>" +

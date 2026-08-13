@@ -52,5 +52,12 @@ ok(be && be.turnoverBased === true, "BE is turnover-based (uncomputable)");
 var uk = byCc("UK");
 ok(uk && uk.tariffs.filter(function (t){return t.id==="reduced";})[0].ccy === "GBP", "UK tariffs in GBP");
 
+// FALLBACK_FX: covers every non-EUR currency the annual dataset uses (STATIC_FX_RATES in
+// vcl-calc-data.js only covers a few of these -- see the annual-fees blocker fix).
+var fx = D.FALLBACK_FX || {};
+["CZK", "DKK", "HUF", "ISK", "PLN", "SEK", "GBP"].forEach(function (ccy) {
+  ok(typeof fx[ccy] === "number" && fx[ccy] > 0, "FALLBACK_FX has a numeric rate for " + ccy);
+});
+
 console.log("\n" + (failures ? failures + " FAILED" : "All passed"));
 process.exit(failures ? 1 : 0);
