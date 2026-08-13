@@ -385,3 +385,19 @@
 .vcl-app .vcl-bud-annual__legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; }
 .vcl-app .vcl-bud-annual__legend-item { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
 .vcl-app .vcl-bud-annual__legend-item .vcl-bud-annual__origin { width: 18px; height: 18px; }
+
+/* --- Annual "Add product" editor (Task 7) -- reuses the plan-line editor's takeover/station/nav/
+   chip/field CSS wholesale (.vcl-bud-editor, .vcl-bud-stations, .vcl-bud-body, .vcl-bud-nav,
+   .vcl-bud-chips, .vcl-bud-field, .vcl-bud-strength-note, .vcl-bud-live-result, ...); only the two
+   pieces genuinely new to this editor get their own rule below. --- */
+/* Station A's Budget year / Coverage this budget row -- two even columns (the line editor's own
+   .vcl-bud-meta-row defaults to a 4-column template for Year/Quarter/Probability). */
+.vcl-app .vcl-bud-meta-row--pair { grid-template-columns: 1fr 1fr; }
+/* Live "Prorated: n of 12 months -> pct%" line under Coverage this budget -- tool-tinted so it reads
+   as a computed result, not a static hint. */
+.vcl-app .vcl-bud-proration-note { font-size: 12px; font-weight: 600; color: var(--budget); margin: 8px 0 0; }
+/* Registration-key collision prompt (Save on Station B, when the key already matches another row) --
+   replaces the station body with a tool-tinted confirmation instead of silently duplicating a row. */
+.vcl-app .vcl-bud-collision { border: 1px solid var(--budget); border-radius: 10px; background: var(--budget-tint); padding: 16px 18px; }
+.vcl-app .vcl-bud-collision__msg { margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.vcl-app .vcl-bud-collision__actions { display: flex; flex-wrap: wrap; gap: 10px; }

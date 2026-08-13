@@ -140,6 +140,10 @@
   var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc" };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
+  // Annual "Add product" editor (Task 7) -- a second, independent takeover, mutually exclusive with
+  // modalState (only one editor is ever open at a time). null when closed, else
+  // { editingId, draft, station:"A"|"B", reached:{A,B}, collision:<id>|null }.
+  var annualEditor = null;
 
   // Per-line result cache, keyed by line id, kept current by the mutation points below
   // (applyModal/duplicateLine/deleteLine) rather than rebuilt wholesale on every render -- see
@@ -675,7 +679,10 @@
         '<td class="vcl-bud-num">' + (row.strengths || 1) + "</td>" +
         "<td>" + annualTariffCell(row, res) + "</td>" +
         '<td class="vcl-bud-num">' + feeHtml + "</td>" +
-        '<td class="vcl-bud-row-actions"></td>';
+        '<td class="vcl-bud-row-actions">' +
+        '<button type="button" class="vcl-bud-icon-btn" data-act="edit" aria-label="Edit" title="Edit">' + ICON.edit + "</button>" +
+        '<button type="button" class="vcl-bud-icon-btn vcl-bud-icon-btn--danger" data-act="delete" aria-label="Delete" title="Delete">' + ICON.del + "</button>" +
+        "</td>";
       tr.dataset.lineId = row.id;
       tbody.appendChild(tr);
     });
@@ -717,6 +724,10 @@
     // dashboard (header actions + tiles + breakdown + table) entirely -- no pop-up overlay.
     if (modalState) {
       container.appendChild(renderEditor());
+      return;
+    }
+    if (annualEditor) {
+      container.appendChild(renderAnnualEditor());
       return;
     }
 
@@ -1753,10 +1764,18 @@
       return;
     }
     // An action button (duplicate / edit / delete) takes precedence and never toggles the row.
+    // The annual table's rows use the SAME data-act values ("edit"/"delete") on a differently-classed
+    // <tr> (vcl-bud-annual-row, not vcl-bud-line-row) -- route by that class so an annual row's id
+    // (an annualLines id) is never handed to the plan-line functions below, and vice versa.
     var btn = evt.target.closest("button[data-act]");
     if (btn) {
       var trB = btn.closest("tr[data-line-id]");
       var id = trB && trB.dataset.lineId;
+      if (trB && trB.classList.contains("vcl-bud-annual-row")) {
+        if (btn.dataset.act === "edit" && id) openAnnualEditorFor(id);
+        if (btn.dataset.act === "delete" && id) deleteAnnualLine(id);
+        return;
+      }
       if (btn.dataset.act === "duplicate" && id) duplicateLine(id);
       if (btn.dataset.act === "delete" && id) deleteLine(id);
       if (btn.dataset.act === "edit" && id) openModalFor(id);
@@ -1773,9 +1792,8 @@
     if (btn.dataset.act === "new-line") openModalFor(null);
     if (btn.dataset.act === "export") exportExcel(); // Task 6
     if (btn.dataset.act === "clear-plan") clearPlan();
-    // "+ Add product" (annual table): placeholder only -- the two-station "Add product" editor that
-    // actually opens here is built in Task 7.
-    if (btn.dataset.act === "add-annual") { /* no-op for now */ }
+    // "+ Add product" (annual table): opens the two-station manual editor (Task 7) on a fresh draft.
+    if (btn.dataset.act === "add-annual") openAnnualEditorFor(null);
   }
 
   // Special case / tariff <select> inside the annual table (annualTariffCell): writes the pick
@@ -1787,6 +1805,447 @@
     if (!row) return;
     row.tariffPicks = row.tariffPicks || {};
     row.tariffPicks[sel.dataset.cc] = sel.value;
+    saveState();
+    rerender();
+  }
+
+  // ---- Annual "Add product" editor (Task 7) -- a second, independent takeover for the annual-fees
+  // table, mirroring the plan-line editor's station/stepper/takeover look-and-feel (same
+  // .vcl-bud-editor/.vcl-bud-stations/.vcl-bud-body/.vcl-bud-nav classes) but with only two stations:
+  // A (Product) and B (Registration). Reused both for "+ Add product" (fresh draft) and for editing
+  // an existing annual row (auto or manual) via its row's edit icon. ----
+
+  var ANNUAL_STATIONS = [{ key: "A", label: "Product" }, { key: "B", label: "Registration" }];
+  var ANNUAL_STATION_ORDER = ["A", "B"];
+
+  function defaultAnnualDraft() {
+    return {
+      origin: "manual",
+      product: "",
+      procedure: { kind: "national", rms: null, countries: [] },
+      strengths: 1,
+      tariffPicks: {},
+      coverage: { mode: "full", fromQuarter: null },
+      // Not part of the persisted annual-row shape (normalizeAnnualLine doesn't carry it across a
+      // reload) -- purely UI context for which budget year this product is being planned into,
+      // mirroring the plan-line editor's own Year field.
+      year: new Date().getFullYear() + 1,
+    };
+  }
+
+  function openAnnualEditorFor(id) {
+    var existing = id && (state.annualLines || []).find(function (r) { return r.id === id; });
+    var draft = existing ? JSON.parse(JSON.stringify(existing)) : defaultAnnualDraft();
+    if (!draft.year) draft.year = new Date().getFullYear() + 1;
+    annualEditor = {
+      editingId: id || null,
+      draft: draft,
+      station: "A",
+      // A brand-new product is a two-step wizard (only A reached until it's complete); an existing
+      // row is fully reached so the user can jump A/B freely, same gating rule as the line editor.
+      reached: id ? { A: true, B: true } : { A: true, B: false },
+      collision: null,
+    };
+    rerender();
+  }
+  function closeAnnualEditor() { annualEditor = null; rerender(); scrollToTop(); }
+
+  function annualStationComplete(key, draft) {
+    if (key === "A") return !!(draft.product && draft.product.trim());
+    return true; // Station B has no hard gate of its own -- Save's collision check is the real guard.
+  }
+
+  function advanceAnnualStation(dir) {
+    var i = ANNUAL_STATION_ORDER.indexOf(annualEditor.station);
+    var j = i + dir;
+    if (j < 0 || j >= ANNUAL_STATION_ORDER.length) return;
+    if (dir > 0 && !annualStationComplete(annualEditor.station, annualEditor.draft)) return;
+    var key = ANNUAL_STATION_ORDER[j];
+    if (dir > 0) annualEditor.reached[key] = true;
+    annualEditor.station = key;
+    refreshAnnualEditor();
+    scrollToTop();
+  }
+
+  // Targeted refresh (mirrors refreshEditor): repaints the stepper, the nav, the current station's
+  // body, and the live preview strip in place -- no full container rerender.
+  function refreshAnnualEditor() {
+    if (!annualEditor) return;
+    if (annualEditor.paintStepper) annualEditor.paintStepper();
+    if (annualEditor.paintNav) annualEditor.paintNav();
+    if (annualEditor.bodyHost) annualStationBody(annualEditor.bodyHost);
+    if (annualEditor.previewHost) renderAnnualPreviewStrip(annualEditor.previewHost);
+  }
+
+  function annualStationBody(host) {
+    host.innerHTML = "";
+    if (annualEditor.collision) { renderAnnualCollision(host); return; }
+    if (annualEditor.station === "A") renderAnnualStationA(host);
+    else renderAnnualStationB(host);
+  }
+
+  // ---- Station A: Product -- name, number of strengths (+ the MRP/DCP skew caveat), budget year,
+  // and this budget's coverage (full year, or prorated from a given quarter). ----
+  function renderAnnualStationA(host) {
+    var d = annualEditor.draft;
+    host.appendChild(el("div", "vcl-bud-body__title", "Product"));
+
+    // Product name -- gates Station B (Next / stepper checkmark). Keystrokes only repaint the
+    // stepper/nav in place (never the body), so the input's focus/caret is never dropped.
+    var productField = el("div", "vcl-bud-field");
+    productField.appendChild(el("label", "vcl-bud-field-label", "Product"));
+    var productInput = el("input", "vcl-bud-input" + (d.product ? "" : " vcl-bud-input--empty"));
+    productInput.type = "text"; productInput.value = d.product;
+    productInput.addEventListener("input", function () {
+      d.product = productInput.value;
+      productInput.classList.toggle("vcl-bud-input--empty", !productInput.value);
+      if (annualEditor.paintStepper) annualEditor.paintStepper();
+      if (annualEditor.paintNav) annualEditor.paintNav();
+    });
+    productField.appendChild(productInput);
+    host.appendChild(productField);
+
+    // Number of strengths -- validated positive integer, committed on change (blur/spinner), not
+    // per keystroke, mirroring the plan-line editor's own strengths field.
+    var strengthField = el("div", "vcl-bud-field vcl-bud-field--narrow");
+    strengthField.appendChild(el("label", "vcl-bud-field-label", "Number of strengths"));
+    var strengthInput = el("input", "vcl-bud-input");
+    strengthInput.type = "number"; strengthInput.min = "1"; strengthInput.step = "1";
+    strengthInput.value = String(d.strengths || 1);
+    strengthInput.addEventListener("change", function () {
+      var n = parseInt(strengthInput.value, 10);
+      if (isNaN(n) || n < 1) n = 1;
+      d.strengths = n;
+      strengthInput.value = String(n);
+      refreshAnnualEditor(); // strengths feed the fee -> refresh the live preview
+    });
+    strengthField.appendChild(strengthInput);
+    host.appendChild(strengthField);
+
+    // MRP/DCP skew caveat -- verbatim copy per spec, same visual treatment as the line editor's own
+    // strengths note (.vcl-bud-strength-note, already styled -- no new CSS needed for this note).
+    var note = el("p", "vcl-bud-strength-note");
+    note.innerHTML = '<span aria-hidden="true">⚠</span> In MRP/DCP registrations, this single strengths figure is applied to every market — regardless of the strengths approved per CMS. May slightly skew the total.';
+    host.appendChild(note);
+
+    // Budget year / Coverage this budget row.
+    var metaRow = el("div", "vcl-bud-meta-row vcl-bud-meta-row--pair");
+
+    var yCol = el("div", "vcl-bud-field");
+    yCol.appendChild(el("label", "vcl-bud-field-label", "Budget year"));
+    var ySelect = el("select", "vcl-bud-select");
+    budgetYearOptions().forEach(function (y) {
+      var opt = el("option", null, String(y)); opt.value = String(y);
+      if (d.year === y) opt.selected = true;
+      ySelect.appendChild(opt);
+    });
+    ySelect.addEventListener("change", function () { d.year = parseInt(ySelect.value, 10); refreshAnnualEditor(); });
+    yCol.appendChild(ySelect);
+    metaRow.appendChild(yCol);
+
+    var cCol = el("div", "vcl-bud-field");
+    cCol.appendChild(el("label", "vcl-bud-field-label", "Coverage this budget"));
+    var cSelect = el("select", "vcl-bud-select");
+    var fullOpt = el("option", null, "Full year"); fullOpt.value = "full";
+    if (d.coverage.mode !== "partial") fullOpt.selected = true;
+    cSelect.appendChild(fullOpt);
+    for (var q = 1; q <= 4; q++) {
+      var qOpt = el("option", null, "Rest of year · from Q" + q); qOpt.value = "Q" + q;
+      if (d.coverage.mode === "partial" && d.coverage.fromQuarter === "Q" + q) qOpt.selected = true;
+      cSelect.appendChild(qOpt);
+    }
+    cSelect.addEventListener("change", function () {
+      d.coverage = (cSelect.value === "full") ? { mode: "full", fromQuarter: null } : { mode: "partial", fromQuarter: cSelect.value };
+      refreshAnnualEditor();
+    });
+    cCol.appendChild(cSelect);
+    metaRow.appendChild(cCol);
+    host.appendChild(metaRow);
+
+    // Live proration line, using the same engine function the fee itself is computed with.
+    var factor = BUD.prorationFactor(d.coverage);
+    var months = (d.coverage.mode === "partial")
+      ? (5 - parseInt(String(d.coverage.fromQuarter || "").replace(/[^0-9]/g, ""), 10)) * 3
+      : 12;
+    var pct = Math.round(factor * 100);
+    host.appendChild(el("p", "vcl-bud-proration-note", "Prorated: " + months + " of 12 months → " + pct + "% of the full annual fee counts"));
+  }
+
+  // ---- Station B: Registration -- procedure kind + markets, mirroring the line editor's own
+  // procedure body (Station B/C) but writing into the annual row's { kind, rms, countries } shape
+  // instead of a Submission procedure. ----
+
+  // CMS multi-select for the annual editor's MRP/DCP procedure -- identical chip grid to cmsChips(p)
+  // (Station B of the line editor) but operating on procedure.countries directly, since an annual
+  // row's procedure has no separate cms array (the RMS sits at countries[0], CMS fill the rest).
+  function annualCmsChips(proc) {
+    var wrap = el("div", "vcl-bud-field");
+    wrap.appendChild(el("label", "vcl-bud-field-label", "CMS (Concerned Member States)"));
+    var grid = el("div", "vcl-bud-cgrid");
+    countriesByRole("CMS").forEach(function (c) {
+      if (c.cc === proc.rms) return; // the RMS cannot also be a CMS
+      var on = proc.countries.indexOf(c.cc) !== -1;
+      var m = /^([A-Za-z]{2})\s*[-–]\s*(.+)$/.exec(c.cc);
+      var label = m ? escapeHtml(m[1]) + '<span class="vcl-bud-cc__sfx">' + escapeHtml(m[2]) + "</span>" : escapeHtml(c.cc);
+      var chip = el("button", "vcl-bud-cc-chip-btn" + (on ? " is-on" : ""), label);
+      chip.type = "button";
+      chip.title = c.name || c.cc;
+      chip.addEventListener("click", function () {
+        if (on) proc.countries = proc.countries.filter(function (x) { return x !== c.cc; });
+        else if (proc.countries.indexOf(c.cc) === -1) proc.countries.push(c.cc);
+        refreshAnnualEditor();
+      });
+      grid.appendChild(chip);
+    });
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  // Per-country tariff picks (only for a market whose annual-fee entry actually offers more than one
+  // tariff variant) -- writes straight into draft.tariffPicks, same field the persisted table's own
+  // annualTariffCell <select> writes (onAnnualChange).
+  function renderAnnualTariffPicks(host, draft, res) {
+    var countries = annualCountries();
+    var any = false;
+    (res.byCountry || []).forEach(function (c) {
+      if (c.status === "no-annual" || c.status === "turnover") return;
+      var entry = BUD.findAnnualCountry(countries, c.cc);
+      if (!entry || !entry.tariffs || entry.tariffs.length <= 1) return;
+      any = true;
+      var row = el("div", "vcl-bud-field vcl-bud-field--narrow");
+      row.appendChild(el("label", "vcl-bud-field-label", c.cc));
+      var sel = el("select", "vcl-bud-select");
+      entry.tariffs.forEach(function (t) {
+        var opt = el("option", null, escapeHtml(t.label)); opt.value = t.id;
+        if (t.id === c.tariffId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function () {
+        draft.tariffPicks = draft.tariffPicks || {};
+        draft.tariffPicks[c.cc] = sel.value;
+        refreshAnnualEditor();
+      });
+      row.appendChild(sel);
+      host.appendChild(row);
+    });
+    return any;
+  }
+
+  function renderAnnualStationB(host) {
+    var d = annualEditor.draft;
+    var proc = d.procedure;
+    host.appendChild(el("div", "vcl-bud-body__title", "Registration"));
+    host.appendChild(el("div", "vcl-bud-body__sub", "Which procedure, and which markets, does this registration cover?"));
+
+    // Procedure kind chips -- switching kind resets the markets (a country picked as an MRP/DCP RMS
+    // means nothing once the kind is National), same as the line editor's own procKindChips.
+    var kindRow = el("div", "vcl-bud-chips");
+    [{ k: "national", l: "National" }, { k: "mrpdcp", l: "MRP / DCP" }, { k: "cp", l: "CP" }].forEach(function (it) {
+      var chip = el("button", "vcl-bud-chip" + (proc.kind === it.k ? " is-on" : ""), escapeHtml(it.l));
+      chip.type = "button";
+      chip.addEventListener("click", function () {
+        if (proc.kind === it.k) return;
+        proc.kind = it.k;
+        proc.rms = null;
+        proc.countries = [];
+        d.tariffPicks = {};
+        refreshAnnualEditor();
+      });
+      kindRow.appendChild(chip);
+    });
+    host.appendChild(kindRow);
+
+    host.appendChild(el("div", "vcl-bud-section-label", "Markets"));
+    if (proc.kind === "national") {
+      host.appendChild(countrySelectField("Country", countriesByRole("national"), proc.countries[0] || null, function (cc) {
+        proc.countries = cc ? [cc] : [];
+        refreshAnnualEditor();
+      }));
+    } else if (proc.kind === "mrpdcp") {
+      host.appendChild(countrySelectField("RMS (Reference Member State)", countriesByRole("RMS"), proc.rms, function (cc) {
+        var cms = proc.countries.slice(1).filter(function (x) { return x !== cc; });
+        proc.rms = cc;
+        proc.countries = cc ? [cc].concat(cms) : cms;
+        refreshAnnualEditor();
+      }));
+      host.appendChild(annualCmsChips(proc));
+      host.appendChild(el("p", "vcl-bud-hint", "Each selected CMS is charged its own annual fee. The RMS cannot also be a CMS."));
+    } else if (proc.kind === "cp") {
+      var euRow = el("div", "vcl-bud-chips");
+      euRow.appendChild(el("span", "vcl-bud-cc-chip vcl-bud-cc-chip--rms", "EU"));
+      host.appendChild(euRow);
+      host.appendChild(el("p", "vcl-bud-hint", "CP · priced as EU — one centralised annual fee, no country selection."));
+    }
+
+    var res = BUD.computeAnnualRow(d, annualCountries(), fxByCurrency());
+    var tariffHost = el("div");
+    var hasTariffPicks = renderAnnualTariffPicks(tariffHost, d, res);
+    if (hasTariffPicks) {
+      host.appendChild(el("div", "vcl-bud-section-label", "Special case / tariff"));
+      host.appendChild(tariffHost);
+    }
+  }
+
+  function renderAnnualCollision(host) {
+    var existing = (state.annualLines || []).find(function (r) { return r.id === annualEditor.collision; });
+    var box = el("div", "vcl-bud-collision");
+    box.appendChild(el("p", "vcl-bud-collision__msg",
+      "A product with this exact registration already exists" +
+      (existing ? ' — <strong>' + escapeHtml(existing.product) + "</strong>" : "") +
+      ". Open that row instead of adding a duplicate?"));
+    var actions = el("div", "vcl-bud-collision__actions");
+    var openBtn = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Open existing product");
+    openBtn.type = "button";
+    openBtn.addEventListener("click", function () { openAnnualEditorFor(annualEditor.collision); });
+    var backBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "Keep editing this one");
+    backBtn.type = "button";
+    backBtn.addEventListener("click", function () { annualEditor.collision = null; refreshAnnualEditor(); });
+    actions.appendChild(openBtn);
+    actions.appendChild(backBtn);
+    box.appendChild(actions);
+    host.appendChild(box);
+  }
+
+  // Live Fee / Coverage preview strip, mirroring renderPreviewStrip -- recomputed from the draft via
+  // the single shared engine function (BUD.computeAnnualRow), no pricing logic duplicated here.
+  function renderAnnualPreviewStrip(host) {
+    host.innerHTML = "";
+    var d = annualEditor.draft;
+    var res = BUD.computeAnnualRow(d, annualCountries(), fxByCurrency());
+    var feeItem = el("div");
+    feeItem.innerHTML = '<div class="lbl">Annual fee</div><div class="val">' + escapeHtml(fmtEUR(res.total)) +
+      (res.computable ? "" : ' <span class="vcl-bud-annual__track">+ turnover-based</span>') + "</div>";
+    host.appendChild(feeItem);
+    var covItem = el("div");
+    covItem.innerHTML = '<div class="lbl">Coverage</div><div class="val">' + Math.round(BUD.prorationFactor(d.coverage) * 100) + "%</div>";
+    host.appendChild(covItem);
+    host.appendChild(el("p", "vcl-bud-live-result__note", "Prorated for partial-year coverage; special-case tariffs applied automatically."));
+  }
+
+  function renderAnnualEditor() {
+    var d = annualEditor.draft;
+    var wrap = el("div", "vcl-bud-editor");
+
+    var head = el("div", "vcl-bud-editor__head");
+    var titleWrap = el("div");
+    var editorYear = d.year || (new Date().getFullYear() + 1);
+    titleWrap.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + editorYear + "</span>"));
+    appendCalcRefLines(titleWrap);
+    head.appendChild(titleWrap);
+    var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
+    closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Cancel and return to plan");
+    closeBtn.addEventListener("click", closeAnnualEditor);
+    head.appendChild(closeBtn);
+    wrap.appendChild(head);
+
+    wrap.appendChild(el("p", "vcl-bud-editor__kicker", (annualEditor.editingId ? "Edit" : "New") + " product"));
+
+    var card = el("div", "vcl-bud-body");
+    var stepper = el("div", "vcl-bud-stations");
+    var stationButtons = {};
+    function paintStepper() {
+      ANNUAL_STATIONS.forEach(function (s) {
+        var btn = stationButtons[s.key];
+        var active = annualEditor.station === s.key;
+        var done = annualEditor.reached[s.key] && annualStationComplete(s.key, d) && !active;
+        btn.disabled = !annualEditor.reached[s.key];
+        btn.className = "vcl-bud-station" + (active ? " is-active" : "") + (done ? " is-done" : "");
+        btn.firstChild.innerHTML = done ? '<span aria-hidden="true">✓</span>' : s.key;
+      });
+    }
+    ANNUAL_STATIONS.forEach(function (s) {
+      var btn = el("button", "vcl-bud-station");
+      btn.type = "button";
+      btn.appendChild(el("div", "vcl-bud-station__dot", s.key));
+      btn.appendChild(el("div", "vcl-bud-station__label", escapeHtml(s.label)));
+      btn.addEventListener("click", function () {
+        if (!annualEditor.reached[s.key]) return;
+        annualEditor.station = s.key;
+        refreshAnnualEditor();
+        scrollToTop();
+      });
+      stationButtons[s.key] = btn;
+      stepper.appendChild(btn);
+    });
+    paintStepper();
+    wrap.appendChild(stepper);
+
+    var bodyInner = el("div", "vcl-bud-body__inner");
+    card.appendChild(bodyInner);
+    annualStationBody(bodyInner);
+    wrap.appendChild(card);
+
+    var nav = el("div", "vcl-bud-nav");
+    function paintNav() {
+      nav.innerHTML = "";
+      var idx = ANNUAL_STATION_ORDER.indexOf(annualEditor.station);
+      var back = el("button", "vcl-bud-btn", "← Back");
+      back.type = "button";
+      back.disabled = idx === 0;
+      back.addEventListener("click", function () { advanceAnnualStation(-1); });
+      nav.appendChild(back);
+      if (idx === ANNUAL_STATION_ORDER.length - 1) {
+        var save = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Save product");
+        save.type = "button";
+        save.disabled = !annualStationComplete("A", d);
+        save.addEventListener("click", saveAnnualProduct);
+        nav.appendChild(save);
+      } else {
+        var next = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Next →");
+        next.type = "button";
+        next.disabled = !annualStationComplete(annualEditor.station, d);
+        next.addEventListener("click", function () { advanceAnnualStation(1); });
+        nav.appendChild(next);
+      }
+    }
+    paintNav();
+    wrap.appendChild(nav);
+
+    var strip = el("div", "vcl-bud-live-result");
+    wrap.appendChild(strip);
+    renderAnnualPreviewStrip(strip);
+
+    annualEditor.paintStepper = paintStepper;
+    annualEditor.paintNav = paintNav;
+    annualEditor.bodyHost = bodyInner;
+    annualEditor.previewHost = strip;
+
+    return wrap;
+  }
+
+  // Save with collision check (Step 5): the registration key is recomputed fresh from the current
+  // product/kind/anchor right before saving (never trusted from a stale draft.key) -- anchor is the
+  // single national country, the MRP/DCP RMS, or "" for CP. A match against any OTHER row (not the
+  // one currently being edited) blocks the save and shows the in-editor collision prompt instead.
+  function saveAnnualProduct() {
+    var d = annualEditor.draft;
+    var kind = d.procedure.kind;
+    var anchor = kind === "national" ? (d.procedure.countries[0] || "")
+      : kind === "mrpdcp" ? (d.procedure.rms || "")
+      : "";
+    d.key = BUD.registrationKey(d.product, kind, anchor);
+    var colliding = (state.annualLines || []).find(function (r) { return r.key === d.key && r.id !== annualEditor.editingId; });
+    if (colliding) {
+      annualEditor.collision = colliding.id;
+      refreshAnnualEditor();
+      return;
+    }
+    if (annualEditor.editingId) {
+      var idx = state.annualLines.findIndex(function (r) { return r.id === annualEditor.editingId; });
+      if (idx !== -1) state.annualLines[idx] = d;
+    } else {
+      d.id = "annual-" + Date.now() + "-" + Math.floor(Math.random() * 1e5);
+      state.annualLines.push(d);
+    }
+    annualEditor = null;
+    saveState();
+    rerender();
+    scrollToTop();
+  }
+
+  function deleteAnnualLine(id) {
+    state.annualLines = (state.annualLines || []).filter(function (r) { return r.id !== id; });
     saveState();
     rerender();
   }
