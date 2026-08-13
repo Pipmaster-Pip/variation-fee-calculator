@@ -129,7 +129,7 @@
 
   var plan = BUD.loadPlan(window.localStorage);
   // expandedId: id of the single currently-open detail row (only one line may be open at a time).
-  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null };
+  var state = { lines: plan.lines, hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc" };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
 
@@ -147,10 +147,10 @@
     modalState = {
       editingId: id || null,
       draft: existing ? JSON.parse(JSON.stringify(existing)) : BUD.newLine("line-" + Date.now() + "-" + Math.floor(Math.random() * 1000)),
-      station: "A", // stations editor always opens on Station A (Variations)
+      station: "A", // stations editor always opens on Station A (Product)
       // GW-style forward gating: a new line is a wizard (only A reached until each station is
-      // completed); an existing line is fully reached so the user can jump A/B/C freely.
-      reached: id ? { A: true, B: true, C: true } : { A: true, B: false, C: false },
+      // completed); an existing line is fully reached so the user can jump A/B/C/D freely.
+      reached: id ? { A: true, B: true, C: true, D: true } : { A: true, B: false, C: false, D: false },
       query: "",
       searchResults: [],
     };
@@ -394,15 +394,55 @@
     // Column widths: Product gets more room (long names were overrunning Mode), Procedures is
     // narrower now that each procedure sits on its own compact line, and Variations gets a touch
     // more for the single-row aggregated badges. <col> hints; auto table-layout still lets cells grow.
+    function sortArrow(key){ return state.sortKey === key ? (state.sortDir === "desc" ? " ▾" : " ▴") : ""; }
     table.innerHTML =
       '<colgroup><col style="width:14%"><col style="width:12%"><col style="width:17%">' +
       '<col style="width:17%"><col style="width:6%"><col style="width:9%">' +
       '<col style="width:12%"><col style="width:13%"></colgroup>' +
-      "<thead><tr><th>Product</th><th>Mode</th><th>Variations</th><th>Procedures</th>" +
-      "<th>Quarter</th><th style=\"text-align:right\">Fee</th>" +
-      "<th style=\"text-align:right\">Hours (PERT)</th><th></th></tr></thead>";
+      "<thead><tr>" +
+      '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="product">Product' + sortArrow("product") + '</th>' +
+      '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="mode">Mode' + sortArrow("mode") + '</th>' +
+      '<th>Variations</th><th>Procedures</th>' +
+      '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="quarter">Quarter' + sortArrow("quarter") + '</th>' +
+      '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="fee" style="text-align:right">Fee' + sortArrow("fee") + '</th>' +
+      '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="hours" style="text-align:right">Hours (PERT)' + sortArrow("hours") + '</th>' +
+      '<th></th></tr></thead>';
     var tbody = el("tbody");
-    state.lines.forEach(function (line) {
+    function sortValue(line, key) {
+      switch (key) {
+        case "product":
+          return String(line.product || "").toLowerCase();
+        case "mode":
+          return SUB.displayMode(line.submission) || "";
+        case "quarter":
+          return (line.year || 0) * 10 + (line.quarter ? parseInt(line.quarter.slice(1), 10) || 0 : 0);
+        case "fee":
+          var r = state.resultsById[line.id];
+          return (r && r.complete) ? r.fee : -Infinity;
+        case "hours":
+          var r = state.resultsById[line.id];
+          return (r && r.complete) ? r.hours.expected : -Infinity;
+        default:
+          return "";
+      }
+    }
+    var indexMap = {};
+    state.lines.forEach(function (l, i) { indexMap[l.id] = i; });
+    var sortedLines = state.lines.slice();
+    sortedLines.sort(function (a, b) {
+      var aVal = sortValue(a, state.sortKey);
+      var bVal = sortValue(b, state.sortKey);
+      var cmp;
+      if (typeof aVal === "string") {
+        cmp = aVal.localeCompare(bVal);
+      } else {
+        cmp = aVal - bVal;
+      }
+      if (cmp !== 0) cmp = cmp * (state.sortDir === "desc" ? -1 : 1);
+      if (cmp === 0) cmp = indexMap[a.id] - indexMap[b.id];
+      return cmp;
+    });
+    sortedLines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
       var expanded = state.expandedId === line.id;
@@ -552,24 +592,26 @@
     });
   }
 
-  // The three stations of the editor. B (Procedures) and C (RA tasks) get real bodies in Task 5;
-  // this task wires the shell + stepper + Station A (Variations) only.
+  // The four stations of the editor. A (Product: product identity + number of strengths + year/
+  // quarter/probability) leads, then B (Variations), C (Procedures), D (RA tasks).
   var STATIONS = [
-    { key: "A", label: "Variations" },
-    { key: "B", label: "Procedures" },
-    { key: "C", label: "RA tasks" },
+    { key: "A", label: "Product" },
+    { key: "B", label: "Variations" },
+    { key: "C", label: "Procedures" },
+    { key: "D", label: "RA tasks" },
   ];
 
-  var STATION_ORDER = ["A", "B", "C"];
+  var STATION_ORDER = ["A", "B", "C", "D"];
 
   // Completion gate per station (GW-style): drives the stepper checkmark, the "Next" enablement,
-  // and the final "Add/Save line" enablement. A is complete once every variation carries a type
-  // (needed to price); B once every *visible* procedure has its authority/country resolved (and,
-  // in a WS/SG lead scenario, a lead is chosen); C is always satisfiable (core RA prep is always
-  // included, the optional modules are opt-in).
+  // and the final "Add/Save line" enablement. A is complete once the product carries a name; B once
+  // every variation carries a type (needed to price); C once every *visible* procedure has its
+  // authority/country resolved (and, in a WS/SG lead scenario, a lead is chosen); D is always
+  // satisfiable (core RA prep is always included, the optional modules are opt-in).
   function stationComplete(key, sub) {
-    if (key === "A") return sub.variations.length > 0 && sub.variations.every(function (v) { return !!v.type; });
-    if (key === "B") {
+    if (key === "A") { var p = modalState && modalState.draft && modalState.draft.product; return !!(p && p.trim()); }
+    if (key === "B") return sub.variations.length > 0 && sub.variations.every(function (v) { return !!v.type; });
+    if (key === "C") {
       var procs = SUB.multiProcedureMode(sub) ? sub.procedures : [sub.procedures[0]];
       var procsOk = procs.every(function (p) {
         return p.kind === "cp" || (p.kind === "national" && p.nat) || (p.kind === "mrpdcp" && p.rms);
@@ -611,10 +653,17 @@
   // Dispatches on modalState.station and (re)builds only the body card's contents -- used both
   // for the initial render and by refreshEditor(), which repaints the stepper + body + preview in
   // place rather than tearing down the whole modal.
+  // Key -> body mapping. NOTE: the render functions keep their original names from when the wizard
+  // was A/B/C; the letters shifted by one when Station A (Product) was prepended, so:
+  //   A -> renderStationProduct (product identity + strengths)
+  //   B -> renderStationA        (Variations)
+  //   C -> renderStationB        (Procedures)
+  //   D -> renderStationC        (RA tasks)
   function stationBody(host) {
     host.innerHTML = "";
-    if (modalState.station === "A") renderStationA(host);
-    else if (modalState.station === "B") renderStationB(host);
+    if (modalState.station === "A") renderStationProduct(host);
+    else if (modalState.station === "B") renderStationA(host);
+    else if (modalState.station === "C") renderStationB(host);
     else renderStationC(host);
   }
 
@@ -634,6 +683,104 @@
     if (modalState.bodyHost) stationBody(modalState.bodyHost);
     if (modalState.previewHost) renderPreviewStrip(modalState.previewHost);
     if (modalState.summaryHost) modalState.summaryHost.textContent = summaryLine(modalState.draft);
+  }
+
+  // ---- Station A: Product -- product identity + number of strengths, then year/quarter/probability. ----
+  // The number of strengths feeds the variation fee now (strength-sensitive countries) and is the
+  // basis for the future annual fee. Product name and the strengths input never trigger a body
+  // rebuild on keystroke (only paintStepper/paintNav for live gating), so focus/caret is safe; the
+  // selects and the strengths `change` commit rerender() to refresh the fee preview + summary.
+  function renderStationProduct(host) {
+    var d = modalState.draft;
+    var sub = d.submission;
+    host.appendChild(el("div", "vcl-bud-body__title", "Product"));
+
+    // Product name -- gates Station A completion (Next / stepper checkmark).
+    var productField = el("div", "vcl-bud-field");
+    productField.appendChild(el("label", "vcl-bud-field-label", "Product"));
+    var productInput = el("input", "vcl-bud-input" + (d.product ? "" : " vcl-bud-input--empty"));
+    productInput.type = "text"; productInput.value = d.product;
+    productInput.addEventListener("input", function () {
+      d.product = productInput.value;
+      productInput.classList.toggle("vcl-bud-input--empty", !productInput.value);
+      // Update gating in place (Next enablement + stepper ✓) WITHOUT rebuilding the body, which
+      // would drop the input's focus/caret mid-typing.
+      if (modalState.paintStepper) modalState.paintStepper();
+      if (modalState.paintNav) modalState.paintNav();
+    });
+    productField.appendChild(productInput);
+    host.appendChild(productField);
+
+    // Number of strengths -- validated positive integer; commit on `change` (blur / spinner), not
+    // per keystroke, so the fee recompute never fires mid-typing.
+    if (!sub.strengths) sub.strengths = { default: 1, overrides: {} };
+    var strengthField = el("div", "vcl-bud-field vcl-bud-field--narrow");
+    strengthField.appendChild(el("label", "vcl-bud-field-label", "Number of strengths"));
+    var strengthInput = el("input", "vcl-bud-input");
+    strengthInput.type = "number"; strengthInput.min = "1"; strengthInput.step = "1";
+    strengthInput.value = String(sub.strengths.default || 1);
+    strengthInput.addEventListener("change", function () {
+      var n = parseInt(strengthInput.value, 10);
+      if (isNaN(n) || n < 1) n = 1;
+      sub.strengths.default = n;
+      strengthInput.value = String(n);
+      rerender(); // strengths feed the fee -> refresh preview + summary
+    });
+    strengthField.appendChild(strengthInput);
+    host.appendChild(strengthField);
+
+    // MRP/DCP caveat: in MRP/DCP a single strengths figure is priced across all CMS, regardless of
+    // the per-CMS approved strengths -- so the plan total may be slightly off.
+    var note = el("p", "vcl-bud-strength-note");
+    note.innerHTML = '<span aria-hidden="true">⚠</span> In MRP/DCP procedures, only this single strengths figure is applied — regardless of the strengths approved in the individual CMS. This may slightly skew the total.';
+    host.appendChild(note);
+
+    // Year / Quarter / Probability row.
+    var metaRow = el("div", "vcl-bud-meta-row vcl-bud-meta-row--triple");
+
+    if (!d.year) d.year = new Date().getFullYear() + 1;
+    var yCol = el("div", "vcl-bud-field");
+    yCol.appendChild(el("label", "vcl-bud-field-label", "Year"));
+    var ySelect = el("select", "vcl-bud-select");
+    budgetYearOptions().forEach(function (y) {
+      var opt = el("option", null, String(y)); opt.value = String(y);
+      if (d.year === y) opt.selected = true;
+      ySelect.appendChild(opt);
+    });
+    ySelect.addEventListener("change", function () {
+      d.year = parseInt(ySelect.value, 10);
+      if (!d.quarter || quartersForYear(d.year).indexOf(d.quarter) === -1) d.quarter = quartersForYear(d.year)[0] || null;
+      rerender();
+    });
+    yCol.appendChild(ySelect);
+    metaRow.appendChild(yCol);
+
+    var qCol = el("div", "vcl-bud-field");
+    qCol.appendChild(el("label", "vcl-bud-field-label", "Quarter"));
+    var qSelect = el("select", "vcl-bud-select");
+    if (!d.quarter || quartersForYear(d.year).indexOf(d.quarter) === -1) d.quarter = quartersForYear(d.year)[0] || null;
+    quartersForYear(d.year).forEach(function (q) {
+      var opt = el("option", null, q); opt.value = q;
+      if (d.quarter === q) opt.selected = true;
+      qSelect.appendChild(opt);
+    });
+    qSelect.addEventListener("change", function () { d.quarter = qSelect.value || null; rerender(); });
+    qCol.appendChild(qSelect);
+    metaRow.appendChild(qCol);
+
+    var pCol = el("div", "vcl-bud-field");
+    pCol.appendChild(el("label", "vcl-bud-field-label", "Probability"));
+    var pSelect = el("select", "vcl-bud-select");
+    [100, 75, 50, 25].forEach(function (p) {
+      var opt = el("option", null, p + "%" + (p === 100 ? " (firm)" : "")); opt.value = String(p);
+      if (d.probability === p) opt.selected = true;
+      pSelect.appendChild(opt);
+    });
+    pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); rerender(); });
+    pCol.appendChild(pSelect);
+    metaRow.appendChild(pCol);
+
+    host.appendChild(metaRow);
   }
 
   // ---- Station A: Variations -- mirrors the Guided Workflow's buildStationA exactly. ----
@@ -1226,71 +1373,10 @@
     // (the header itself stays identical across every line, so this is where "which line" belongs).
     wrap.appendChild(el("p", "vcl-bud-editor__kicker", (modalState.editingId ? "Edit" : "New") + " plan line"));
 
-    // Meta row: Product / Quarter / Probability (moved out of the old single-station body)
-    var metaRow = el("div", "vcl-bud-meta-row");
-    var productCol = el("div", "vcl-bud-field");
-    productCol.appendChild(el("label", "vcl-bud-field-label", "Product"));
-    var productInput = el("input", "vcl-bud-input" + (d.product ? "" : " vcl-bud-input--empty"));
-    productInput.type = "text"; productInput.value = d.product;
-    // No rerender() here: this is a text input, same focus-safety rule as the search field --
-    // rebuilding the DOM per keystroke would drop focus/caret mid-typing.
-    productInput.addEventListener("input", function () {
-      d.product = productInput.value;
-      productInput.classList.toggle("vcl-bud-input--empty", !productInput.value);
-    });
-    productCol.appendChild(productInput);
-    metaRow.appendChild(productCol);
+    // Product identity (name / strengths / year / quarter / probability) now lives IN Station A
+    // (renderStationProduct), not in a persistent meta row -- so stations B–D read as focused steps.
 
-    // Year: sits between Product and Quarter. Changing it re-derives which quarters are valid (and
-    // clears a now-invalid quarter), then rerenders so the header kicker and the quarter list follow.
-    if (!d.year) d.year = new Date().getFullYear() + 1;
-    var yCol = el("div", "vcl-bud-field");
-    yCol.appendChild(el("label", "vcl-bud-field-label", "Year"));
-    var ySelect = el("select", "vcl-bud-select");
-    budgetYearOptions().forEach(function (y) {
-      var opt = el("option", null, String(y)); opt.value = String(y);
-      if (d.year === y) opt.selected = true;
-      ySelect.appendChild(opt);
-    });
-    ySelect.addEventListener("change", function () {
-      d.year = parseInt(ySelect.value, 10);
-      // Drop a quarter that no longer exists for the new year (e.g. Q1 when switching to the current year)
-      // and default to the first valid quarter instead of leaving it empty.
-      if (!d.quarter || quartersForYear(d.year).indexOf(d.quarter) === -1) d.quarter = quartersForYear(d.year)[0] || null;
-      rerender();
-    });
-    yCol.appendChild(ySelect);
-    metaRow.appendChild(yCol);
-
-    var qCol = el("div", "vcl-bud-field");
-    qCol.appendChild(el("label", "vcl-bud-field-label", "Quarter"));
-    var qSelect = el("select", "vcl-bud-select");
-    if (!d.quarter || quartersForYear(d.year).indexOf(d.quarter) === -1) d.quarter = quartersForYear(d.year)[0] || null;
-    quartersForYear(d.year).forEach(function (q) {
-      var opt = el("option", null, q); opt.value = q;
-      if (d.quarter === q) opt.selected = true;
-      qSelect.appendChild(opt);
-    });
-    // A <select> "change" only fires once a choice is finalised (no keystroke-level focus risk),
-    // so it's safe to rerender -- and it needs to, to refresh the summary line's quarter.
-    qSelect.addEventListener("change", function () { d.quarter = qSelect.value || null; rerender(); });
-    qCol.appendChild(qSelect);
-    metaRow.appendChild(qCol);
-
-    var pCol = el("div", "vcl-bud-field");
-    pCol.appendChild(el("label", "vcl-bud-field-label", "Probability"));
-    var pSelect = el("select", "vcl-bud-select");
-    [100, 75, 50, 25].forEach(function (p) {
-      var opt = el("option", null, p + "%" + (p === 100 ? " (firm)" : "")); opt.value = String(p);
-      if (d.probability === p) opt.selected = true;
-      pSelect.appendChild(opt);
-    });
-    pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); rerender(); });
-    pCol.appendChild(pSelect);
-    metaRow.appendChild(pCol);
-    // metaRow is appended INSIDE the station card below (above the station heading), not here.
-
-    // Station stepper (A · B · C). Clicking a *reached* dot swaps the body card's content via a
+    // Station stepper (A · B · C · D). Clicking a *reached* dot swaps the body card's content via a
     // targeted refresh (no full container rerender -- nothing about the draft changed). Unreached
     // dots are disabled until forward-navigation opens them (GW-style gating). The dot shows a ✓
     // once the station is complete (and isn't the active one).
@@ -1324,12 +1410,8 @@
     paintStepper();
     wrap.appendChild(stepper);
 
-    // Body card: the Product / Quarter / Probability meta fields sit at the TOP of the white station
-    // card (above the station heading), then a divider. They live OUTSIDE the per-station body host
-    // so station navigation (refreshEditor repaints only bodyInner) never wipes them or drops the
-    // Product input's focus mid-typing.
-    card.appendChild(metaRow);
-    card.appendChild(el("div", "vcl-bud-meta-divider"));
+    // Body card holds only the per-station body host now; the product meta fields moved into
+    // Station A (renderStationProduct) so each station's card shows just that station's content.
     var bodyInner = el("div", "vcl-bud-body__inner");
     card.appendChild(bodyInner);
     stationBody(bodyInner);
@@ -1350,7 +1432,7 @@
       if (idx === STATION_ORDER.length - 1) {
         var finish = el("button", "vcl-bud-btn vcl-bud-btn--primary", modalState.editingId ? "Save line" : "+ Add line");
         finish.type = "button";
-        finish.disabled = !(stationComplete("A", sub) && stationComplete("B", sub));
+        finish.disabled = !(stationComplete("A", sub) && stationComplete("B", sub) && stationComplete("C", sub));
         finish.addEventListener("click", applyModal);
         nav.appendChild(finish);
       } else {
@@ -1460,6 +1542,15 @@
     rerender();
   }
   function onTableClick(evt) {
+    // Sort by header click
+    var sortTh = evt.target.closest("th[data-sort]");
+    if (sortTh) {
+      var key = sortTh.dataset.sort;
+      if (state.sortKey === key) { state.sortDir = (state.sortDir === "desc") ? "asc" : "desc"; }
+      else { state.sortKey = key; state.sortDir = (key === "product" || key === "mode") ? "asc" : "desc"; }
+      rerender();
+      return;
+    }
     // An action button (duplicate / edit / delete) takes precedence and never toggles the row.
     var btn = evt.target.closest("button[data-act]");
     if (btn) {
@@ -1507,7 +1598,7 @@
         editingId: null,
         draft: draft,
         station: "A",
-        reached: { A: true, B: false, C: false },
+        reached: { A: true, B: false, C: false, D: false },
         query: "",
         searchResults: [],
       };

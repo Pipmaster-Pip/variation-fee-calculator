@@ -124,6 +124,14 @@
     return out;
   }
 
+  // Number-of-strengths, validated: a positive-integer default (>=1) plus an optional per-country
+  // overrides map. Preserves a stored value across save/reload instead of always resetting to 1.
+  function normalizeStrengths(raw) {
+    var def = (raw && typeof raw.default === "number" && raw.default >= 1) ? Math.floor(raw.default) : 1;
+    var overrides = (raw && raw.overrides && typeof raw.overrides === "object") ? raw.overrides : {};
+    return { default: def, overrides: overrides };
+  }
+
   // Normalizes a raw `submission` payload (either an already-v2 submission, or a synthetic one
   // built by normalizeLine() from legacy v1 top-level fields) into a valid Submission shape.
   // Malformed input (wrong types, non-objects) never throws -- it recovers to safe defaults.
@@ -145,7 +153,7 @@
             piDocs: (raw.raTasks.piDocs && typeof raw.raTasks.piDocs === "object") ? raw.raTasks.piDocs : {},
             activeSubstance: raw.raTasks.activeSubstance || null }
         : { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
-      strengths: { default: 1, overrides: {} },
+      strengths: normalizeStrengths(raw.strengths),
       specials: { line: {}, ws: {}, lead: null },
     };
   }

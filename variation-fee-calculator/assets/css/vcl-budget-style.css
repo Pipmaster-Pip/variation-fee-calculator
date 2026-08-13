@@ -89,7 +89,7 @@
 .vcl-app .vcl-bud-mode-cell { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .vcl-app .vcl-bud-mode-pill { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 3px 9px; border-radius: 20px; background: var(--budget-tint); color: var(--budget); border: 1px solid transparent; white-space: nowrap; }
 .vcl-app .vcl-bud-mode-pill--single { border-color: transparent; }
-.vcl-app .vcl-bud-mode-pill--grouping { border-color: color-mix(in srgb, var(--budget) 35%, transparent); }
+.vcl-app .vcl-bud-mode-pill--grouping { border-color: transparent; }
 .vcl-app .vcl-bud-mode-pill--worksharing { background: rgba(58, 108, 168, 0.10); color: #3A6CA8; }
 .vcl-app .vcl-bud-mode-pill--superGrouping { background: rgba(140, 90, 180, 0.10); color: #8C5AB4; }
 .vcl-app .vcl-bud-mode-pill--annualUpdate { background: rgba(60, 150, 130, 0.10); color: #2E8C77; }
@@ -156,6 +156,13 @@
 .vcl-app .vcl-bud-field { margin-bottom: 14px; }
 .vcl-app .vcl-bud-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vcl-app .vcl-bud-meta-row { display: grid; grid-template-columns: 2fr 0.9fr 0.9fr 1.2fr; gap: 12px; margin-bottom: 16px; }
+/* Station A (Product) shows only Year / Quarter / Probability in the meta row -- three columns. */
+.vcl-app .vcl-bud-meta-row--triple { grid-template-columns: 0.9fr 0.9fr 1.2fr; }
+/* Number-of-strengths is a single narrow field (not a full-width input). */
+.vcl-app .vcl-bud-field--narrow { max-width: 200px; }
+/* MRP/DCP caveat under the strengths field: reddish, no box. */
+.vcl-app .vcl-bud-strength-note { font-size: 12px; line-height: 1.5; color: #A32D2D; margin: 6px 0 16px; }
+.vcl-app .vcl-bud-strength-note span { margin-right: 4px; }
 /* Divider between the meta fields and the station heading, both inside the white station card. */
 .vcl-app .vcl-bud-meta-divider { border-top: 1px solid var(--border-soft); margin: 0 0 16px; }
 .vcl-app .vcl-bud-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
@@ -347,3 +354,6 @@
 .vcl-app .vcl-bud-toggle__thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .vcl-app .vcl-bud-toggle.is-on .vcl-bud-toggle__thumb { transform: translateX(16px); }
 .vcl-app .vcl-bud-toggle__label { font-size: 13px; color: var(--ink); font-weight: 500; }
+
+.vcl-app .vcl-bud-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.vcl-app .vcl-bud-sortable:hover { color: var(--budget); }
