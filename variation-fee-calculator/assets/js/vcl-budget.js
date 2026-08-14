@@ -716,7 +716,8 @@
     if (c.status === "turnover") return "turnover-based";
     if (c.status === "no-annual") return "no fee";
     if (c.status === "no-rate") return "rate unavailable";
-    if (c.status === "needs-pick") {
+    if (c.choice) {
+      // A genuine tariff choice -- show the picked tariff's own label (survives after the user picks).
       var entry = BUD.findAnnualCountry(annualCountries(), c.cc);
       var picked = entry && entry.tariffs && entry.tariffs.filter(function (t) { return t.id === c.tariffId; })[0];
       return picked && picked.label ? picked.label : "";
@@ -734,7 +735,7 @@
     var countries = annualCountries();
     var lines = [];
     list.forEach(function (c) {
-      if (c.status !== "needs-pick") return;
+      if (!c.choice) return; // only markets the role doesn't resolve keep an editable <select>
       var entry = BUD.findAnnualCountry(countries, c.cc);
       if (!entry || !entry.tariffs || entry.tariffs.length <= 1) return;
       var opts = entry.tariffs.map(function (t) {
@@ -752,7 +753,7 @@
   function renderAnnualTable() {
     var wrap = el("div", "vcl-bud-annual");
     var head = el("div", "vcl-bud-table-head");
-    head.appendChild(el("h3", null, "Plan lines — Annual maintenance fees"));
+    head.appendChild(el("h3", null, 'Plan lines — Annual maintenance fees <span class="vcl-bud-year">for ' + escapeHtml(planYearLabel()) + "</span>"));
     var addWrap = el("div", "vcl-bud-annual__addwrap");
     var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "+ Add product");
     addBtn.type = "button";
@@ -2050,6 +2051,7 @@
       collision: null,
     };
     rerender();
+    scrollToTop(); // opening the takeover editor (Add product / edit) jumps to the top of the page
   }
   function closeAnnualEditor() { annualEditor = null; rerender(); scrollToTop(); }
 

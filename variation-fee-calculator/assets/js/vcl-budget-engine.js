@@ -318,10 +318,13 @@
       if (role && ts[i].role === role) byRole = ts[i];
       if (ts[i].isDefault) def = ts[i];
     }
-    if (byId) return { tariff: byId, needsPick: false };
-    if (byRole) return { tariff: byRole, needsPick: false };
-    if (ts.length === 1) return { tariff: ts[0], needsPick: false };
-    return { tariff: def || ts[0] || null, needsPick: ts.length > 1 };
+    // A "choice" market offers multiple tariffs the role does NOT resolve on its own -- the user must
+    // (or may) choose, and that stays true even after a pick is made (so the <select> never vanishes).
+    var choice = ts.length > 1 && !byRole;
+    if (byId) return { tariff: byId, needsPick: false, choice: choice };
+    if (byRole) return { tariff: byRole, needsPick: false, choice: false };
+    if (ts.length === 1) return { tariff: ts[0], needsPick: false, choice: false };
+    return { tariff: def || ts[0] || null, needsPick: ts.length > 1, choice: choice };
   }
 
   function computeAnnualRow(row, countries, fxByCurrency) {
@@ -335,12 +338,12 @@
     ccs.forEach(function (cc) {
       var entry = findAnnualCountry(countries, cc);
       if (!entry || entry.hasAnnual === false) {
-        out.byCountry.push({ cc: cc, role: null, tariffId: null, amountLocal: 0, ccy: "EUR", amountEur: 0, status: "no-annual" });
+        out.byCountry.push({ cc: cc, role: null, tariffId: null, amountLocal: 0, ccy: "EUR", amountEur: 0, status: "no-annual", choice: false });
         return;
       }
       if (entry.turnoverBased) {
         out.computable = false;
-        out.byCountry.push({ cc: cc, role: null, tariffId: null, amountLocal: 0, ccy: entry.tariffs[0] ? entry.tariffs[0].ccy : "EUR", amountEur: 0, status: "turnover" });
+        out.byCountry.push({ cc: cc, role: null, tariffId: null, amountLocal: 0, ccy: entry.tariffs[0] ? entry.tariffs[0].ccy : "EUR", amountEur: 0, status: "turnover", choice: false });
         return;
       }
       var role = null;
@@ -348,7 +351,7 @@
       else if (proc.kind === "national") role = "national";
       var picked = pickTariff(entry, role, (row.tariffPicks || {})[cc]);
       var t = picked.tariff;
-      if (!t) { out.byCountry.push({ cc: cc, role: role, tariffId: null, amountLocal: 0, ccy: "EUR", amountEur: 0, status: "no-annual" }); return; }
+      if (!t) { out.byCountry.push({ cc: cc, role: role, tariffId: null, amountLocal: 0, ccy: "EUR", amountEur: 0, status: "no-annual", choice: false }); return; }
       var addUnit = (typeof t.addStrength === "number") ? t.addStrength : 0;
       var local = (t.base + Math.max(0, strengths - 1) * addUnit) * factor;
       var rate = t.ccy === "EUR" ? 1 : (fx[t.ccy] || null);
@@ -357,13 +360,13 @@
         // status (local amount + ccy still populated) instead of silently pricing to EUR 0, and
         // flag the whole row uncomputable so callers don't treat the total as complete.
         out.computable = false;
-        out.byCountry.push({ cc: cc, role: role, tariffId: t.id, amountLocal: local, ccy: t.ccy, amountEur: 0, status: "no-rate" });
+        out.byCountry.push({ cc: cc, role: role, tariffId: t.id, amountLocal: local, ccy: t.ccy, amountEur: 0, status: "no-rate", choice: picked.choice });
         return;
       }
       var eur = rate ? local / rate : 0;
       if (picked.needsPick && out.needsPick.indexOf(cc) === -1) out.needsPick.push(cc);
       out.byCountry.push({ cc: cc, role: role, tariffId: t.id, amountLocal: local, ccy: t.ccy, amountEur: eur,
-        status: picked.needsPick ? "needs-pick" : "ok" });
+        status: picked.needsPick ? "needs-pick" : "ok", choice: picked.choice });
       out.total += eur;
     });
     return out;
