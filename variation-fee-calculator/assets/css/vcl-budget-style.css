@@ -414,3 +414,6 @@
 .vcl-app .vcl-bud-collision { border: 1px solid var(--budget); border-radius: 10px; background: var(--budget-tint); padding: 16px 18px; }
 .vcl-app .vcl-bud-collision__msg { margin: 0 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .vcl-app .vcl-bud-collision__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Annual-fee table rows are expandable (Task 4) -- signal it the same way as the Variations table. */
+.vcl-app .vcl-bud-annual-row { cursor: pointer; }

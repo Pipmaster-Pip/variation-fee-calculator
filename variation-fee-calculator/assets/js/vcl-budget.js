@@ -482,6 +482,61 @@
     return tr;
   }
 
+  // Expandable per-annual-row detail, mirroring renderDetailRow: fee-by-market (EUR + local currency)
+  // on the left, proration + turnover/no-rate qualifiers on the right. This is where the noisy notes
+  // (local-currency amounts, "+ turnover-based") live now, so the compact fee cell stays clean.
+  function renderAnnualDetailRow(row, res) {
+    var tr = el("tr", "vcl-bud-detail-row");
+    var td = el("td"); td.colSpan = 7;
+    var box = el("div", "vcl-bud-detail");
+    var grid = el("div", "vcl-bud-detail__grid");
+
+    var left = el("div");
+    left.appendChild(el("div", "vcl-bud-detail__sec", "Annual fee by market"));
+    (res.byCountry || []).forEach(function (c) {
+      var itm = el("div", "vcl-bud-detail__item");
+      itm.appendChild(el("span", null, '<span class="vcl-bud-cc">' + escapeHtml(c.cc) + "</span>"));
+      var rightText = (c.status === "turnover") ? "turnover-based"
+        : (c.status === "no-annual") ? "no fee"
+        : (c.status === "no-rate") ? "rate unavailable"
+        : fmtEUR(c.amountEur);
+      itm.appendChild(el("span", "vcl-bud-detail__h", escapeHtml(rightText)));
+      left.appendChild(itm);
+      if (c.ccy && c.ccy !== "EUR" && (c.status === "ok" || c.status === "needs-pick" || c.status === "no-rate")) {
+        var sub = el("div", "vcl-bud-detail__sub");
+        sub.appendChild(el("span", null, "in local currency"));
+        sub.appendChild(el("span", null, c.cc + " " + fmtLocalAmount(c.amountLocal, c.ccy)));
+        left.appendChild(sub);
+      }
+    });
+    var tot = el("div", "vcl-bud-detail__total");
+    tot.appendChild(el("span", null, "Total annual"));
+    tot.appendChild(el("span", null, fmtEUR(res.total)));
+    left.appendChild(tot);
+    grid.appendChild(left);
+
+    var rightCol = el("div");
+    rightCol.appendChild(el("div", "vcl-bud-detail__sec", "Coverage & tariffs"));
+    var factor = BUD.prorationFactor(row.coverage);
+    var months = (row.coverage && row.coverage.mode === "partial")
+      ? (5 - parseInt(String(row.coverage.fromQuarter || "").replace(/[^0-9]/g, ""), 10)) * 3 : 12;
+    var pr = el("div", "vcl-bud-detail__item");
+    pr.appendChild(el("span", null, "Proration"));
+    pr.appendChild(el("span", "vcl-bud-detail__h", months + "/12 · " + Math.round(factor * 100) + "%"));
+    rightCol.appendChild(pr);
+    if (!res.computable) {
+      var hasTurnover = (res.byCountry || []).some(function (c) { return c.status === "turnover"; });
+      var hasNoRate = (res.byCountry || []).some(function (c) { return c.status === "no-rate"; });
+      if (hasTurnover) rightCol.appendChild(el("p", "vcl-bud-hint", "Some markets are turnover-based and priced separately."));
+      if (hasNoRate) rightCol.appendChild(el("p", "vcl-bud-hint", "Some markets have no resolvable FX rate."));
+    }
+    grid.appendChild(rightCol);
+
+    box.appendChild(grid);
+    td.appendChild(box); tr.appendChild(td);
+    return tr;
+  }
+
   function renderTable(rollup) {
     var wrap = el("div");
     var head = el("div", "vcl-bud-table-head");
@@ -729,7 +784,7 @@
     (state.annualLines || []).forEach(function (row) {
       var res = BUD.computeAnnualRow(row, countries, fx);
       totalEur += res.total;
-      var feeHtml = escapeHtml(fmtEUR(res.total)) + annualFeeCellNotes(res);
+      var feeHtml = escapeHtml(fmtEUR(res.total));
       var tr = el("tr", "vcl-bud-annual-row");
       tr.innerHTML =
         "<td>" + annualOriginCell(row) + "</td>" +
@@ -744,6 +799,7 @@
         "</td>";
       tr.dataset.lineId = row.id;
       tbody.appendChild(tr);
+      if (state.expandedId === row.id) tbody.appendChild(renderAnnualDetailRow(row, res));
     });
     table.appendChild(tbody);
 
@@ -1896,6 +1952,10 @@
     }
     // Anywhere else on a line row toggles that line's detail (the whole row is the target, not just
     // the chevron). The detail row itself carries no data-line-id, so clicks inside it are ignored.
+    // A click on the tariff <select> inside an annual row must not toggle the row.
+    if (evt.target.closest("select")) return;
+    var annTr = evt.target.closest("tr.vcl-bud-annual-row[data-line-id]");
+    if (annTr && annTr.dataset.lineId) { toggleExpand(annTr.dataset.lineId); return; }
     var tr = evt.target.closest("tr.vcl-bud-line-row[data-line-id]");
     if (tr && tr.dataset.lineId) toggleExpand(tr.dataset.lineId);
   }
