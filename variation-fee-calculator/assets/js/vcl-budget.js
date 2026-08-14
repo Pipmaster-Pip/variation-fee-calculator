@@ -137,7 +137,7 @@
   // annualLines: the second "Plan lines" table (annual maintenance fees) -- persisted alongside the
   // variation lines but priced by a wholly separate pure function (computeAnnualRow), so it gets no
   // resultsById cache: each render just calls the (cheap, pure) engine fresh per row.
-  var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc" };
+  var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc", breakdownMode: "combined" };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
   // Annual "Add product" editor (Task 7) -- a second, independent takeover, mutually exclusive with
@@ -386,9 +386,14 @@
     return wrap;
   }
 
-  function renderBreakdownPanel(title, rows, total) {
+  function renderBreakdownPanel(title, rows, total, mode) {
     var panel = el("div", "vcl-bud-panel");
     panel.appendChild(el("h3", null, escapeHtml(title)));
+    if (!rows || !rows.length) {
+      var empty = (mode === "ann") ? "No annual spend" : (mode === "var") ? "No variation spend" : "No spend yet";
+      panel.appendChild(el("p", "vcl-bud-hint", empty));
+      return panel;
+    }
     rows.slice(0, 6).forEach(function (row) {
       var r = el("div", "vcl-bud-bdrow");
       r.appendChild(el("span", null, escapeHtml(row.key)));
@@ -875,10 +880,26 @@
     var combinedMarket = mergeBreakdown(rollup.byMarket, annualRollup.byMarket);
     var combinedProduct = mergeBreakdown(rollup.byProduct, annualRollup.byProduct);
     var combinedTotal = rollup.totals.fee + annualRollup.totalEur;
+    var bdMode = state.breakdownMode || "combined";
+    var srcMarket = bdMode === "var" ? rollup.byMarket : bdMode === "ann" ? annualRollup.byMarket : combinedMarket;
+    var srcProduct = bdMode === "var" ? rollup.byProduct : bdMode === "ann" ? annualRollup.byProduct : combinedProduct;
+    var srcTotal = bdMode === "var" ? rollup.totals.fee : bdMode === "ann" ? annualRollup.totalEur : combinedTotal;
+
+    var bdSection = el("div", "vcl-bud-breakdown-section");
+    var bdHead = el("div", "vcl-bud-breakdown-head");
+    bdHead.appendChild(el("span", "vcl-bud-breakdown-title", "Agency spend breakdown"));
+    var segHtml = [["combined", "Combined"], ["var", "Variations"], ["ann", "Annual"]].map(function (m) {
+      return '<button type="button" class="vcl-bud-seg-btn' + (bdMode === m[0] ? " is-on" : "") +
+        '" data-act="bd-mode" data-mode="' + m[0] + '">' + m[1] + "</button>";
+    }).join("");
+    bdHead.appendChild(el("div", "vcl-bud-seg", segHtml));
+    bdSection.appendChild(bdHead);
+
     var breakdown = el("div", "vcl-bud-breakdown");
-    breakdown.appendChild(renderBreakdownPanel("By market", combinedMarket, combinedTotal));
-    breakdown.appendChild(renderBreakdownPanel("By product", combinedProduct, combinedTotal));
-    container.appendChild(breakdown);
+    breakdown.appendChild(renderBreakdownPanel("By market", srcMarket, srcTotal, bdMode));
+    breakdown.appendChild(renderBreakdownPanel("By product", srcProduct, srcTotal, bdMode));
+    bdSection.appendChild(breakdown);
+    container.appendChild(bdSection);
 
     container.appendChild(renderTable(rollup));
     container.appendChild(renderAnnualTable());
@@ -1971,6 +1992,7 @@
     if (btn.dataset.act === "clear-plan") clearPlan();
     // "+ Add product" (annual table): opens the two-station manual editor (Task 7) on a fresh draft.
     if (btn.dataset.act === "add-annual") openAnnualEditorFor(null);
+    if (btn.dataset.act === "bd-mode") { state.breakdownMode = btn.dataset.mode; rerender(); return; }
   }
 
   // Special case / tariff <select> inside the annual table (annualTariffCell): writes the pick
