@@ -389,6 +389,9 @@
 /* Special case / tariff <select>: same field styling as the editor's inputs/selects, just compact
    enough to sit inline in a table cell instead of a full-width form row. */
 .vcl-app .vcl-bud-select--tariff { height: 28px; width: auto; min-width: 0; max-width: 100%; font-size: 12px; padding: 3px 6px; }
+/* Special-cases pick: keep the country code and its <select> on one line (they were wrapping in the
+   narrow column). */
+.vcl-app .vcl-bud-annual__scpick { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); white-space: nowrap; }
 /* Country chip modifiers for the Markets cell (base .vcl-bud-cc-chip already exists, previously
    unused): RMS gets the same tint+border treatment as the procedures column's .vcl-bud-cc--rms;
    no-annual/turnover-based markets are dimmed rather than hidden (spec: "€0 rows stay visible"). */

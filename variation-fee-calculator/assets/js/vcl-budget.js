@@ -743,7 +743,7 @@
       }).join("");
       var sel = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
         '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
-      lines.push('<span class="vcl-bud-proc-line">' + escapeHtml(ccShort(c.cc)) + " " + sel + "</span>");
+      lines.push('<div class="vcl-bud-annual__scpick">' + escapeHtml(ccShort(c.cc)) + sel + "</div>");
     });
     if (!lines.length) return '<span class="vcl-bud-annual__track">—</span>';
     return '<span class="vcl-bud-proc-cell">' + lines.join("") + "</span>";
@@ -769,8 +769,8 @@
     var tableWrap = el("div", "vcl-bud-table-wrap vcl-bud-table-wrap--annual");
     var table = el("table", "vcl-bud-table");
     table.innerHTML =
-      '<colgroup><col style="width:5%"><col style="width:24%"><col style="width:24%">' +
-      '<col style="width:6%"><col style="width:17%"><col style="width:15%"><col style="width:9%"></colgroup>' +
+      '<colgroup><col style="width:5%"><col style="width:24%"><col style="width:16%">' +
+      '<col style="width:6%"><col style="width:25%"><col style="width:15%"><col style="width:9%"></colgroup>' +
       "<thead><tr>" +
       "<th></th><th>Product</th><th>Markets</th><th>Str.</th>" +
       '<th>Special cases</th><th style="text-align:right">Annual fee</th><th></th>' +
@@ -877,9 +877,15 @@
     var bdSection = el("div", "vcl-bud-breakdown-section");
     var bdHead = el("div", "vcl-bud-breakdown-head");
     bdHead.appendChild(el("span", "vcl-bud-breakdown-title", "Agency spend breakdown"));
+    // Active segment carries a subtle tint in its own mode's bar colour (Combined plum / Variations
+    // budget-red / Annual petrol), so the toggle echoes the chart it drives.
+    var segTint = { combined: "rgba(107,85,102,0.14)", "var": "var(--budget-bg)", ann: "rgba(75,138,156,0.16)" };
+    var segText = { combined: "#6B5566", "var": "var(--budget)", ann: "#37697A" };
     var segHtml = [["combined", "Combined"], ["var", "Variations"], ["ann", "Annual"]].map(function (m) {
-      return '<button type="button" class="vcl-bud-seg-btn' + (bdMode === m[0] ? " is-on" : "") +
-        '" data-act="bd-mode" data-mode="' + m[0] + '">' + m[1] + "</button>";
+      var on = bdMode === m[0];
+      var style = on ? ' style="background:' + segTint[m[0]] + ";color:" + segText[m[0]] + ';font-weight:600"' : "";
+      return '<button type="button" class="vcl-bud-seg-btn' + (on ? " is-on" : "") + '"' + style +
+        ' data-act="bd-mode" data-mode="' + m[0] + '">' + m[1] + "</button>";
     }).join("");
     bdHead.appendChild(el("div", "vcl-bud-seg", segHtml));
     bdSection.appendChild(bdHead);
@@ -1846,23 +1852,16 @@
   // Plain-text "Special case / tariff" note for the Annual maintenance fees export sheet -- mirrors
   // annualTariffCell's on-screen logic (per-country tariff pick, or a no-fee/turnover-based note)
   // but as one flat string, since a spreadsheet cell can't hold the <select>/chip markup.
-  function annualSpecialCaseText(row, res) {
-    var countries = annualCountries();
-    var list = res.byCountry || [];
-    if (!list.length) return "—";
-    var multi = list.length > 1;
-    var parts = list.map(function (c) {
-      var note;
-      if (c.status === "no-annual") note = "no fee";
-      else if (c.status === "turnover") note = "turnover-based";
-      else {
-        var entry = BUD.findAnnualCountry(countries, c.cc);
-        var t = entry && entry.tariffs ? entry.tariffs.find(function (x) { return x.id === c.tariffId; }) : null;
-        note = (entry && entry.tariffs && entry.tariffs.length > 1) ? (t ? t.label : "auto") : "auto";
-      }
-      return multi ? (c.cc + ": " + note) : note;
-    });
-    return parts.join("; ");
+  // Per-market special-case note for the (now per-market) Excel annual sheet: the resolved tariff's
+  // label for a multi-tariff market, "turnover-based" / "no fee" / "rate unavailable" for the special
+  // statuses, or "auto" for a single-default market.
+  function annualCountryNote(c) {
+    if (c.status === "no-annual") return "no fee";
+    if (c.status === "turnover") return "turnover-based";
+    if (c.status === "no-rate") return "rate unavailable";
+    var entry = BUD.findAnnualCountry(annualCountries(), c.cc);
+    var t = entry && entry.tariffs ? entry.tariffs.filter(function (x) { return x.id === c.tariffId; })[0] : null;
+    return (entry && entry.tariffs && entry.tariffs.length > 1) ? (t ? t.label : "auto") : "auto";
   }
   function annualCoverageText(row) {
     var cov = row.coverage || {};
@@ -1883,7 +1882,7 @@
 
     // "Fee (EUR)" is renamed to make clear it is the one-off variation fee, distinct from the
     // recurring annual maintenance fees on the second sheet.
-    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "One-off fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
+    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "Variation Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
@@ -1898,36 +1897,48 @@
       ]);
     });
     var wsLines = XLSX.utils.aoa_to_sheet(linesRows);
-    XLSX.utils.book_append_sheet(wb, wsLines, "Plan lines");
+    XLSX.utils.book_append_sheet(wb, wsLines, "Variations");
 
-    // Annual maintenance fees sheet: one row per persisted annual row, priced via computeAnnualRow
+    // Annual maintenance fees sheet: ONE ROW PER MARKET (each CMS and the RMS of an MRP/DCP gets its
+    // own row with its own fee), so the sheet is flat and pivot-ready. Priced via computeAnnualRow
     // (same engine call the on-screen annual table uses).
-    var annualRows = [["Product", "Registration/track", "Markets", "Strengths", "Special cases", "Annual fee (EUR)", "Coverage"]];
+    var annualRows = [["Product", "Procedure", "Market", "Role", "Strengths", "Special case", "Annual fee (EUR)", "Year", "Coverage"]];
     (state.annualLines || []).forEach(function (row) {
       var res = BUD.computeAnnualRow(row, countries, fx);
       var proc = row.procedure || {};
-      var markets = proc.kind === "cp" ? "EU" : (Array.isArray(proc.countries) ? proc.countries.join(", ") : "");
-      annualRows.push([
-        row.product || "", annualTrackLabel(proc.kind), markets, row.strengths || 1,
-        annualSpecialCaseText(row, res), Math.round(res.total * 100) / 100, annualCoverageText(row),
-      ]);
+      var procLabel = annualTrackLabel(proc.kind);
+      var cov = annualCoverageText(row);
+      var yr = row.year || "";
+      var list = res.byCountry || [];
+      if (!list.length) {
+        annualRows.push([row.product || "", procLabel, "", "", row.strengths || 1, "—", 0, yr, cov]);
+        return;
+      }
+      list.forEach(function (c) {
+        var priced = (c.status === "ok" || c.status === "needs-pick");
+        annualRows.push([
+          row.product || "", procLabel, c.cc, c.role || "", row.strengths || 1,
+          annualCountryNote(c), priced ? Math.round(c.amountEur * 100) / 100 : 0, yr, cov,
+        ]);
+      });
     });
     var wsAnnual = XLSX.utils.aoa_to_sheet(annualRows);
     XLSX.utils.book_append_sheet(wb, wsAnnual, "Annual maintenance fees");
 
+    var r2 = function (n) { return Math.round((n || 0) * 100) / 100; };
     var rollupRows = [
-      ["Variation fees (EUR)", rollup.totals.fee],
-      ["Annual fees (EUR/yr)", annualRollup.totalEur],
-      ["Total agency spend this year (EUR)", rollup.totals.fee + annualRollup.totalEur],
+      ["Variation fees (EUR)", r2(rollup.totals.fee)],
+      ["Annual fees (EUR/yr)", r2(annualRollup.totalEur)],
+      ["Total agency spend this year (EUR)", r2(rollup.totals.fee + annualRollup.totalEur)],
       ["Annual RA hours (expected)", Math.round(rollup.totals.hoursExpected)],
       ["Annual RA hours (min)", Math.round(rollup.totals.hoursMin)],
       ["Annual RA hours (max)", Math.round(rollup.totals.hoursMax)],
       ["FTE required", BUD.computeFte(rollup.totals.hoursExpected, state.hoursPerHead).toFixed(2)],
       ["Hours per head per year", state.hoursPerHead],
       [], ["By market (combined agency spend, EUR)", "Fee (EUR)"],
-    ].concat(mergeBreakdown(rollup.byMarket, annualRollup.byMarket).map(function (r) { return [r.key, r.value]; }))
+    ].concat(mergeBreakdown(rollup.byMarket, annualRollup.byMarket).map(function (r) { return [r.key, r2(r.value)]; }))
      .concat([[], ["By product (combined agency spend, EUR)", "Fee (EUR)"]])
-     .concat(mergeBreakdown(rollup.byProduct, annualRollup.byProduct).map(function (r) { return [r.key, r.value]; }));
+     .concat(mergeBreakdown(rollup.byProduct, annualRollup.byProduct).map(function (r) { return [r.key, r2(r.value)]; }));
     var wsRollup = XLSX.utils.aoa_to_sheet(rollupRows);
     XLSX.utils.book_append_sheet(wb, wsRollup, "Rollup");
 

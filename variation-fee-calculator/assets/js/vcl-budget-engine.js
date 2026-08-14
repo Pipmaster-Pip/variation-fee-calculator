@@ -289,6 +289,9 @@
       coverage: (raw.coverage && raw.coverage.mode === "partial")
         ? { mode: "partial", fromQuarter: raw.coverage.fromQuarter || null }
         : { mode: "full", fromQuarter: null },
+      // Budget year this recurring cost is planned into -- persisted so the Excel export can carry a
+      // Year column (older rows saved before this field default to next year on load).
+      year: (typeof raw.year === "number" && raw.year >= 2000) ? raw.year : (new Date().getFullYear() + 1),
     };
   }
 
