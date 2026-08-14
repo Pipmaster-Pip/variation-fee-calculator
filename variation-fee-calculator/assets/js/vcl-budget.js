@@ -386,7 +386,7 @@
     return wrap;
   }
 
-  function renderBreakdownPanel(title, rows, total, mode) {
+  function renderBreakdownPanel(title, rows, total, mode, color) {
     var panel = el("div", "vcl-bud-panel");
     panel.appendChild(el("h3", null, escapeHtml(title)));
     if (!rows || !rows.length) {
@@ -400,6 +400,7 @@
       var bar = el("span", "vcl-bud-bdbar");
       var fill = el("span");
       fill.style.width = (total ? Math.round((row.value / total) * 100) : 0) + "%";
+      if (color) fill.style.background = color; // per-mode bar colour (Variations / Annual / Combined)
       bar.appendChild(fill);
       r.appendChild(bar);
       r.appendChild(el("span", "vcl-bud-bdval", escapeHtml(fmtEUR(row.value))));
@@ -500,12 +501,12 @@
     left.appendChild(el("div", "vcl-bud-detail__sec", "Annual fee by market"));
     (res.byCountry || []).forEach(function (c) {
       var itm = el("div", "vcl-bud-detail__item");
-      itm.appendChild(el("span", null, '<span class="vcl-bud-cc">' + escapeHtml(c.cc) + "</span>"));
-      var rightText = (c.status === "turnover") ? "turnover-based"
-        : (c.status === "no-annual") ? "no fee"
-        : (c.status === "no-rate") ? "rate unavailable"
-        : fmtEUR(c.amountEur);
-      itm.appendChild(el("span", "vcl-bud-detail__h", escapeHtml(rightText)));
+      var qual = annualMarketQualifier(c);
+      var lbl = '<span class="vcl-bud-cc">' + escapeHtml(c.cc) + "</span>" +
+        (qual ? ' <span class="vcl-bud-annual__track">' + escapeHtml(qual) + "</span>" : "");
+      itm.appendChild(el("span", null, lbl));
+      var priced = (c.status === "ok" || c.status === "needs-pick");
+      itm.appendChild(el("span", "vcl-bud-detail__h", priced ? escapeHtml(fmtEUR(c.amountEur)) : "—"));
       left.appendChild(itm);
       if (c.ccy && c.ccy !== "EUR" && (c.status === "ok" || c.status === "needs-pick" || c.status === "no-rate")) {
         var sub = el("div", "vcl-bud-detail__sub");
@@ -686,64 +687,66 @@
       ' <span class="vcl-bud-annual__track">· ' + escapeHtml(annualTrackLabel(kind)) + "</span></span>";
   }
 
-  // Country chips for the Markets cell -- RMS highlighted, no-annual/turnover markets dimmed, capped
-  // at 6 visible with a "+N" overflow (mirrors renderBreakdownPanel's own slice(0, 6) cap).
-  function annualMarketsCell(res) {
-    var MAX_VISIBLE = 6;
-    var list = res.byCountry || [];
-    if (!list.length) return '<span class="vcl-bud-annual__track">—</span>';
-    var shown = list.slice(0, MAX_VISIBLE);
-    var extra = list.length - shown.length;
-    var html = shown.map(function (c) {
-      var cls = "vcl-bud-cc-chip";
-      if (c.role === "RMS") cls += " vcl-bud-cc-chip--rms";
-      if (c.status === "no-annual" || c.status === "turnover") cls += " vcl-bud-cc-chip--dim";
-      return '<span class="' + cls + '">' + escapeHtml(c.cc) + "</span>";
-    }).join("");
-    if (extra > 0) html += '<span class="vcl-bud-annual__track">+' + extra + "</span>";
-    return html;
+  // Markets cell: the registration's procedure rendered in the same plain-text style as the Variations
+  // table's Procedures column ("1 × nat. (DE)" / "RMS IT (+ 7 CMS)" / "1 × CP"). The full per-country
+  // breakdown lives in the expandable detail row, so the collapsed cell stays compact.
+  function annualMarketsCell(row) {
+    var proc = (row && row.procedure) || {};
+    var line;
+    if (proc.kind === "national") {
+      var natCc = (proc.countries && proc.countries[0]) ? ccShort(proc.countries[0]) : "?";
+      line = "1 × nat. (" + escapeHtml(natCc) + ")";
+    } else if (proc.kind === "cp") {
+      line = "1 × CP";
+    } else if (proc.kind === "mrpdcp") {
+      var rms = proc.rms ? ccShort(proc.rms) : "?";
+      var n = (proc.countries || []).filter(function (c) { return c !== proc.rms; }).length;
+      line = "RMS " + escapeHtml(rms) + " (+ " + n + " CMS)";
+    } else {
+      return '<span class="vcl-bud-annual__track">—</span>';
+    }
+    return '<span class="vcl-bud-proc-cell"><span class="vcl-bud-proc-line">' + line + "</span></span>";
   }
 
-  // Special cases cell: only markets that carry an actual special case are listed -- an editable
-  // <select> where the tariff is genuinely ambiguous (status "needs-pick"; keeps the
-  // data-line-id/data-cc contract for onAnnualChange), plain text where the tariff is already resolved
-  // by role, or a turnover-based note. Single-default ("auto") and no-fee markets are omitted; a row
-  // with none shows an em dash. Plain running text, no country pills.
+  // Muted role/tariff/status qualifier shown next to a market in the EXPANDED annual detail
+  // ("RMS", "CMS", "POM – standard", "turnover-based", ...). Returns "" when there's nothing to add
+  // (e.g. a plain national/CP market). needs-pick markets show the resolved tariff's own label; plain
+  // role-resolved MRP/DCP markets show their role.
+  function annualMarketQualifier(c) {
+    if (c.status === "turnover") return "turnover-based";
+    if (c.status === "no-annual") return "no fee";
+    if (c.status === "no-rate") return "rate unavailable";
+    if (c.status === "needs-pick") {
+      var entry = BUD.findAnnualCountry(annualCountries(), c.cc);
+      var picked = entry && entry.tariffs && entry.tariffs.filter(function (t) { return t.id === c.tariffId; })[0];
+      return picked && picked.label ? picked.label : "";
+    }
+    return (c.role === "RMS" || c.role === "CMS") ? c.role : "";
+  }
+
+  // Special cases cell: ONLY markets that need a genuine user choice (status "needs-pick") get a
+  // control here -- an editable <select> (keeps the data-line-id/data-cc contract for onAnnualChange),
+  // with the country in plain text like the Procedures column. Role / turnover / tariff context for
+  // every other market is shown in the expandable detail row instead (annualMarketQualifier), next to
+  // each country. A row with no genuine choice shows an em dash.
   function annualTariffCell(row, res) {
     var list = res.byCountry || [];
     var countries = annualCountries();
     var lines = [];
     list.forEach(function (c) {
-      var inner = null;
-      if (c.status === "turnover") {
-        inner = '<span class="vcl-bud-annual__track">turnover-based</span>';
-      } else if (c.status === "no-annual") {
-        return; // no fee -> not a special case
-      } else {
-        var entry = BUD.findAnnualCountry(countries, c.cc);
-        if (entry && entry.tariffs && entry.tariffs.length > 1) {
-          if (c.status === "needs-pick") {
-            // Genuine ambiguity -- an editable <select> (keeps the data-line-id/data-cc contract onAnnualChange reads).
-            var opts = entry.tariffs.map(function (t) {
-              return '<option value="' + escapeHtml(t.id) + '"' + (t.id === c.tariffId ? " selected" : "") + ">" +
-                escapeHtml(t.label) + "</option>";
-            }).join("");
-            inner = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
-              '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
-          } else {
-            // Tariff already resolved by role -- plain text, not editable (avoids overriding the correct fee).
-            var picked = entry.tariffs.filter(function (t) { return t.id === c.tariffId; })[0];
-            inner = '<span class="vcl-bud-annual__track">' + escapeHtml(picked ? picked.label : "—") + "</span>";
-          }
-        } else {
-          return; // single default tariff -> not a special case
-        }
-      }
-      lines.push('<div class="vcl-bud-annual__sc-line"><span class="vcl-bud-annual__sc-cc">' +
-        escapeHtml(c.cc) + "</span> " + inner + "</div>");
+      if (c.status !== "needs-pick") return;
+      var entry = BUD.findAnnualCountry(countries, c.cc);
+      if (!entry || !entry.tariffs || entry.tariffs.length <= 1) return;
+      var opts = entry.tariffs.map(function (t) {
+        return '<option value="' + escapeHtml(t.id) + '"' + (t.id === c.tariffId ? " selected" : "") + ">" +
+          escapeHtml(t.label) + "</option>";
+      }).join("");
+      var sel = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
+        '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
+      lines.push('<span class="vcl-bud-proc-line">' + escapeHtml(ccShort(c.cc)) + " " + sel + "</span>");
     });
     if (!lines.length) return '<span class="vcl-bud-annual__track">—</span>';
-    return '<div class="vcl-bud-annual__sc">' + lines.join("") + "</div>";
+    return '<span class="vcl-bud-proc-cell">' + lines.join("") + "</span>";
   }
 
   function renderAnnualTable() {
@@ -784,7 +787,7 @@
       tr.innerHTML =
         "<td>" + annualOriginCell(row) + "</td>" +
         "<td>" + annualProductCell(row) + "</td>" +
-        "<td>" + annualMarketsCell(res) + "</td>" +
+        "<td>" + annualMarketsCell(row) + "</td>" +
         '<td class="vcl-bud-num">' + (row.strengths || 1) + "</td>" +
         "<td>" + annualTariffCell(row, res) + "</td>" +
         '<td class="vcl-bud-num">' + feeHtml + "</td>" +
@@ -881,9 +884,13 @@
     bdHead.appendChild(el("div", "vcl-bud-seg", segHtml));
     bdSection.appendChild(bdHead);
 
+    var bdLabelMap = { combined: "Combined", "var": "Variations", ann: "Annual fees" };
+    var bdColorMap = { combined: "#6B5566", "var": "var(--budget)", ann: "#4B8A9C" };
+    var bdLabel = bdLabelMap[bdMode] || "Combined";
+    var bdColor = bdColorMap[bdMode] || "var(--budget)";
     var breakdown = el("div", "vcl-bud-breakdown");
-    breakdown.appendChild(renderBreakdownPanel("By market", srcMarket, srcTotal, bdMode));
-    breakdown.appendChild(renderBreakdownPanel("By product", srcProduct, srcTotal, bdMode));
+    breakdown.appendChild(renderBreakdownPanel("By market — " + bdLabel, srcMarket, srcTotal, bdMode, bdColor));
+    breakdown.appendChild(renderBreakdownPanel("By product — " + bdLabel, srcProduct, srcTotal, bdMode, bdColor));
     bdSection.appendChild(breakdown);
     container.appendChild(bdSection);
 
