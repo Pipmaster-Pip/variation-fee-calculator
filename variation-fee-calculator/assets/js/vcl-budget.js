@@ -718,7 +718,7 @@
       '<col style="width:6%"><col style="width:18%"><col style="width:14%"><col style="width:11%"></colgroup>' +
       "<thead><tr>" +
       "<th></th><th>Product</th><th>Markets</th><th>Str.</th>" +
-      '<th>Special case / tariff</th><th style="text-align:right">Annual fee</th><th></th>' +
+      '<th>Special cases</th><th style="text-align:right">Annual fee</th><th></th>' +
       "</tr></thead>";
 
     var tbody = el("tbody");
@@ -801,7 +801,7 @@
     actions.innerHTML =
       '<button type="button" class="vcl-bud-btn vcl-bud-btn--ghost" data-act="clear-plan">Clear plan</button>' +
       '<button type="button" class="vcl-bud-btn" data-act="export">⭳ Export to Excel</button>' +
-      '<button type="button" class="vcl-bud-btn vcl-bud-btn--primary" data-act="new-line">+ New line</button>';
+      '<button type="button" class="vcl-bud-btn vcl-bud-btn--primary" data-act="new-line">+ Add variation line</button>';
     header.appendChild(actions);
     container.appendChild(header);
 
@@ -1825,7 +1825,7 @@
 
     // Annual maintenance fees sheet: one row per persisted annual row, priced via computeAnnualRow
     // (same engine call the on-screen annual table uses).
-    var annualRows = [["Product", "Registration/track", "Markets", "Strengths", "Special case", "Annual fee (EUR)", "Coverage"]];
+    var annualRows = [["Product", "Registration/track", "Markets", "Strengths", "Special cases", "Annual fee (EUR)", "Coverage"]];
     (state.annualLines || []).forEach(function (row) {
       var res = BUD.computeAnnualRow(row, countries, fx);
       var proc = row.procedure || {};
