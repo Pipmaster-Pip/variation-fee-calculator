@@ -644,19 +644,20 @@
     return html;
   }
 
-  // Special case / tariff cell: a <select> per market that actually has more than one tariff variant
-  // to choose from (writes back to row.tariffPicks on change -- see onAnnualChange), a muted "auto"
-  // label where only one tariff applies, and a muted status note for no-annual/turnover-based markets.
+  // Special cases cell: only markets that carry an actual special case are listed -- a multi-tariff
+  // <select> (unchanged data-line-id/data-cc contract for onAnnualChange) or a turnover-based note.
+  // Single-default ("auto") and no-fee markets are omitted; a row with none shows an em dash. Plain
+  // running text, no country pills.
   function annualTariffCell(row, res) {
     var list = res.byCountry || [];
     var countries = annualCountries();
-    var multi = list.length > 1;
-    var parts = list.map(function (c) {
-      var inner;
-      if (c.status === "no-annual") {
-        inner = '<span class="vcl-bud-annual__track">no fee</span>';
-      } else if (c.status === "turnover") {
+    var lines = [];
+    list.forEach(function (c) {
+      var inner = null;
+      if (c.status === "turnover") {
         inner = '<span class="vcl-bud-annual__track">turnover-based</span>';
+      } else if (c.status === "no-annual") {
+        return; // no fee -> not a special case
       } else {
         var entry = BUD.findAnnualCountry(countries, c.cc);
         if (entry && entry.tariffs && entry.tariffs.length > 1) {
@@ -667,12 +668,14 @@
           inner = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
             '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
         } else {
-          inner = '<span class="vcl-bud-annual__track">auto</span>';
+          return; // single default tariff -> not a special case
         }
       }
-      return multi ? ('<div class="vcl-bud-proc-line"><span class="vcl-bud-cc">' + escapeHtml(c.cc) + "</span> " + inner + "</div>") : inner;
+      lines.push('<div class="vcl-bud-annual__sc-line"><span class="vcl-bud-annual__sc-cc">' +
+        escapeHtml(c.cc) + "</span> " + inner + "</div>");
     });
-    return '<div class="vcl-bud-proc-cell">' + parts.join("") + "</div>";
+    if (!lines.length) return '<span class="vcl-bud-annual__track">—</span>';
+    return '<div class="vcl-bud-annual__sc">' + lines.join("") + "</div>";
   }
 
   // Extra markup appended after the EUR total in the Annual fee cell: a muted "+ turnover-based" /
