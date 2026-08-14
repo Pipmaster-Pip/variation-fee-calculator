@@ -350,7 +350,7 @@
       '<div class="vcl-bud-agency__row"><span>Variations</span><span class="vcl-bud-agency__val">' +
       escapeHtml(fmtEUR(rollup.totals.fee)) + "</span></div>" +
       '<div class="vcl-bud-agency__row"><span>Annual fee</span><span class="vcl-bud-agency__val">' +
-      escapeHtml(fmtEUR(annualRollup.totalEur)) + " /yr</span></div>" +
+      escapeHtml(fmtEUR(annualRollup.totalEur)) + "</span></div>" +
       '<div class="vcl-bud-agency__divider"></div>' +
       '<div class="vcl-bud-agency__row vcl-bud-agency__row--total"><span>Total this year</span><span class="vcl-bud-agency__val">' +
       escapeHtml(fmtEUR(totalThisYear)) + "</span></div>";
