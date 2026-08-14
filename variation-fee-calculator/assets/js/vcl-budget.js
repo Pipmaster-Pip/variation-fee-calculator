@@ -1844,6 +1844,7 @@
   }
   function clearPlan() {
     state.lines = [];
+    state.annualLines = [];
     state.resultsById = {};
     state.expandedId = null;
     saveState();
