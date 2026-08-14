@@ -510,7 +510,7 @@
       if (c.ccy && c.ccy !== "EUR" && (c.status === "ok" || c.status === "needs-pick" || c.status === "no-rate")) {
         var sub = el("div", "vcl-bud-detail__sub");
         sub.appendChild(el("span", null, "in local currency"));
-        sub.appendChild(el("span", null, c.cc + " " + fmtLocalAmount(c.amountLocal, c.ccy)));
+        sub.appendChild(el("span", null, escapeHtml(c.cc + " " + fmtLocalAmount(c.amountLocal, c.ccy))));
         left.appendChild(sub);
       }
     });
@@ -704,10 +704,11 @@
     return html;
   }
 
-  // Special cases cell: only markets that carry an actual special case are listed -- a multi-tariff
-  // <select> (unchanged data-line-id/data-cc contract for onAnnualChange) or a turnover-based note.
-  // Single-default ("auto") and no-fee markets are omitted; a row with none shows an em dash. Plain
-  // running text, no country pills.
+  // Special cases cell: only markets that carry an actual special case are listed -- an editable
+  // <select> where the tariff is genuinely ambiguous (status "needs-pick"; keeps the
+  // data-line-id/data-cc contract for onAnnualChange), plain text where the tariff is already resolved
+  // by role, or a turnover-based note. Single-default ("auto") and no-fee markets are omitted; a row
+  // with none shows an em dash. Plain running text, no country pills.
   function annualTariffCell(row, res) {
     var list = res.byCountry || [];
     var countries = annualCountries();
@@ -721,12 +722,19 @@
       } else {
         var entry = BUD.findAnnualCountry(countries, c.cc);
         if (entry && entry.tariffs && entry.tariffs.length > 1) {
-          var opts = entry.tariffs.map(function (t) {
-            return '<option value="' + escapeHtml(t.id) + '"' + (t.id === c.tariffId ? " selected" : "") + ">" +
-              escapeHtml(t.label) + "</option>";
-          }).join("");
-          inner = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
-            '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
+          if (c.status === "needs-pick") {
+            // Genuine ambiguity -- an editable <select> (keeps the data-line-id/data-cc contract onAnnualChange reads).
+            var opts = entry.tariffs.map(function (t) {
+              return '<option value="' + escapeHtml(t.id) + '"' + (t.id === c.tariffId ? " selected" : "") + ">" +
+                escapeHtml(t.label) + "</option>";
+            }).join("");
+            inner = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
+              '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
+          } else {
+            // Tariff already resolved by role -- plain text, not editable (avoids overriding the correct fee).
+            var picked = entry.tariffs.filter(function (t) { return t.id === c.tariffId; })[0];
+            inner = '<span class="vcl-bud-annual__track">' + escapeHtml(picked ? picked.label : "—") + "</span>";
+          }
         } else {
           return; // single default tariff -> not a special case
         }
@@ -736,29 +744,6 @@
     });
     if (!lines.length) return '<span class="vcl-bud-annual__track">—</span>';
     return '<div class="vcl-bud-annual__sc">' + lines.join("") + "</div>";
-  }
-
-  // Extra markup appended after the EUR total in the Annual fee cell: a muted "+ turnover-based" /
-  // "+ rate unavailable" note when the row isn't fully computable (mirrors the existing
-  // turnover-based note; "rate unavailable" covers computeAnnualRow's "no-rate" status -- a market
-  // priced in a foreign currency with no FX rate resolvable, see vcl-budget-engine.js), plus a
-  // compact secondary line listing the local-currency amount per foreign-currency market ("in local
-  // currency where applicable") so a CZK/DKK/HUF/ISK/PLN/SEK/GBP fee is never shown as a bare EUR
-  // figure with no way to sanity-check the conversion.
-  function annualFeeCellNotes(res) {
-    var list = res.byCountry || [];
-    var html = "";
-    if (!res.computable) {
-      var hasTurnover = list.some(function (c) { return c.status === "turnover"; });
-      var hasNoRate = list.some(function (c) { return c.status === "no-rate"; });
-      if (hasTurnover) html += ' <span class="vcl-bud-annual__track">+ turnover-based</span>';
-      if (hasNoRate) html += ' <span class="vcl-bud-annual__track">+ rate unavailable</span>';
-    }
-    var localParts = list.filter(function (c) {
-      return c.ccy && c.ccy !== "EUR" && (c.status === "ok" || c.status === "needs-pick" || c.status === "no-rate");
-    }).map(function (c) { return c.cc + " " + fmtLocalAmount(c.amountLocal, c.ccy); });
-    if (localParts.length) html += '<div class="vcl-bud-annual__track">' + escapeHtml(localParts.join(", ")) + "</div>";
-    return html;
   }
 
   function renderAnnualTable() {
@@ -794,7 +779,8 @@
       var res = BUD.computeAnnualRow(row, countries, fx);
       totalEur += res.total;
       var feeHtml = escapeHtml(fmtEUR(res.total));
-      var tr = el("tr", "vcl-bud-annual-row");
+      var expanded = state.expandedId === row.id;
+      var tr = el("tr", "vcl-bud-annual-row" + (expanded ? " is-expanded" : ""));
       tr.innerHTML =
         "<td>" + annualOriginCell(row) + "</td>" +
         "<td>" + annualProductCell(row) + "</td>" +
@@ -808,7 +794,7 @@
         "</td>";
       tr.dataset.lineId = row.id;
       tbody.appendChild(tr);
-      if (state.expandedId === row.id) tbody.appendChild(renderAnnualDetailRow(row, res));
+      if (expanded) tbody.appendChild(renderAnnualDetailRow(row, res));
     });
     table.appendChild(tbody);
 

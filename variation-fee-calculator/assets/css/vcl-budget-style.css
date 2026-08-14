@@ -49,8 +49,8 @@
 .vcl-app .vcl-bud-fte-input { width: 62px; font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* Agency fees card (Proposal 2) -- replaces the old single-value "Variation fees" tile with three
-   stacked rows (Variations / Annual fee / Total this year) and a budget-tinted left border, so this
-   tile reads as the "combined agency spend" summary rather than just another stat tile. */
+   stacked rows (Variations / Annual fee / Total this year), so this tile reads as the "combined
+   agency spend" summary rather than just another stat tile. */
 .vcl-app .vcl-bud-agency__rows { display: flex; flex-direction: column; gap: 6px; }
 .vcl-app .vcl-bud-agency__row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--ink); }
 .vcl-app .vcl-bud-agency__val { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -87,7 +87,8 @@
    in a tall row (e.g. the actions column, icons at the top) that bottom rule reads as a stray
    horizontal line floating below the icons. Drop it on data rows; the border-top rule is the single
    clean separator (the detail row keeps its own explicit rules via a more specific selector). */
-.vcl-app table.vcl-bud-table tbody tr.vcl-bud-line-row > td { border-bottom: 0; }
+.vcl-app table.vcl-bud-table tbody tr.vcl-bud-line-row > td,
+.vcl-app table.vcl-bud-table tbody tr.vcl-bud-annual-row > td { border-bottom: 0; }
 /* WP themes also give <table> a bottom margin; inside the rounded wrapper that opens a gap below
    the Total row before the rounded corner. Zero it so the footer fill reaches the rounding. */
 .vcl-app .vcl-bud-table-wrap table.vcl-bud-table { margin: 0; }
@@ -148,8 +149,10 @@
 /* Product cell: wrap long names inside the (now wider) column instead of letting them run into the
    Mode column. */
 .vcl-app .vcl-bud-expcell { white-space: normal; overflow-wrap: break-word; }
-.vcl-app .vcl-bud-line-row.is-expanded { background: var(--budget-tint); }
-.vcl-app .vcl-bud-line-row.is-expanded > td { border-bottom: none; }
+.vcl-app .vcl-bud-line-row.is-expanded,
+.vcl-app .vcl-bud-annual-row.is-expanded { background: var(--budget-tint); }
+.vcl-app .vcl-bud-line-row.is-expanded > td,
+.vcl-app .vcl-bud-annual-row.is-expanded > td { border-bottom: none; }
 /* Horizontal budget-coloured rules top AND bottom delimit the open detail as its own drawer -- a
    clean "waagrechte Linie" instead of the column grid dangling down into it. The table.vcl-bud-table
    prefix raises specificity above the generic "td { border-top: ... }" rule so the top rule sticks. */
@@ -418,7 +421,7 @@
 /* Annual-fee table rows are expandable (Task 4) -- signal it the same way as the Variations table. */
 .vcl-app .vcl-bud-annual-row { cursor: pointer; }
 
-.vcl-app .vcl-bud-table-wrap--annual { overflow-x: clip; }
+.vcl-app .vcl-bud-table-wrap.vcl-bud-table-wrap--annual { overflow-x: clip; }
 
 .vcl-app .vcl-bud-annual__addwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .vcl-app .vcl-bud-annual__addhint { font-size: 11.5px; color: var(--muted); margin: 0; }
