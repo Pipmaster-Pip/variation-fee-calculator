@@ -2366,11 +2366,17 @@
     function paintNav() {
       nav.innerHTML = "";
       var idx = ANNUAL_STATION_ORDER.indexOf(annualEditor.station);
-      var back = el("button", "vcl-bud-btn", "← Back");
-      back.type = "button";
-      back.disabled = idx === 0;
-      back.addEventListener("click", function () { advanceAnnualStation(-1); });
-      nav.appendChild(back);
+      if (idx === 0) {
+        var toPlan = el("button", "vcl-bud-btn", "← Back to plan");
+        toPlan.type = "button";
+        toPlan.addEventListener("click", closeAnnualEditor);
+        nav.appendChild(toPlan);
+      } else {
+        var back = el("button", "vcl-bud-btn", "← Back");
+        back.type = "button";
+        back.addEventListener("click", function () { advanceAnnualStation(-1); });
+        nav.appendChild(back);
+      }
       if (idx === ANNUAL_STATION_ORDER.length - 1) {
         var save = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Save product");
         save.type = "button";
