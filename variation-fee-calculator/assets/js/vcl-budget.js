@@ -769,11 +769,11 @@
     var countries = annualCountries();
     var fx = fxByCurrency();
 
-    var tableWrap = el("div", "vcl-bud-table-wrap");
+    var tableWrap = el("div", "vcl-bud-table-wrap vcl-bud-table-wrap--annual");
     var table = el("table", "vcl-bud-table");
     table.innerHTML =
-      '<colgroup><col style="width:5%"><col style="width:22%"><col style="width:24%">' +
-      '<col style="width:6%"><col style="width:18%"><col style="width:14%"><col style="width:11%"></colgroup>' +
+      '<colgroup><col style="width:5%"><col style="width:24%"><col style="width:24%">' +
+      '<col style="width:6%"><col style="width:17%"><col style="width:15%"><col style="width:9%"></colgroup>' +
       "<thead><tr>" +
       "<th></th><th>Product</th><th>Markets</th><th>Str.</th>" +
       '<th>Special cases</th><th style="text-align:right">Annual fee</th><th></th>' +

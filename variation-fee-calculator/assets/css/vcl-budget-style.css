@@ -417,3 +417,5 @@
 
 /* Annual-fee table rows are expandable (Task 4) -- signal it the same way as the Variations table. */
 .vcl-app .vcl-bud-annual-row { cursor: pointer; }
+
+.vcl-app .vcl-bud-table-wrap--annual { overflow-x: clip; }
