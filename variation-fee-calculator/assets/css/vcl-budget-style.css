@@ -419,3 +419,6 @@
 .vcl-app .vcl-bud-annual-row { cursor: pointer; }
 
 .vcl-app .vcl-bud-table-wrap--annual { overflow-x: clip; }
+
+.vcl-app .vcl-bud-annual__addwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.vcl-app .vcl-bud-annual__addhint { font-size: 11.5px; color: var(--muted); margin: 0; }

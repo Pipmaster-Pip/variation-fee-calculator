@@ -760,10 +760,14 @@
     var wrap = el("div", "vcl-bud-annual");
     var head = el("div", "vcl-bud-table-head");
     head.appendChild(el("h3", null, "Plan lines — Annual maintenance fees"));
-    var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--primary", "+ Add product");
+    var addWrap = el("div", "vcl-bud-annual__addwrap");
+    var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "+ Add product");
     addBtn.type = "button";
     addBtn.dataset.act = "add-annual";
-    head.appendChild(addBtn);
+    addWrap.appendChild(addBtn);
+    addWrap.appendChild(el("p", "vcl-bud-annual__addhint",
+      "Add a product for which no variation is planned in " + escapeHtml(planYearLabel())));
+    head.appendChild(addWrap);
     wrap.appendChild(head);
 
     var countries = annualCountries();
