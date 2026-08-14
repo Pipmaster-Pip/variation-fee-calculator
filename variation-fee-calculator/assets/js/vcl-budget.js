@@ -1843,6 +1843,8 @@
     rerender();
   }
   function clearPlan() {
+    if (!(state.lines.length || (state.annualLines && state.annualLines.length))) return;
+    if (!window.confirm("Clear the whole plan? This removes all variation lines and annual fees. This can't be undone.")) return;
     state.lines = [];
     state.annualLines = [];
     state.resultsById = {};
