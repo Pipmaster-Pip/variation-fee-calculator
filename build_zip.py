@@ -24,6 +24,7 @@ FILES = [
     "variation-fee-calculator.php",
     "convert.py",
     "convert-workload.py",
+    "convert-annual-fees.py",
     "extract_qa.py",
     "extract_art5.py",
     "README.md",
