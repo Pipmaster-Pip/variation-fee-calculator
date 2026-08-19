@@ -1360,6 +1360,7 @@ function computeCountryBreakdown(cc, full) {
 // ---- Step 3: result ----
 function renderStepResult() {
   const res = appState.results;
+  if (appState.results && window.VCL_USAGE) window.VCL_USAGE.track("calculator", "finish");
 
   const mode = appState.resultCurrencyMode || 'eur';
 

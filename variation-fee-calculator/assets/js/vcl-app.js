@@ -187,10 +187,25 @@
     "Browse a chapter or section on the left, or search above, to see its variations listed here. Pick one to see its conditions, required documentation and procedure type.";
   el.detailEmpty.innerHTML = `<p class="classification-empty-hint">${DETAIL_EMPTY_HINT}</p>`;
 
+  // Maps the current view/guidance state onto the six usage-counter tool keys.
+  // browse/summary/art5 default to "classification" (the app's landing view), so
+  // "classification started" is effectively the per-session baseline -- intended.
+  function usageToolForView() {
+    if (state.view === "timetables") return "timelines";
+    if (state.view === "calculator") return "calculator";
+    if (state.view === "workflow") return "workflow";
+    if (state.view === "budget") return "budget";
+    if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.guidanceHub) {
+      return "guidance";
+    }
+    return "classification";
+  }
+
   // The browse column (search + chapter/section/subsection accordion) stays on screen in every
   // view -- only the right-hand column switches between the entry detail, the Summary, and the
   // (static) Grouping guidance.
   function switchViewVisibility() {
+    if (window.VCL_USAGE) window.VCL_USAGE.track(usageToolForView(), "start");
     const isSummary = state.view === "summary";
     const isGrouping = state.view === "grouping";
     const isPreciseScope = state.view === "precisescope";
@@ -2560,6 +2575,7 @@
   }
 
   el.summaryExportCalculator.addEventListener("click", () => {
+    if (window.VCL_USAGE) window.VCL_USAGE.track("calculator", "handoff");
     const items = buildSummaryLineItems();
     if (items.length === 0) {
       window.alert("No variations selected yet -- nothing to export.");
@@ -2580,6 +2596,7 @@
   // export): the first seeds Station A, the rest arrive pre-loaded in the grouping list with their
   // codes, and Grouping is pre-ticked when there is more than one -- see VCL_WORKFLOW.prefill.
   el.summaryExportWorkflow.addEventListener("click", () => {
+    if (window.VCL_USAGE) window.VCL_USAGE.track("workflow", "handoff");
     const items = buildSummaryLineItems();
     if (items.length === 0) {
       window.alert("No variations selected yet -- nothing to hand over.");
@@ -2601,6 +2618,7 @@
   // variations as a single Grouping) -- VCL_BUDGET.prefill opens its takeover editor seeded at
   // Station A so the user completes procedures/countries, then goToDestination paints it.
   el.summaryExportBudget.addEventListener("click", () => {
+    if (window.VCL_USAGE) window.VCL_USAGE.track("budget", "handoff");
     const items = buildSummaryLineItems();
     if (items.length === 0) {
       window.alert("No variations selected yet -- nothing to hand over.");

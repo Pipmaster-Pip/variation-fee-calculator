@@ -180,6 +180,7 @@
     var idx = state.lines.findIndex(function (l) { return l.id === modalState.draft.id; });
     if (idx === -1) state.lines.push(modalState.draft);
     else state.lines[idx] = modalState.draft;
+    if (idx === -1 && window.VCL_USAGE) window.VCL_USAGE.track("budget", "finish");
     recomputeLine(modalState.draft);
     seedAnnualForLine(modalState.draft);
     modalState = null;

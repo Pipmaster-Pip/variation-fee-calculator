@@ -81,6 +81,17 @@ function vcl_register_assets() {
 		true
 	);
 
+	$usage_file = VFC_PLUGIN_DIR . 'assets/js/vcl-usage.js';
+	$usage_ver  = file_exists( $usage_file ) ? filemtime( $usage_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-usage',
+		VFC_PLUGIN_URL . 'assets/js/vcl-usage.js',
+		array(),
+		$usage_ver,
+		true
+	);
+
 	$app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-app.js';
 	$app_ver  = file_exists( $app_file ) ? filemtime( $app_file ) : VFC_VERSION;
 
@@ -311,6 +322,7 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_style( 'vcl-workflow-style' );
 	wp_enqueue_style( 'vcl-calc-style' );
 	wp_enqueue_style( 'vcl-budget-style' );
+	wp_enqueue_script( 'vcl-usage' );
 	wp_enqueue_script( 'vcl-app' );
 	wp_enqueue_script( 'vcl-timeline' );
 	wp_enqueue_script( 'vcl-submission' );
@@ -338,6 +350,7 @@ function vcl_shortcode( $atts ) {
 		// user/domain rather than whole -- see vcl_get_contact_parts() for why. Empty array
 		// when no valid address is configured, which hides the links.
 		'contact'          => vcl_get_contact_parts(),
+		'countUrl'         => rest_url( 'vfc/v1/count' ),
 	) );
 
 	ob_start();

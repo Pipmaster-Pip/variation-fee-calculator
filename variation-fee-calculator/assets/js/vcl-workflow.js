@@ -1882,6 +1882,7 @@
     else if (state.station === "D") buildStationC(body);   // Date & Timeline
     else if (state.station === "E") buildStationD(body);   // Fees
     else buildPlaceholder(body, state.station);
+    if (state.station === "E" && window.VCL_USAGE) window.VCL_USAGE.track("workflow", "finish");
 
     const nav = el("div", "vcl-wf-nav");
     const back = el("button", "vcl-wf-btn", "← Back");

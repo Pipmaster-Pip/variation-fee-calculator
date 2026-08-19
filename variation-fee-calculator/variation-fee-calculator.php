@@ -18,6 +18,8 @@ define( 'VFC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once VFC_PLUGIN_DIR . 'includes/admin.php';
 require_once VFC_PLUGIN_DIR . 'includes/lookup.php';
+require_once VFC_PLUGIN_DIR . 'includes/usage-counter.php';
+require_once VFC_PLUGIN_DIR . 'includes/usage-dashboard.php';
 
 // The Variation Fee Calculator is now embedded inside the Variation Toolbox
 // (see includes/lookup.php: the "Variation Fee Calculator" nav hero and the
