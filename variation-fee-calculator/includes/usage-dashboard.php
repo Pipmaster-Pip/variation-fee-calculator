@@ -61,6 +61,26 @@ function vfc_usage_rate( $started, $finished ) {
 }
 
 /**
+ * Returns the localised "last reset" line, or an empty string if never reset.
+ * Uses the site's configured date+time format and local timezone.
+ *
+ * @return string
+ */
+function vfc_usage_last_reset_text() {
+	$raw = get_option( 'vfc_usage_reset_at', '' );
+	if ( empty( $raw ) ) {
+		return '';
+	}
+	// The value is stored in local time (current_time), so read it as-is.
+	$ts = strtotime( $raw );
+	if ( ! $ts ) {
+		return '';
+	}
+	$format = get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
+	return sprintf( 'Zuletzt zurückgesetzt: %s', date_i18n( $format, $ts ) );
+}
+
+/**
  * Registers the dashboard widget (admins only).
  */
 function vfc_usage_add_dashboard_widget() {
@@ -139,6 +159,10 @@ function vfc_usage_render_dashboard_widget() {
 			</tr>
 		</tfoot>
 	</table>
+	<?php $reset_text = vfc_usage_last_reset_text(); ?>
+	<?php if ( $reset_text ) : ?>
+		<p style="margin:8px 0 0; color:#646970; font-size:12px;"><?php echo esc_html( $reset_text ); ?></p>
+	<?php endif; ?>
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:8px 0 0;"
 		onsubmit="return confirm('Alle Nutzungszähler der Variation Toolbox auf 0 zurücksetzen?');">
 		<input type="hidden" name="action" value="vfc_reset_usage">
@@ -160,6 +184,8 @@ function vfc_usage_handle_reset() {
 	foreach ( vfc_usage_all_options() as $name ) {
 		update_option( $name, 0, false );
 	}
+	// Remember when the counters were last cleared, for display in the backend.
+	update_option( 'vfc_usage_reset_at', current_time( 'mysql' ), false );
 
 	wp_safe_redirect( admin_url( 'index.php' ) );
 	exit;
