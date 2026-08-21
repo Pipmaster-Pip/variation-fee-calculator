@@ -56,6 +56,45 @@ function vfc_usage_option_name( $tool, $event ) {
 }
 
 /**
+ * Increments today's start/finish/handoff count for one tool inside the
+ * vfc_usage_today_counts option. Lazily resets the whole option to an empty
+ * count set whenever the stored date is no longer today, so no cron job is
+ * needed. Runs alongside, and independently of, the all-time counters.
+ *
+ * @param string $tool  Tool key.
+ * @param string $event 'start' | 'finish' | 'handoff'.
+ */
+function vfc_usage_bump_today_count( $tool, $event ) {
+	$today = current_time( 'Y-m-d' );
+	$data  = get_option( 'vfc_usage_today_counts', array() );
+
+	if ( ! is_array( $data ) || ! isset( $data['date'] ) || $today !== $data['date'] ) {
+		$data = array(
+			'date'   => $today,
+			'counts' => array(),
+		);
+	}
+
+	if ( ! isset( $data['counts'][ $tool ] ) ) {
+		$data['counts'][ $tool ] = array(
+			's' => 0,
+			'f' => 0,
+			'h' => 0,
+		);
+	}
+
+	$fields = array(
+		'start'   => 's',
+		'finish'  => 'f',
+		'handoff' => 'h',
+	);
+	$field  = $fields[ $event ];
+	$data['counts'][ $tool ][ $field ] += 1;
+
+	update_option( 'vfc_usage_today_counts', $data, false );
+}
+
+/**
  * Registers POST /wp-json/vfc/v1/count. Open + nonce-free on purpose: anonymous,
  * possibly cached pages must be able to count, and the action only ever adds 1 to
  * a whitelisted counter.
@@ -91,6 +130,7 @@ function vfc_usage_count_callback( $request ) {
 
 	$value = (int) get_option( $option, 0 ) + 1;
 	update_option( $option, $value, false );
+	vfc_usage_bump_today_count( $tool, $event );
 
 	return new WP_REST_Response( array( 'ok' => true ), 200 );
 }

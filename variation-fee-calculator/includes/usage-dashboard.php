@@ -159,6 +159,7 @@ function vfc_usage_render_dashboard_widget() {
 			</tr>
 		</tfoot>
 	</table>
+	<?php vfc_usage_render_today_table(); ?>
 	<?php $reset_text = vfc_usage_last_reset_text(); ?>
 	<?php if ( $reset_text ) : ?>
 		<p style="margin:8px 0 0; color:#646970; font-size:12px;"><?php echo esc_html( $reset_text ); ?></p>
@@ -169,6 +170,95 @@ function vfc_usage_render_dashboard_widget() {
 		<?php wp_nonce_field( 'vfc_reset_usage' ); ?>
 		<button type="submit" class="button-link" style="color:#b32d2e;">Zähler zurücksetzen</button>
 	</form>
+	<?php
+}
+
+/**
+ * Renders the "today" table inside the dashboard widget: same columns as
+ * the all-time table, but sourced from the vfc_usage_today_counts option and
+ * limited to rows with activity today. Read-only -- never writes the option.
+ */
+function vfc_usage_render_today_table() {
+	$data  = get_option( 'vfc_usage_today_counts', array() );
+	$today = current_time( 'Y-m-d' );
+
+	$has_data = is_array( $data ) && isset( $data['date'], $data['counts'] ) && $today === $data['date'] && ! empty( $data['counts'] );
+
+	$date_format = get_option( 'date_format' );
+	$heading     = sprintf( 'Heute (%s)', wp_date( $date_format ) );
+
+	echo '<h3 style="font-size:13px; margin:16px 0 8px; padding-top:8px; border-top:1px solid #dcdcde;">' . esc_html( $heading ) . '</h3>';
+
+	if ( ! $has_data ) {
+		echo '<p style="font-size:13px; margin:0; color:#646970;">Heute wurde noch nichts genutzt.</p>';
+		return;
+	}
+
+	$labels = array();
+	foreach ( vfc_usage_rows_meta() as $meta ) {
+		$labels[ $meta['key'] ] = $meta['label'];
+	}
+
+	$rows           = array();
+	$total_started  = 0;
+	$total_finished = 0;
+	$total_handoff  = 0;
+
+	foreach ( $data['counts'] as $key => $counts ) {
+		if ( ! is_array( $counts ) ) {
+			continue;
+		}
+		$s = (int) $counts['s'];
+		$f = (int) $counts['f'];
+		$h = (int) $counts['h'];
+		if ( 0 === $s && 0 === $f && 0 === $h ) {
+			continue;
+		}
+
+		$label = isset( $labels[ $key ] ) ? $labels[ $key ] : $key;
+
+		$total_started  += $s;
+		$total_finished += $f;
+		$total_handoff  += $h;
+		$rows[]          = array( 'label' => $label, 's' => $s, 'f' => $f, 'h' => $h );
+	}
+
+	if ( empty( $rows ) ) {
+		echo '<p style="font-size:13px; margin:0; color:#646970;">Heute wurde noch nichts genutzt.</p>';
+		return;
+	}
+	?>
+	<table class="widefat striped">
+		<thead>
+			<tr>
+				<th>Tool</th>
+				<th style="text-align:right;">Gestartet</th>
+				<th style="text-align:right;">Abgeschlossen</th>
+				<th style="text-align:right;">Quote</th>
+				<th style="text-align:right;">Aus Classification übergeben</th>
+			</tr>
+		</thead>
+		<tbody>
+			<?php foreach ( $rows as $r ) : ?>
+				<tr>
+					<td><?php echo esc_html( $r['label'] ); ?></td>
+					<td style="text-align:right;"><?php echo (int) $r['s']; ?></td>
+					<td style="text-align:right;"><?php echo (int) $r['f']; ?></td>
+					<td style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $r['s'], $r['f'] ) ); ?></td>
+					<td style="text-align:right;"><?php echo (int) $r['h']; ?></td>
+				</tr>
+			<?php endforeach; ?>
+		</tbody>
+		<tfoot>
+			<tr>
+				<th>Gesamt heute</th>
+				<th style="text-align:right;"><?php echo (int) $total_started; ?></th>
+				<th style="text-align:right;"><?php echo (int) $total_finished; ?></th>
+				<th style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?></th>
+				<th style="text-align:right;"><?php echo (int) $total_handoff; ?></th>
+			</tr>
+		</tfoot>
+	</table>
 	<?php
 }
 
