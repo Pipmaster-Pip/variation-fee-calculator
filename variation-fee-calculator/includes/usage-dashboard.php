@@ -141,7 +141,8 @@ function vfc_usage_render_dashboard_widget() {
 	<p style="font-size:13px; margin:0 0 8px;">
 		<strong><?php echo (int) $total_started; ?></strong> gestartet ·
 		<strong><?php echo (int) $total_finished; ?></strong> abgeschlossen ·
-		<?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?> Abschlussquote
+		<?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?> Abschlussquote ·
+		<strong><?php echo (int) $total_download; ?></strong> Excel-Downloads
 	</p>
 	<table class="widefat striped">
 		<thead>
@@ -151,7 +152,6 @@ function vfc_usage_render_dashboard_widget() {
 				<th style="text-align:right;">Abgeschlossen</th>
 				<th style="text-align:right;">Quote</th>
 				<th style="text-align:right;">Aus Classification übergeben</th>
-				<th style="text-align:right;">Excel-Download</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -162,7 +162,6 @@ function vfc_usage_render_dashboard_widget() {
 					<td style="text-align:right;"><?php echo ( null === $r['f'] ) ? '–' : (int) $r['f']; ?></td>
 					<td style="text-align:right;"><?php echo ( null === $r['f'] ) ? '–' : esc_html( vfc_usage_rate( $r['s'], $r['f'] ) ); ?></td>
 					<td style="text-align:right;"><?php echo ( null === $r['h'] ) ? '–' : (int) $r['h']; ?></td>
-					<td style="text-align:right;"><?php echo ( null === $r['d'] ) ? '–' : (int) $r['d']; ?></td>
 				</tr>
 			<?php endforeach; ?>
 		</tbody>
@@ -173,7 +172,6 @@ function vfc_usage_render_dashboard_widget() {
 				<th style="text-align:right;"><?php echo (int) $total_finished; ?></th>
 				<th style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?></th>
 				<th style="text-align:right;"><?php echo (int) $total_handoff; ?></th>
-				<th style="text-align:right;"><?php echo (int) $total_download; ?></th>
 			</tr>
 		</tfoot>
 	</table>
@@ -223,10 +221,8 @@ function vfc_usage_render_today_table() {
 	}
 
 	$labels = array();
-	$downloadable = array();
 	foreach ( vfc_usage_rows_meta() as $meta ) {
-		$labels[ $meta['key'] ]       = $meta['label'];
-		$downloadable[ $meta['key'] ] = $meta['download'];
+		$labels[ $meta['key'] ] = $meta['label'];
 	}
 
 	$rows           = array();
@@ -247,20 +243,13 @@ function vfc_usage_render_today_table() {
 			continue;
 		}
 
-		$label     = isset( $labels[ $key ] ) ? $labels[ $key ] : $key;
-		$has_d_col = ! empty( $downloadable[ $key ] );
+		$label = isset( $labels[ $key ] ) ? $labels[ $key ] : $key;
 
 		$total_started  += $s;
 		$total_finished += $f;
 		$total_handoff  += $h;
 		$total_download += $d;
-		$rows[]          = array(
-			'label' => $label,
-			's'     => $s,
-			'f'     => $f,
-			'h'     => $h,
-			'd'     => $has_d_col ? $d : null,
-		);
+		$rows[]          = array( 'label' => $label, 's' => $s, 'f' => $f, 'h' => $h );
 	}
 
 	if ( empty( $rows ) ) {
@@ -268,6 +257,12 @@ function vfc_usage_render_today_table() {
 		return;
 	}
 	?>
+	<p style="font-size:13px; margin:0 0 8px;">
+		<strong><?php echo (int) $total_started; ?></strong> gestartet ·
+		<strong><?php echo (int) $total_finished; ?></strong> abgeschlossen ·
+		<?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?> Abschlussquote ·
+		<strong><?php echo (int) $total_download; ?></strong> Excel-Downloads
+	</p>
 	<table class="widefat striped">
 		<thead>
 			<tr>
@@ -276,7 +271,6 @@ function vfc_usage_render_today_table() {
 				<th style="text-align:right;">Abgeschlossen</th>
 				<th style="text-align:right;">Quote</th>
 				<th style="text-align:right;">Aus Classification übergeben</th>
-				<th style="text-align:right;">Excel-Download</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -287,7 +281,6 @@ function vfc_usage_render_today_table() {
 					<td style="text-align:right;"><?php echo (int) $r['f']; ?></td>
 					<td style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $r['s'], $r['f'] ) ); ?></td>
 					<td style="text-align:right;"><?php echo (int) $r['h']; ?></td>
-					<td style="text-align:right;"><?php echo ( null === $r['d'] ) ? '–' : (int) $r['d']; ?></td>
 				</tr>
 			<?php endforeach; ?>
 		</tbody>
@@ -298,7 +291,6 @@ function vfc_usage_render_today_table() {
 				<th style="text-align:right;"><?php echo (int) $total_finished; ?></th>
 				<th style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?></th>
 				<th style="text-align:right;"><?php echo (int) $total_handoff; ?></th>
-				<th style="text-align:right;"><?php echo (int) $total_download; ?></th>
 			</tr>
 		</tfoot>
 	</table>
