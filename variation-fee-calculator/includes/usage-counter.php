@@ -31,11 +31,21 @@ function vfc_usage_result_tools() {
 }
 
 /**
+ * Tools that accept a 'download' event (currently just the Calculator's Excel
+ * workbook link).
+ *
+ * @return string[]
+ */
+function vfc_usage_download_tools() {
+	return array( 'calculator' );
+}
+
+/**
  * Maps a tool+event pair to its wp_options counter name, or null if the pair is
  * not allowed. Pure -- no WordPress calls -- so it stays trivially reviewable.
  *
  * @param string $tool  Tool key.
- * @param string $event 'start' | 'finish' | 'handoff'.
+ * @param string $event 'start' | 'finish' | 'handoff' | 'download'.
  * @return string|null  Option name, or null when the pair is invalid.
  */
 function vfc_usage_option_name( $tool, $event ) {
@@ -52,17 +62,23 @@ function vfc_usage_option_name( $tool, $event ) {
 		$suffix = ( 'finish' === $event ) ? '_finished' : '_handoff';
 		return 'vfc_usage_' . $tool . $suffix;
 	}
+	if ( 'download' === $event ) {
+		if ( ! in_array( $tool, vfc_usage_download_tools(), true ) ) {
+			return null;
+		}
+		return 'vfc_usage_' . $tool . '_download';
+	}
 	return null;
 }
 
 /**
- * Increments today's start/finish/handoff count for one tool inside the
- * vfc_usage_today_counts option. Lazily resets the whole option to an empty
- * count set whenever the stored date is no longer today, so no cron job is
- * needed. Runs alongside, and independently of, the all-time counters.
+ * Increments today's start/finish/handoff/download count for one tool inside
+ * the vfc_usage_today_counts option. Lazily resets the whole option to an
+ * empty count set whenever the stored date is no longer today, so no cron job
+ * is needed. Runs alongside, and independently of, the all-time counters.
  *
  * @param string $tool  Tool key.
- * @param string $event 'start' | 'finish' | 'handoff'.
+ * @param string $event 'start' | 'finish' | 'handoff' | 'download'.
  */
 function vfc_usage_bump_today_count( $tool, $event ) {
 	$today = current_time( 'Y-m-d' );
@@ -80,13 +96,15 @@ function vfc_usage_bump_today_count( $tool, $event ) {
 			's' => 0,
 			'f' => 0,
 			'h' => 0,
+			'd' => 0,
 		);
 	}
 
 	$fields = array(
-		'start'   => 's',
-		'finish'  => 'f',
-		'handoff' => 'h',
+		'start'    => 's',
+		'finish'   => 'f',
+		'handoff'  => 'h',
+		'download' => 'd',
 	);
 	$field  = $fields[ $event ];
 	$data['counts'][ $tool ][ $field ] += 1;

@@ -19,12 +19,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function vfc_usage_rows_meta() {
 	return array(
-		array( 'key' => 'classification', 'label' => 'Classification',  'result' => false ),
-		array( 'key' => 'guidance',       'label' => 'Guidance',        'result' => false ),
-		array( 'key' => 'timelines',      'label' => 'Timelines',       'result' => false ),
-		array( 'key' => 'calculator',     'label' => 'Calculator',      'result' => true ),
-		array( 'key' => 'workflow',       'label' => 'Guided Workflow', 'result' => true ),
-		array( 'key' => 'budget',         'label' => 'Budget Planning', 'result' => true ),
+		array( 'key' => 'classification', 'label' => 'Classification',  'result' => false, 'download' => false ),
+		array( 'key' => 'guidance',       'label' => 'Guidance',        'result' => false, 'download' => false ),
+		array( 'key' => 'timelines',      'label' => 'Timelines',       'result' => false, 'download' => false ),
+		array( 'key' => 'calculator',     'label' => 'Calculator',      'result' => true,  'download' => true ),
+		array( 'key' => 'workflow',       'label' => 'Guided Workflow', 'result' => true,  'download' => false ),
+		array( 'key' => 'budget',         'label' => 'Budget Planning', 'result' => true,  'download' => false ),
 	);
 }
 
@@ -40,6 +40,9 @@ function vfc_usage_all_options() {
 		if ( $row['result'] ) {
 			$names[] = 'vfc_usage_' . $row['key'] . '_finished';
 			$names[] = 'vfc_usage_' . $row['key'] . '_handoff';
+		}
+		if ( $row['download'] ) {
+			$names[] = 'vfc_usage_' . $row['key'] . '_download';
 		}
 	}
 	return $names;
@@ -81,7 +84,9 @@ function vfc_usage_last_reset_text() {
 }
 
 /**
- * Registers the dashboard widget (admins only).
+ * Registers the two dashboard widgets (admins only): all-time counters with
+ * reset, and today's counters as its own draggable/collapsible widget so the
+ * combined view no longer forces one very tall box.
  */
 function vfc_usage_add_dashboard_widget() {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -91,6 +96,11 @@ function vfc_usage_add_dashboard_widget() {
 		'vfc_usage_counts',
 		'Variation Toolbox – Nutzung',
 		'vfc_usage_render_dashboard_widget'
+	);
+	wp_add_dashboard_widget(
+		'vfc_usage_today',
+		'Variation Toolbox – Heute',
+		'vfc_usage_render_today_widget'
 	);
 }
 add_action( 'wp_dashboard_setup', 'vfc_usage_add_dashboard_widget' );
@@ -107,11 +117,13 @@ function vfc_usage_render_dashboard_widget() {
 	$total_started  = 0;
 	$total_finished = 0;
 	$total_handoff  = 0;
+	$total_download = 0;
 
 	foreach ( vfc_usage_rows_meta() as $meta ) {
 		$s = (int) get_option( 'vfc_usage_' . $meta['key'] . '_started', 0 );
 		$f = $meta['result'] ? (int) get_option( 'vfc_usage_' . $meta['key'] . '_finished', 0 ) : null;
 		$h = $meta['result'] ? (int) get_option( 'vfc_usage_' . $meta['key'] . '_handoff', 0 ) : null;
+		$d = $meta['download'] ? (int) get_option( 'vfc_usage_' . $meta['key'] . '_download', 0 ) : null;
 
 		$total_started += $s;
 		if ( null !== $f ) {
@@ -120,7 +132,10 @@ function vfc_usage_render_dashboard_widget() {
 		if ( null !== $h ) {
 			$total_handoff += $h;
 		}
-		$rows[] = array( 'label' => $meta['label'], 's' => $s, 'f' => $f, 'h' => $h );
+		if ( null !== $d ) {
+			$total_download += $d;
+		}
+		$rows[] = array( 'label' => $meta['label'], 's' => $s, 'f' => $f, 'h' => $h, 'd' => $d );
 	}
 	?>
 	<p style="font-size:13px; margin:0 0 8px;">
@@ -136,6 +151,7 @@ function vfc_usage_render_dashboard_widget() {
 				<th style="text-align:right;">Abgeschlossen</th>
 				<th style="text-align:right;">Quote</th>
 				<th style="text-align:right;">Aus Classification übergeben</th>
+				<th style="text-align:right;">Excel-Download</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -146,6 +162,7 @@ function vfc_usage_render_dashboard_widget() {
 					<td style="text-align:right;"><?php echo ( null === $r['f'] ) ? '–' : (int) $r['f']; ?></td>
 					<td style="text-align:right;"><?php echo ( null === $r['f'] ) ? '–' : esc_html( vfc_usage_rate( $r['s'], $r['f'] ) ); ?></td>
 					<td style="text-align:right;"><?php echo ( null === $r['h'] ) ? '–' : (int) $r['h']; ?></td>
+					<td style="text-align:right;"><?php echo ( null === $r['d'] ) ? '–' : (int) $r['d']; ?></td>
 				</tr>
 			<?php endforeach; ?>
 		</tbody>
@@ -156,10 +173,10 @@ function vfc_usage_render_dashboard_widget() {
 				<th style="text-align:right;"><?php echo (int) $total_finished; ?></th>
 				<th style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?></th>
 				<th style="text-align:right;"><?php echo (int) $total_handoff; ?></th>
+				<th style="text-align:right;"><?php echo (int) $total_download; ?></th>
 			</tr>
 		</tfoot>
 	</table>
-	<?php vfc_usage_render_today_table(); ?>
 	<?php $reset_text = vfc_usage_last_reset_text(); ?>
 	<?php if ( $reset_text ) : ?>
 		<p style="margin:8px 0 0; color:#646970; font-size:12px;"><?php echo esc_html( $reset_text ); ?></p>
@@ -174,9 +191,20 @@ function vfc_usage_render_dashboard_widget() {
 }
 
 /**
- * Renders the "today" table inside the dashboard widget: same columns as
- * the all-time table, but sourced from the vfc_usage_today_counts option and
- * limited to rows with activity today. Read-only -- never writes the option.
+ * Renders the second dashboard widget: today's counters only. No reset button
+ * here -- the option clears itself lazily at midnight (vfc_usage_bump_today_count()).
+ */
+function vfc_usage_render_today_widget() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	vfc_usage_render_today_table();
+}
+
+/**
+ * Renders the "today" table: same columns as the all-time table, but sourced
+ * from the vfc_usage_today_counts option and limited to rows with activity
+ * today. Read-only -- never writes the option.
  */
 function vfc_usage_render_today_table() {
 	$data  = get_option( 'vfc_usage_today_counts', array() );
@@ -187,7 +215,7 @@ function vfc_usage_render_today_table() {
 	$date_format = get_option( 'date_format' );
 	$heading     = sprintf( 'Heute (%s)', wp_date( $date_format ) );
 
-	echo '<h3 style="font-size:13px; margin:16px 0 8px; padding-top:8px; border-top:1px solid #dcdcde;">' . esc_html( $heading ) . '</h3>';
+	echo '<p style="font-size:13px; margin:0 0 8px; color:#646970;">' . esc_html( $heading ) . '</p>';
 
 	if ( ! $has_data ) {
 		echo '<p style="font-size:13px; margin:0; color:#646970;">Heute wurde noch nichts genutzt.</p>';
@@ -195,14 +223,17 @@ function vfc_usage_render_today_table() {
 	}
 
 	$labels = array();
+	$downloadable = array();
 	foreach ( vfc_usage_rows_meta() as $meta ) {
-		$labels[ $meta['key'] ] = $meta['label'];
+		$labels[ $meta['key'] ]       = $meta['label'];
+		$downloadable[ $meta['key'] ] = $meta['download'];
 	}
 
 	$rows           = array();
 	$total_started  = 0;
 	$total_finished = 0;
 	$total_handoff  = 0;
+	$total_download = 0;
 
 	foreach ( $data['counts'] as $key => $counts ) {
 		if ( ! is_array( $counts ) ) {
@@ -211,16 +242,25 @@ function vfc_usage_render_today_table() {
 		$s = (int) $counts['s'];
 		$f = (int) $counts['f'];
 		$h = (int) $counts['h'];
-		if ( 0 === $s && 0 === $f && 0 === $h ) {
+		$d = isset( $counts['d'] ) ? (int) $counts['d'] : 0;
+		if ( 0 === $s && 0 === $f && 0 === $h && 0 === $d ) {
 			continue;
 		}
 
-		$label = isset( $labels[ $key ] ) ? $labels[ $key ] : $key;
+		$label     = isset( $labels[ $key ] ) ? $labels[ $key ] : $key;
+		$has_d_col = ! empty( $downloadable[ $key ] );
 
 		$total_started  += $s;
 		$total_finished += $f;
 		$total_handoff  += $h;
-		$rows[]          = array( 'label' => $label, 's' => $s, 'f' => $f, 'h' => $h );
+		$total_download += $d;
+		$rows[]          = array(
+			'label' => $label,
+			's'     => $s,
+			'f'     => $f,
+			'h'     => $h,
+			'd'     => $has_d_col ? $d : null,
+		);
 	}
 
 	if ( empty( $rows ) ) {
@@ -236,6 +276,7 @@ function vfc_usage_render_today_table() {
 				<th style="text-align:right;">Abgeschlossen</th>
 				<th style="text-align:right;">Quote</th>
 				<th style="text-align:right;">Aus Classification übergeben</th>
+				<th style="text-align:right;">Excel-Download</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -246,6 +287,7 @@ function vfc_usage_render_today_table() {
 					<td style="text-align:right;"><?php echo (int) $r['f']; ?></td>
 					<td style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $r['s'], $r['f'] ) ); ?></td>
 					<td style="text-align:right;"><?php echo (int) $r['h']; ?></td>
+					<td style="text-align:right;"><?php echo ( null === $r['d'] ) ? '–' : (int) $r['d']; ?></td>
 				</tr>
 			<?php endforeach; ?>
 		</tbody>
@@ -256,6 +298,7 @@ function vfc_usage_render_today_table() {
 				<th style="text-align:right;"><?php echo (int) $total_finished; ?></th>
 				<th style="text-align:right;"><?php echo esc_html( vfc_usage_rate( $total_started, $total_finished ) ); ?></th>
 				<th style="text-align:right;"><?php echo (int) $total_handoff; ?></th>
+				<th style="text-align:right;"><?php echo (int) $total_download; ?></th>
 			</tr>
 		</tfoot>
 	</table>

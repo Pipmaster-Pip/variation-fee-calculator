@@ -178,6 +178,14 @@
       <p class="ref-updated">Last updated in Variation Toolbox: ${lastUpdated("calculator", calcUpdated)}</p>
       ${excelHtml}
     `;
+    if (excelUrl) {
+      const excelLink = el.calcHead.querySelector(".calc-excel-dl a");
+      if (excelLink) {
+        excelLink.addEventListener("click", () => {
+          if (window.VCL_USAGE) window.VCL_USAGE.track("calculator", "download");
+        });
+      }
+    }
   }
   fillCalcHead();
 
