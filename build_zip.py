@@ -35,6 +35,7 @@ FILES = [
     "assets/css/vcl-style.css",
     "assets/css/vcl-workload-style.css",
     "assets/css/vcl-workflow-style.css",
+    "assets/css/vcl-guide-style.css",
     "assets/css/vcl-calc-style.css",
     "assets/js/vcl-app.js",
     "assets/js/vcl-usage.js",
@@ -52,6 +53,7 @@ FILES = [
     "assets/js/vcl-sg-logic.js",
     "assets/js/vcl-submission.js",
     "assets/js/vcl-workflow.js",
+    "assets/js/vcl-guide.js",
     "assets/js/vcl-calc-app.js",
     "assets/js/vcl-calc-data.js",
 ]
