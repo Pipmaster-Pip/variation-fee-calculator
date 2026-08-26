@@ -222,6 +222,10 @@
     if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.guidanceHub) {
       return "guidance";
     }
+    // "browse" covers both the Welcome/overview screen (classifyOpen/guidanceOpen both false,
+    // e.g. right after "Start") and actively browsing Classification (classifyOpen true) --
+    // only the latter should map to Classification; the overview itself opens on the Calculator.
+    if (state.view === "browse" && !state.classifyOpen && !state.guidanceOpen) return "calculator";
     return "classification";
   }
 
