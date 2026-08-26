@@ -17,13 +17,19 @@
   z-index: 1000;
 }
 
+/* Fixed height (not max-height): the box must not grow when a tool's content is longer or an
+   accordion opens, or -- centered via #vcl-guideModal's align-items:center -- growing taller
+   shifts its top edge upward each time, which reads as the whole modal "jumping". A constant
+   height keeps its screen position stable across every tool and every accordion state; the
+   body scrolls internally (.vcl-guide-body, flex: 1 1 auto below) for whichever tool's content
+   doesn't fit. */
 .vcl-app .vcl-guide-shell {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
   width: 100%;
   max-width: 640px;
-  max-height: 92vh;
+  height: min(640px, 86vh);
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(20, 30, 40, 0.25);
@@ -42,16 +48,20 @@
 .vcl-app .vcl-guide-head h2 { margin: 0; font-size: 17px; font-weight: 600; font-family: "IBM Plex Serif", serif; }
 .vcl-app .vcl-guide-close {
   width: 30px; height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--paper);
   color: var(--muted);
   font-size: 15px;
+  line-height: 1;
   cursor: pointer;
 }
 .vcl-app .vcl-guide-close:hover { color: var(--ink); }
 
-.vcl-app .vcl-guide-body { padding: 20px 22px; overflow-y: auto; }
+.vcl-app .vcl-guide-body { flex: 1 1 auto; min-height: 0; padding: 20px 22px; overflow-y: auto; }
 
 .vcl-app .vcl-guide-stepper { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .vcl-app .vcl-guide-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer; }
