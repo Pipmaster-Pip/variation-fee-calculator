@@ -130,6 +130,15 @@ Type-Badges app-weit `--ia #1F5F5B` · `--ib #A8651A` · `--ii #B23A2E` — UNVE
   generiert Tabellen aus F/TIMING/ASSESS (keine zweite Wahrheit).
 * Basis RA-h: IA 10 · IAIN 10 · IB 12 · II 15. Prep IAIN 7 · IB 7 · IB(unf.) 14 · II 14 (IA n.a.).
 
+### Annual Update (AU) & Super-Grouping (SG)
+* Zwei Type-IA-only Submission-Modi im Guided Workflow (und gespiegelt in Budget Planning),
+  ersetzen das früher separat geplante eigenständige „Annual Update Tool". AU = 1 Verfahren/
+  Zulassung, mehrere Type-IA gebündelt, 12-Monats-Frist (früheste Einreichung Impl+9,
+  späteste Impl+12). SG = dieselben Type-IA über mehrere nationale/MRP-DCP-Verfahren
+  (auch verschiedene RMS) gebündelt, mit Lead + Letter of Intent + Kapitel-C-Prüfung.
+  Logik in `assets/js/vcl-sg-logic.js`. Gemergt auf `main` (u. a. Gate-Fixes `3cbca5c`,
+  `1bd0416`, beide 2026-08-11).
+
 ### Summary + Export
 * „Export to Variation Fee Calculator" — gedämpft in Calculator-Gold gefüllt (`#F5EEDD`/`#C7A653`).
   Übergibt Variations-Zahlen in-memory via `window.VCLCALC.setGlobalCounts(totalsByBucket())`;
@@ -147,8 +156,6 @@ timetables, workload` (in Defaults, Save-Loop UND Formular). Kontakt-Adresse get
 (user/domain), erst im Browser zusammengesetzt.
 
 ## Offene Punkte
-* **Annual Update Tool** (zurückgestellt): geplantes eigenes Tool; 3 offene Fachfragen (RA-Basis-
-  Staffelung nach IA-Zahl? AU-Prozedur-Uhr/Prep? Fenster ab frühester IA oder je IA?).
 * IAIN-Prep 7d & National-Validation 14d sind provisorisch (im Panel als „provisional").
 * „Estimated Workload"/Department-Balken temporär raus (bis Abteilungs-Zeitmodell steht;
   DEPARTMENTS/computeSchedule liegen bereit, taskDurationDays sind Platzhalter).
