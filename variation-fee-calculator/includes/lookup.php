@@ -168,6 +168,16 @@ function vcl_register_assets() {
 		$workflow_style_ver
 	);
 
+	$guide_style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-guide-style.css';
+	$guide_style_ver  = file_exists( $guide_style_file ) ? filemtime( $guide_style_file ) : VFC_VERSION;
+
+	wp_register_style(
+		'vcl-guide-style',
+		VFC_PLUGIN_URL . 'assets/css/vcl-guide-style.css',
+		array( 'vcl-style' ),
+		$guide_style_ver
+	);
+
 	// Super-Grouping / Annual Update pure-logic module (window.VCL_SG_LOGIC). No dependencies;
 	// registered before vcl-workflow so its global is ready by the time that script runs.
 	$sg_logic_file = VFC_PLUGIN_DIR . 'assets/js/vcl-sg-logic.js';
@@ -214,6 +224,17 @@ function vcl_register_assets() {
 		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
 		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-workload-data', 'vcl-workload-hours', 'vcl-calc-app', 'vcl-submission' ),
 		$workflow_app_ver,
+		true
+	);
+
+	$guide_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-guide.js';
+	$guide_app_ver  = file_exists( $guide_app_file ) ? filemtime( $guide_app_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-guide',
+		VFC_PLUGIN_URL . 'assets/js/vcl-guide.js',
+		array(),
+		$guide_app_ver,
 		true
 	);
 
@@ -320,6 +341,7 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_style( 'vcl-style' );
 	wp_enqueue_style( 'vcl-workload-style' );
 	wp_enqueue_style( 'vcl-workflow-style' );
+	wp_enqueue_style( 'vcl-guide-style' );
 	wp_enqueue_style( 'vcl-calc-style' );
 	wp_enqueue_style( 'vcl-budget-style' );
 	wp_enqueue_script( 'vcl-usage' );
@@ -327,6 +349,7 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_script( 'vcl-timeline' );
 	wp_enqueue_script( 'vcl-submission' );
 	wp_enqueue_script( 'vcl-workflow' );
+	wp_enqueue_script( 'vcl-guide' );
 	wp_enqueue_script( 'vcl-calc-app' );
 	wp_enqueue_script( 'vcl-annual-data' );
 	wp_enqueue_script( 'vcl-budget-engine' );
@@ -474,6 +497,8 @@ function vcl_shortcode( $atts ) {
 	  </div>
 	  <div class="selection-bar__list hidden" id="vcl-selectionList"></div>
 	</div>
+
+	<div class="hidden" id="vcl-guideModal"></div>
 
 	</div>
 	<?php

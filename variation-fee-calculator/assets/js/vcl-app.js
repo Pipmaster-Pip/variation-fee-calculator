@@ -209,6 +209,22 @@
     return "classification";
   }
 
+  // Maps state.view to the guide's tool id (see vcl-guide.js's TOOLS array) so the "How to
+  // use" button opens on whichever tool the visitor is currently looking at, instead of
+  // always starting at the first tool. Deliberately mirrors usageToolForView() above --
+  // same state, same view buckets, different id vocabulary (OVERVIEW_DESTINATIONS' `dest`
+  // values, not the usage-tracker's short names).
+  function guideToolForView() {
+    if (state.view === "timetables") return "timetables";
+    if (state.view === "calculator") return "calculator";
+    if (state.view === "workflow") return "workflow";
+    if (state.view === "budget") return "budget";
+    if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.guidanceHub) {
+      return "guidance";
+    }
+    return "classification";
+  }
+
   // The browse column (search + chapter/section/subsection accordion) stays on screen in every
   // view -- only the right-hand column switches between the entry detail, the Summary, and the
   // (static) Grouping guidance.
@@ -3645,6 +3661,11 @@
   // browse overview -- exactly the start page.
   const homeBtn = document.getElementById("vcl-homeBtn");
   if (homeBtn) homeBtn.addEventListener("click", () => goToDestination("home"));
+
+  const guideBtn = document.getElementById("vcl-guideBtn");
+  if (guideBtn) guideBtn.addEventListener("click", () => {
+    if (window.VCL_GUIDE) window.VCL_GUIDE.open(guideToolForView(), guideBtn);
+  });
 
   openEntryFromUrl();
   fillContactSlots();
