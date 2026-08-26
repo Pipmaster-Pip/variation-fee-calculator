@@ -353,12 +353,18 @@
     return defaultGroupOpen(entry);
   }
 
+  // Height of the site theme's own fixed/sticky top navigation, which permanently overlays
+  // this much of the viewport -- jumpToTop() must stop short of the true top by at least this
+  // much, or the masthead lands underneath it instead of just below it.
+  const SITE_FIXED_NAV_HEIGHT = 100;
+
   function jumpToTop() {
     // Scroll the window to the top of the toolbox (its masthead), deterministically -- scrollIntoView
     // only nudges when the element is partly off-screen, so from deep inside a tall tool (e.g. Budget)
-    // it wouldn't lift the page far enough. Compute the app's absolute document offset and go there.
+    // it wouldn't lift the page far enough. Compute the app's absolute document offset and go there,
+    // offset by the site's fixed nav height so the masthead ends up visible below it, not hidden under it.
     const top = el.appRoot.getBoundingClientRect().top + window.pageYOffset;
-    window.scrollTo({ top: Math.max(0, top - 12), behavior: "auto" });
+    window.scrollTo({ top: Math.max(0, top - SITE_FIXED_NAV_HEIGHT - 12), behavior: "auto" });
   }
 
   // Deep-linking: reflects the currently open entry in the page URL (?code=Q.I.a) via
