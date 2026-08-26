@@ -360,10 +360,16 @@ function vcl_shortcode( $atts ) {
 	<div class="page-shell">
 
 	<header class="app-header">
-	  <button type="button" class="app-header__home" id="vcl-homeBtn" aria-label="Back to start" title="Back to start">
-	    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
-	    <span>Start</span>
-	  </button>
+	  <div class="app-header__actions">
+	    <button type="button" class="app-header__guide" id="vcl-guideBtn" aria-label="How to use this toolbox" title="How to use this toolbox">
+	      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 1.7-2.4 3.4"/><path d="M12 17h.01"/></svg>
+	      <span>How to use</span>
+	    </button>
+	    <button type="button" class="app-header__home" id="vcl-homeBtn" aria-label="Back to start" title="Back to start">
+	      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+	      <span>Start</span>
+	    </button>
+	  </div>
 	  <h1>Variation Toolbox</h1>
 	  <p class="app-header__copyright">
 	    &copy; Dr. Tom Deutschle

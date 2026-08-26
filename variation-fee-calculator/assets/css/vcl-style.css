@@ -107,11 +107,17 @@
   position: relative;
 }
 
-/* Home button: sits top-right of the masthead, returns to the welcome overview (start page). */
-.vcl-app .app-header__home {
+/* Header action buttons ("How to use", "Start"): sit top-right of the masthead as a row. */
+.vcl-app .app-header__actions {
   position: absolute;
   top: 24px;
   right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vcl-app .app-header__home,
+.vcl-app .app-header__guide {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -125,8 +131,10 @@
   cursor: pointer;
   transition: color .12s, border-color .12s;
 }
-.vcl-app .app-header__home:hover { color: var(--ink); border-color: var(--ink); }
-.vcl-app .app-header__home svg { flex-shrink: 0; }
+.vcl-app .app-header__home:hover,
+.vcl-app .app-header__guide:hover { color: var(--ink); border-color: var(--ink); }
+.vcl-app .app-header__home svg,
+.vcl-app .app-header__guide svg { flex-shrink: 0; }
 
 .vcl-app .app-header__eyebrow {
   font-family: "IBM Plex Mono", monospace;
