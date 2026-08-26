@@ -6,8 +6,6 @@
  * comment above .vcl-app's own position:relative rule).
  * ============================================================================ */
 
-#vcl-guideModal.hidden { display: none; }
-
 #vcl-guideModal {
   position: fixed;
   inset: 0;

@@ -88,7 +88,7 @@
         "Use in conjunction with Classification if a case is ambiguous.",
       ],
       further: [
-        "Guidance and Q&amp;A documents will be updated as soon as new versions are published.",
+        "Guidance and Q&A documents will be updated as soon as new versions are published.",
       ],
     },
     {
@@ -105,13 +105,6 @@
       ],
     },
   ];
-
-  function el(tag, cls, html) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (html != null) e.innerHTML = html;
-    return e;
-  }
 
   var built = false;
   var container = null;
