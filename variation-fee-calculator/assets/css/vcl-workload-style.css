@@ -563,6 +563,61 @@
 .vcl-app .tab--active .tab__title { font-weight: 600; }
 .vcl-app .guide-overview__desc { font-weight: 400; }
 
+/* Selection preview at the bottom of the welcome overview (see homeSelectionPreviewHtml in
+   vcl-app.js) -- read-only teaser of the current Summary, in the Summary nav item's own plum
+   identity, so the selection is visible on Start without a click into the full Summary view. */
+.vcl-app .sel-full {
+  margin-top: 22px;
+  border: 1.5px solid var(--plum);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.vcl-app .sel-full__head {
+  background: var(--plum-tint);
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.vcl-app .sel-full__head-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.vcl-app .sel-full__title { font-family: "IBM Plex Serif", serif; font-size: 15px; font-weight: 600; color: var(--plum); margin: 0; }
+.vcl-app .sel-full__count { font-size: 11.5px; color: var(--ink-faint); margin: 3px 0 0; }
+.vcl-app .sel-full__actions button {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.vcl-app .sel-full__actions button:hover { background: var(--paper); }
+
+.vcl-app .sel-full-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+}
+.vcl-app .sel-full-item:last-child { border-bottom: none; }
+.vcl-app .sel-full-item:hover { background: var(--plum-tint); }
+.vcl-app .sel-full-item__code {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--plum);
+  background: var(--plum-tint);
+  border-radius: 5px;
+  padding: 3px 7px;
+  flex-shrink: 0;
+}
+.vcl-app .sel-full-item__typecol { flex-shrink: 0; }
+.vcl-app .sel-full-item__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.vcl-app .sel-full-item__title { font-size: 12.5px; color: var(--ink); line-height: 1.4; }
+.vcl-app .sel-full-item__subtitle { font-size: 11px; color: var(--ink-faint); }
+
 /* ============================================================================
  * "How this estimate is built" -- the methodology / transparency panel.
  * Collapsed by default: it is reference material, not part of the answer, and

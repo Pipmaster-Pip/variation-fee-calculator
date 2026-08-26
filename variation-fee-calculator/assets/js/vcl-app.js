@@ -3414,12 +3414,100 @@
         <h3 class="guide-overview__heading">Welcome to the Variation Toolbox</h3>
         <p class="guide-overview__intro">Search a variation in the box on the left to classify it &mdash; or pick a tool below. Everything for variation applications in one place.</p>
         <div class="guide-overview__grid">${cards}</div>
+        ${homeSelectionPreviewHtml()}
       </div>`;
   }
   function wireOverviewCards(container) {
     container.querySelectorAll(".guide-overview__card[data-dest]").forEach((btn) => {
       btn.addEventListener("click", () => goToDestination(btn.getAttribute("data-dest")));
     });
+    wireHomeSelectionPreview(container);
+  }
+
+  // Selection preview shown at the bottom of the welcome overview once something is selected --
+  // so the current selection is visible on Start without a click into the (identically styled)
+  // Summary view. Deliberately read-only: no per-item expand/remove here, that stays the Summary
+  // view's job. "Expand all" and clicking a row both jump into the full Summary, expanded.
+  function homeSelectionPreviewHtml() {
+    const items = buildSummaryLineItems();
+    if (items.length === 0) return "";
+    const rows = items
+      .map((item) => {
+        const eff = effectiveVariantType(item.entry, item.variant);
+        const labelInfo = summaryLabelInfo(item.entry, item.variant);
+        return `
+          <div class="sel-full-item">
+            <span class="mono sel-full-item__code">${labelInfo.code}</span>
+            <span class="sel-full-item__typecol"><span class="${eff.badgeClass}">${eff.label}</span></span>
+            <span class="sel-full-item__titles">
+              <span class="sel-full-item__title">${item.entry.title}</span>
+              ${labelInfo.subtitle ? `<span class="sel-full-item__subtitle">${labelInfo.subtitle}</span>` : ""}
+            </span>
+          </div>`;
+      })
+      .join("");
+    return `
+      <div class="sel-full" id="vcl-homeSelectionPreview">
+        <div class="sel-full__head">
+          <div class="sel-full__head-top">
+            <div>
+              <p class="sel-full__title">Summary of Variations</p>
+              <p class="sel-full__count">${items.length} ${items.length === 1 ? "item" : "items"} selected</p>
+            </div>
+            <div class="sel-full__actions">
+              <button type="button" id="vcl-homePreviewClearAll">Clear all</button>
+              <button type="button" id="vcl-homePreviewExpandAll">Expand all</button>
+            </div>
+          </div>
+        </div>
+        ${rows}
+      </div>`;
+  }
+  function wireHomeSelectionPreview(container) {
+    const preview = container.querySelector("#vcl-homeSelectionPreview");
+    if (!preview) return;
+    const openFullSummary = () => {
+      buildSummaryLineItems().forEach((item) => state.summaryExpandedUnits.add(unitLineKey(item.key, item.unitIndex)));
+      state.view = "summary";
+      state.classifyOpen = false;
+      state.guidanceOpen = false;
+      renderBrowse();
+      switchViewVisibility();
+      renderSummary();
+      jumpToTop();
+    };
+    const expandAllBtn = preview.querySelector("#vcl-homePreviewExpandAll");
+    if (expandAllBtn) expandAllBtn.addEventListener("click", openFullSummary);
+    preview.querySelectorAll(".sel-full-item").forEach((row) => row.addEventListener("click", openFullSummary));
+
+    // Mirrors the selection bar's own "Clear all" (el.selectionClear above): drops every
+    // selection, then re-renders the welcome overview so the preview box disappears with it.
+    const clearAllBtn = preview.querySelector("#vcl-homePreviewClearAll");
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        state.selections = {};
+        state.summaryExpandedUnits.clear();
+        saveSelections();
+        renderSelectionBar();
+        renderBrowse();
+        renderDetail();
+      });
+    }
+
+    // Same column-alignment trick as alignSummaryColumns(): the code and type-badge columns
+    // are sized to their widest row so every title starts at the same x position, instead of
+    // each row's own badge width ("II" vs. "IB (unforeseen)") shifting the text after it.
+    const codeEls = preview.querySelectorAll(".sel-full-item__code");
+    const typeCols = preview.querySelectorAll(".sel-full-item__typecol");
+    codeEls.forEach((e) => (e.style.minWidth = ""));
+    typeCols.forEach((e) => (e.style.minWidth = ""));
+    if (codeEls.length) {
+      const maxCode = Math.max(...[...codeEls].map((e) => e.offsetWidth));
+      const maxType = Math.max(...[...typeCols].map((e) => e.offsetWidth), 0);
+      codeEls.forEach((e) => (e.style.minWidth = `${maxCode}px`));
+      typeCols.forEach((e) => (e.style.minWidth = `${maxType}px`));
+    }
   }
 
   // The Guidance hub: shown in the detail area when "Guidance on Variations" is opened (nav
