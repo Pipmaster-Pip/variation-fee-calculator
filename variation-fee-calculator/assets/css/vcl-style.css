@@ -17,13 +17,13 @@
  * ============================================================================ */
 
 .vcl-app {
-  --paper: #FBFAF8;
+  --paper: #F3F5F8;
   --panel: #FFFFFF;
-  --ink: #1A2332;
-  --muted: #4A5568;
-  --ink-faint: #8A93A3;
-  --border: #E2E5EA;
-  --border-soft: #EEF0F2;
+  --ink: #1B212C;
+  --muted: #4D5566;
+  --ink-faint: #838DA0;
+  --border: #DDE2E9;
+  --border-soft: #EDF0F4;
   --accent: #1F5F5B;
   --accent-bg: #E8F1F0;
   --ia: #1F5F5B;
@@ -91,10 +91,10 @@
   padding-right: 28px;
   background: var(--paper);
   color: var(--ink);
-  font-family: "IBM Plex Sans", -apple-system, sans-serif;
-  border-radius: 14px;
+  font-family: "Libre Franklin", -apple-system, sans-serif;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(20, 30, 40, 0.06), 0 4px 16px rgba(20, 30, 40, 0.08);
+  box-shadow: 0 1px 2px rgba(20, 30, 48, 0.05), 0 6px 20px rgba(20, 30, 48, 0.06);
 }
 
 .vcl-app, .vcl-app * { box-sizing: border-box; }
@@ -146,7 +146,7 @@
 }
 
 .vcl-app .app-header h1 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 26px;
   margin: 0 0 8px;
@@ -234,7 +234,7 @@
 }
 
 .vcl-app .tab__code {
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: "Libre Franklin", sans-serif;
   font-size: 14px;
   font-weight: 600;
   color: var(--accent);
@@ -925,7 +925,7 @@
 }
 
 .vcl-app .detail-head h3 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0;
@@ -1282,7 +1282,7 @@
 }
 
 .vcl-app .summary-header__title {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 4px;
@@ -1376,7 +1376,7 @@
 }
 
 .vcl-app .classification-head h3 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
@@ -1417,7 +1417,7 @@
 }
 
 .vcl-app .grouping-head h3 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
@@ -1633,7 +1633,7 @@
 
 .vcl-app .qa-revisions { margin-top: 26px; }
 .vcl-app .qa-revisions h4 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-size: 13.5px;
   font-weight: 600;
   margin: 0 0 8px;
@@ -1674,7 +1674,7 @@
 
 .vcl-app .art5-archive-head { margin-bottom: 14px; }
 .vcl-app .art5-archive-head h4 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 4px;
@@ -1754,7 +1754,7 @@
 }
 
 .vcl-app .tt-head h3 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
@@ -2099,7 +2099,7 @@
 /* ---- Type II comparison: earliest vs. latest EOP, one shared calendar-day axis ---- */
 .vcl-app .tt-compare-head { margin-bottom: 22px; }
 .vcl-app .tt-compare-head h4 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-size: 15px;
   font-weight: 600;
   margin: 0 0 6px;

@@ -20,7 +20,7 @@
   border-bottom: 2px solid var(--workflow);
 }
 .vcl-app .vcl-wf-head h3 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
@@ -894,7 +894,7 @@
 /* Workload identity colour so it reads as the shared methodology, distinct from the green preview. */
 .vcl-app .vcl-wf-meth { margin-top: 8px; border: 1px solid color-mix(in srgb, #41762F 30%, #EBF2E3); border-radius: 12px; background: #fff; overflow: hidden; }
 .vcl-app .vcl-wf-meth-bar { display: flex; align-items: center; gap: 8px; width: 100%; font: inherit; font-size: 12px; font-weight: 600; color: #41762F; background: #EBF2E3; border: none; padding: 10px 14px; cursor: pointer; text-align: left; }
-.vcl-app .vcl-wf-meth-bar .i { width: 16px; height: 16px; border-radius: 50%; background: #41762F; color: #fff; font-size: 10px; font-style: italic; font-family: "IBM Plex Serif", serif; display: flex; align-items: center; justify-content: center; flex: none; }
+.vcl-app .vcl-wf-meth-bar .i { width: 16px; height: 16px; border-radius: 50%; background: #41762F; color: #fff; font-size: 10px; font-style: italic; font-family: "Source Serif 4", serif; display: flex; align-items: center; justify-content: center; flex: none; }
 .vcl-app .vcl-wf-meth-bar .t { flex: 1; }
 .vcl-app .vcl-wf-meth-bar .chev { color: #41762F; }
 .vcl-app .vcl-wf-meth-panel { padding: 0; }
@@ -904,7 +904,7 @@
 .vcl-app .vcl-wf-meth-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 3px 0; border-top: .5px solid var(--line, #eee); color: var(--muted); }
 .vcl-app .vcl-wf-meth-row:first-of-type { border-top: none; }
 .vcl-app .vcl-wf-meth-row.is-active { color: var(--ink, #222); font-weight: 600; }
-.vcl-app .vcl-wf-meth-val { font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; font-weight: 500; white-space: nowrap; color: #27500A; }
+.vcl-app .vcl-wf-meth-val { font-family: "Libre Franklin", sans-serif; font-size: 12.5px; font-weight: 500; white-space: nowrap; color: #27500A; }
 .vcl-app .vcl-wf-meth-note { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 5px 0 0; }
 .vcl-app .vcl-wf-meth-formula { display: block; width: 100%; box-sizing: border-box; font-family: "IBM Plex Mono", monospace; font-size: 11px; background: #EBF2E3; border-radius: 8px; padding: 8px 10px; color: var(--ink, #222); line-height: 1.6; margin: 0 0 14px; }
 .vcl-app .vcl-wf-meth-total { border-top: 1px solid color-mix(in srgb, #41762F 35%, transparent); margin-top: 2px; padding-top: 7px; font-weight: 600; color: var(--workflow); }

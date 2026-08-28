@@ -38,7 +38,7 @@
 }
 
 .vcl-app .vcl-wl-head h3 {
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
@@ -72,7 +72,7 @@
 }
 
 .vcl-app .vcl-wl-section h4 {
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: "Libre Franklin", sans-serif;
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
@@ -243,7 +243,7 @@
    modifiers are kept in the markup for semantics but share this one look). */
 .vcl-app .vcl-wl-hint {
   display: inline-block;
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: "Libre Franklin", sans-serif;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.5;
@@ -468,7 +468,7 @@
 }
 .vcl-app .vcl-wl-ra-top { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .vcl-app .vcl-wl-ra-num { display: flex; align-items: baseline; gap: 4px; }
-.vcl-app .vcl-wl-ra-num .val { font-family: "IBM Plex Serif", serif; font-size: 46px; font-weight: 700; line-height: 1; }
+.vcl-app .vcl-wl-ra-num .val { font-family: "Source Serif 4", serif; font-size: 46px; font-weight: 700; line-height: 1; }
 .vcl-app .vcl-wl-ra-num .unit { font-size: 22px; font-weight: 600; opacity: .9; }
 .vcl-app .vcl-wl-ra-headtext { display: flex; flex-direction: column; gap: 3px; flex: 1 1 220px; }
 .vcl-app .vcl-wl-ra-headtext .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .82; }
@@ -532,7 +532,7 @@
    First-load overview cards + live-search count in the Guide detail area.
    ============================================================================ */
 .vcl-app .guide-overview { padding: 2px 0 8px; }
-.vcl-app .guide-overview__heading { font-family: "IBM Plex Serif", serif; font-weight: 600; font-size: 20px; color: var(--ink); margin: 0 0 6px; }
+.vcl-app .guide-overview__heading { font-family: "Source Serif 4", serif; font-weight: 600; font-size: 20px; color: var(--ink); margin: 0 0 6px; }
 /* Runs the full width of the detail area (no max-width) so it lines up with the
    card grid's right edge below it. */
 .vcl-app .guide-overview__intro { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0 0 18px; }
@@ -579,7 +579,7 @@
   border-bottom: 1px solid var(--border);
 }
 .vcl-app .sel-full__head-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.vcl-app .sel-full__title { font-family: "IBM Plex Serif", serif; font-size: 15px; font-weight: 600; color: var(--plum); margin: 0; }
+.vcl-app .sel-full__title { font-family: "Source Serif 4", serif; font-size: 15px; font-weight: 600; color: var(--plum); margin: 0; }
 .vcl-app .sel-full__count { font-size: 11.5px; color: var(--ink-faint); margin: 3px 0 0; }
 .vcl-app .sel-full__actions button {
   font-family: inherit;
@@ -684,7 +684,7 @@
 
 .vcl-app .vcl-wl-method-h {
   margin: 0 0 10px;
-  font-family: "IBM Plex Serif", serif;
+  font-family: "Source Serif 4", serif;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--ink);
@@ -736,7 +736,7 @@
   border-radius: 3px;
   background: var(--ib-bg);
   color: var(--ib);
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: "Libre Franklin", sans-serif;
   font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;

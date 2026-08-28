@@ -6,15 +6,15 @@
  * ============================================================================ */
 
 .vclcalc-app{
-  /* Warm neutrals (were cool navy/slate/blue-grey) so body text, role lines and
-     meta read in the calculator's warm gold scheme instead of a bluish cast. */
-  --ink:#29221a;
-  --ink-soft:#5f5140;
-  --ink-faint:#968a73;
-  --paper:#fbfaf8;
+  /* Cool blue-grey neutrals, matching the toolbox-wide redesign -- the gold
+     identity below is what carries the calculator's own accent. */
+  --ink:#1b212c;
+  --ink-soft:#4d5566;
+  --ink-faint:#838da0;
+  --paper:#f3f5f8;
   --panel:#ffffff;
-  --line:#e2e5ea;
-  --line-strong:#c7cdd6;
+  --line:#dde2e9;
+  --line-strong:#c3cbd6;
   /* Gold identity to match the Fee Calculator's nav hero and view heading when
      embedded in the Variation Toolbox (was teal in the standalone build). */
   --accent:#8f6e2e;
@@ -24,9 +24,9 @@
   --amber-soft:#fbf0e2;
   --mono: "IBM Plex Mono","SF Mono",Consolas,monospace;
   --serif: "Source Serif 4","Georgia",serif;
-  --sans: "Inter","Helvetica Neue",Arial,sans-serif;
+  --sans: "Libre Franklin","Helvetica Neue",Arial,sans-serif;
   --radius: 3px;
-  --shadow: 0 1px 2px rgba(20,30,40,0.06), 0 4px 16px rgba(20,30,40,0.04);
+  --shadow: 0 1px 2px rgba(20,30,48,.05), 0 6px 20px rgba(20,30,48,.06);
 
   font-family:var(--sans);
   background:var(--paper);
