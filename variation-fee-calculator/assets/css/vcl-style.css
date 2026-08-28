@@ -957,11 +957,13 @@
 .vcl-app .variant-block__head .type-ib { box-shadow: inset 0 0 0 1.5px rgba(166, 121, 10, 0.35); }
 .vcl-app .variant-block__head .type-ii { box-shadow: inset 0 0 0 1.5px rgba(178, 58, 46, 0.35); }
 
-/* Label runs full width on its own line; badges + stepper sit on a second, right-aligned row
-   underneath (previously shared one row, competing for space against the condition text). */
+/* Label and badges/stepper share one row, wrapping to a second line only when the label is
+   too long to fit next to them (matches the collapsed a/b/c rows' single-row layout). */
 .vcl-app .variant-block__head {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -970,6 +972,7 @@
   font-size: 14px;
   font-weight: 500;
   display: block;
+  flex: 1 1 260px;
 }
 
 .vcl-app .variant-block__section { margin-top: 12px; }
@@ -1268,7 +1271,8 @@
 .vcl-app .summary-header {
   margin-bottom: 18px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--ib);
+  /* Summary's own identity color (the Summary nav card is --plum), not the Type-IB gold. */
+  border-bottom: 2px solid var(--plum);
 }
 
 /* Title/count + action buttons row -- the hint below sits outside this flex row (as a normal
@@ -1665,6 +1669,7 @@
   border: 1px solid var(--classify);
   border-radius: 8px;
   padding: 12px 15px;
+  margin-top: 18px;
   margin-bottom: 20px;
   font-size: 13px;
   color: var(--ink);
@@ -2254,11 +2259,10 @@
   padding: 0;
 }
 
-.vcl-app .summary-item__chevron { font-size: 20px; color: var(--muted); width: 20px; flex-shrink: 0; }
-
 .vcl-app .summary-item__num {
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
+  font-weight: 700;
   color: var(--muted);
   flex-shrink: 0;
 }
@@ -2331,7 +2335,9 @@
 .vcl-app .summary-item__body {
   border-top: 1px solid var(--border-soft);
   padding: 14px 16px 16px;
-  background: var(--paper);
+  /* White, matching the Classification detail cards (.entry-card/.variant-block) so the two
+     views share one visual language. */
+  background: var(--panel);
 }
 
 .vcl-app .summary-item__section { margin-bottom: 14px; }
@@ -2435,8 +2441,7 @@
     padding: 0;
   }
   .vcl-app .summary-header__actions,
-  .vcl-app .summary-item__remove,
-  .vcl-app .summary-item__chevron {
+  .vcl-app .summary-item__remove {
     display: none !important;
   }
   .vcl-app .summary-item { break-inside: avoid; }

@@ -400,18 +400,19 @@
     const lo = Math.ceil(mm.min), hi = Math.ceil(mm.max);
     return lo === hi ? (lo + " h") : (lo + "–" + hi + " h");
   }
-  // Raw min–max band for the transparency box, matching the reference table exactly: half-hours
-  // are NOT rounded up and there is no unit (e.g. "0.5–1", "2–4"). Collapses when both ends match.
+  // Min–max band for the transparency box: half-hours are NOT rounded up, and each entry carries
+  // the "h" unit with spaces around the en-dash (e.g. "0.5 – 1 h", "2 – 4 h"). Collapses to a
+  // single figure when both ends match.
   function raBand(mm) {
     if (!mm) return "—";
     const lo = fmtNum(mm.min), hi = fmtNum(mm.max);
-    return lo === hi ? lo : (lo + "–" + hi);
+    return lo === hi ? (lo + " h") : (lo + " – " + hi + " h");
   }
-  // Bare band without the unit, e.g. "34–65" — for the parenthetical range under the headline.
+  // Ceil'd band with the unit, e.g. "34 – 65 h" — for the parenthetical range under the headline.
   function raRangeBare(mm) {
     if (!mm) return "—";
     const lo = Math.ceil(mm.min), hi = Math.ceil(mm.max);
-    return lo === hi ? String(lo) : (lo + "–" + hi);
+    return lo === hi ? (lo + " h") : (lo + " – " + hi + " h");
   }
   // The single headline figure: the right-skewed PERT expected value, whole hours.
   function raExpectedText(ra) {
@@ -2000,7 +2001,7 @@
       table.appendChild(el("p", "vcl-wf-meth-note", "No activities listed for this combination."));
     } else {
       rows.forEach((r) => {
-        const hrs = (r.min == null && r.max == null) ? "n.a." : (fmtNum(r.min || 0) + "–" + fmtNum(r.max || 0));
+        const hrs = (r.min == null && r.max == null) ? "n.a." : (fmtNum(r.min || 0) + " – " + fmtNum(r.max || 0));
         const row = el("div", "vcl-wf-ref-row");
         row.innerHTML = '<span class="vcl-wf-ref-stream">' + escapeHtml(r.stream) + "</span>"
           + "<span>" + escapeHtml(r.activity) + "</span>"
@@ -2027,7 +2028,7 @@
     const showCMC = stream === "all" || stream === "CMC";
     const twoCol = showRA && showCMC;
     const has = (x) => x && (x.min != null || x.max != null);
-    const band = (x) => has(x) ? (fmtNum(x.min || 0) + "–" + fmtNum(x.max || 0)) : "—";
+    const band = (x) => has(x) ? (fmtNum(x.min || 0) + " – " + fmtNum(x.max || 0)) : "—";
 
     const blocks = [];
     modDefs.forEach((m) => {
@@ -2109,7 +2110,7 @@
     if (nz(sec.cmc)) inner.appendChild(methSection("CMC activities", it.cmc, sec.cmc));
     if (nz(sec.compilation)) inner.appendChild(methSection("Compilation & submission activities", it.compilation, sec.compilation));
 
-    inner.appendChild(methRow("RA workload total", raBand(sec.total) + " h", "vcl-wf-meth-total"));
+    inner.appendChild(methRow("RA workload total", raBand(sec.total), "vcl-wf-meth-total"));
 
     // Explain the single headline figure (right-skewed PERT expected value).
     const expected = Math.round(ra.expected);

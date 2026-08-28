@@ -775,7 +775,7 @@
 .vclcalc-app .num-stepper input{ background:var(--panel); }
 
 /* ---- Step 3: special-cases panel (tinted like a Guided-Workflow builder) ---- */
-.vclcalc-app .special-panel{ border:1px dashed var(--line-strong); background:var(--accent-soft); }
+.vclcalc-app .special-panel{ border:1px dashed var(--line-strong); background:var(--panel); }
 
 /* ---- Nav buttons ---- */
 .vclcalc-app .btn{ border-radius:8px; }

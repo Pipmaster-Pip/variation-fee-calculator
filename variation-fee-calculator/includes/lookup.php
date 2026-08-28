@@ -401,9 +401,9 @@ function vcl_shortcode( $atts ) {
 	    <span id="vcl-contactSlot"></span>
 	  </p>
 	  <p>
-	    A practical toolbox for variations &mdash; from classification under the EU Variation Classification
-	    Guideline to grouping, procedure timetables, RA workload planning and the official fees across
-	    EU-27, EMA, CH, IS, NO, UK and RS.
+	    One toolbox for the full variation lifecycle &mdash; classification, grouping, timetables, RA
+	    workload and official fees across EU-27, EMA, CH, IS, NO, UK and RS, plus portfolio-level
+	    budget planning.
 	  </p>
 	</header>
 

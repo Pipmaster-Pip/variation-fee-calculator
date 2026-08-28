@@ -371,6 +371,15 @@
     window.scrollTo({ top: Math.max(0, top - SITE_FIXED_NAV_HEIGHT - 12), behavior: "auto" });
   }
 
+  // Scrolls the window so `target`'s top edge lands just below the site's fixed nav -- same
+  // deterministic offset math as jumpToTop(), but aimed at a specific element instead of the
+  // app masthead. Used when opening an accordion section so the row the user clicked sits at the
+  // top of the screen, rather than wherever scrollIntoView({block:"start"}) happens to nudge it.
+  function scrollTargetToTop(target) {
+    const top = target.getBoundingClientRect().top + window.pageYOffset;
+    window.scrollTo({ top: Math.max(0, top - SITE_FIXED_NAV_HEIGHT - 12), behavior: "auto" });
+  }
+
   // Deep-linking: reflects the currently open entry in the page URL (?code=Q.I.a) via
   // replaceState, so no extra back-button history entry is created for every click. Read
   // back on page load by openEntryFromUrl() so a link with ?code=... reopens that exact
@@ -686,12 +695,12 @@
         const opening = state.groupingOpen !== key;
         state.groupingOpen = opening ? key : null;
         renderGrouping();
-        // When opening a section, scroll its list into view at the top of .grouping-col's own
-        // scroll container -- otherwise the list renders below the fold and the user has to
-        // scroll up manually to find where it starts.
+        // When opening a section, scroll the clicked row up to the top of the screen (just below
+        // the site's fixed nav) so its now-expanded content reads from the top down -- otherwise
+        // the list renders below the fold and the user has to scroll up manually to find its start.
         if (opening) {
           const reopened = el.groupingCol.querySelector(`[data-grouping-toggle="${key}"]`);
-          if (reopened) reopened.scrollIntoView({ block: "start" });
+          if (reopened) scrollTargetToTop(reopened);
         }
       });
     });
@@ -781,7 +790,7 @@
         renderPreciseScope();
         if (opening) {
           const reopened = el.preciseScopeCol.querySelector(`[data-precise-scope-toggle="${key}"]`);
-          if (reopened) reopened.scrollIntoView({ block: "start" });
+          if (reopened) scrollTargetToTop(reopened);
         }
       });
     });
@@ -1071,11 +1080,21 @@
   // Keeps the numbered sub-lists in a "conditions" cell readable: the source wraps them with
   // newlines and indentation, which collapse to one run without this.
   function art5Multiline(text) {
-    return escapePreciseScopeText(text)
+    // The source data carries the original PDF's line breaks verbatim -- including mid-sentence
+    // ones from its narrow column. Only break before a line that actually starts a new list
+    // item (1) / 1. / 2) ... or a dash bullet); every other line is a soft continuation of the
+    // previous one, joined with a space so the text reflows to the full column width.
+    const lines = escapePreciseScopeText(text)
       .split(/\r?\n/)
       .map((l) => l.trim())
-      .filter(Boolean)
-      .join("<br>");
+      .filter(Boolean);
+    return lines
+      .map((line, i) => {
+        if (i === 0) return line;
+        const startsNewItem = /^(\d+[.)]|[–-]\s)/.test(line);
+        return (startsNewItem ? "<br>" : " ") + line;
+      })
+      .join("");
   }
 
   function art5Badge(rec) {
@@ -2124,10 +2143,6 @@
         jumpToTop();
       });
       el.browseTree.appendChild(calcBtn);
-
-      const calcDivider = document.createElement("div");
-      calcDivider.className = "tabs-divider tabs-divider--flush";
-      el.browseTree.appendChild(calcDivider);
     }
 
     // Guided Workflow -- promoted to the #2 slot, right below the Fee Calculator: the two action
@@ -2152,9 +2167,6 @@
       jumpToTop();
     });
     el.browseTree.appendChild(workflowBtn);
-    const workflowDivider = document.createElement("div");
-    workflowDivider.className = "tabs-divider tabs-divider--flush";
-    el.browseTree.appendChild(workflowDivider);
 
     const totalQty = totalSelectedQty();
     // Summary only appears once there's actually something to summarize -- before the first
@@ -2344,11 +2356,7 @@
     el.browseTree.appendChild(timetablesBtn);
 
     // Budget Planning sits at the very bottom of the nav (below the reference views), per the
-    // user's layout preference -- a divider separates it from the Timetables row above.
-    const budgetDivider = document.createElement("div");
-    budgetDivider.className = "tabs-divider tabs-divider--flush";
-    el.browseTree.appendChild(budgetDivider);
-
+    // user's layout preference.
     const budgetBtn = document.createElement("button");
     budgetBtn.type = "button";
     budgetBtn.className = "tab" + (state.view === "budget" ? " tab--active" : "");
@@ -2883,7 +2891,6 @@
           <div class="summary-item">
             <div class="summary-item__row">
               <button class="summary-item__head" type="button" data-toggle-line="${lineKey}">
-                <span class="summary-item__chevron">${isExpanded ? "▾" : "▸"}</span>
                 <span class="summary-item__num">${idx + 1}.</span>
                 <span class="mono summary-item__code">${labelInfo.code}</span>
                 <span class="summary-item__typecol"><span class="${eff.badgeClass}">${eff.label}</span></span>

@@ -362,7 +362,7 @@
     hoursTile.appendChild(el("p", "vcl-bud-tile__label", "Annual RA hours"));
     hoursTile.appendChild(el("p", "vcl-bud-tile__value", Math.round(rollup.totals.hoursExpected) + " h"));
     hoursTile.appendChild(el("p", "vcl-bud-tile__sub",
-      "Range " + Math.round(rollup.totals.hoursMin) + "–" + Math.round(rollup.totals.hoursMax) + " h (min–max)"));
+      "Range " + Math.round(rollup.totals.hoursMin) + " – " + Math.round(rollup.totals.hoursMax) + " h (min–max)"));
     wrap.appendChild(hoursTile);
 
     var fte = BUD.computeFte(rollup.totals.hoursExpected, state.hoursPerHead);
@@ -413,7 +413,7 @@
   // Whole-hours-ish band formatter for the detail rows: keeps half hours (matches the workbook's
   // raw ranges) but drops trailing ".0".
   function hNum(n) { var x = Math.round((n || 0) * 10) / 10; return String(x); }
-  function hBand(mm) { if (!mm) return "—"; var lo = hNum(mm.min), hi = hNum(mm.max); return lo === hi ? lo + " h" : lo + "–" + hi + " h"; }
+  function hBand(mm) { if (!mm) return "—"; var lo = hNum(mm.min), hi = hNum(mm.max); return lo === hi ? lo + " h" : lo + " – " + hi + " h"; }
 
   // Expandable per-line detail (chosen "Variant A"): the itemised RA-hours breakdown grouped into
   // RA / CMC / Compilation sections (with subtotals + PERT total, matching the GW method box),
@@ -624,7 +624,7 @@
         : '<td class="vcl-bud-num"><span class="vcl-bud-warn">Countries incomplete</span></td>';
       var hoursCell = r.complete
         ? '<td class="vcl-bud-num">' + Math.round(r.hours.expected) + ' h<div class="vcl-bud-hours-band">(' +
-          Math.round(r.hours.min) + "–" + Math.round(r.hours.max) + " h)</div></td>"
+          Math.round(r.hours.min) + " – " + Math.round(r.hours.max) + " h)</div></td>"
         : '<td class="vcl-bud-num">—</td>';
       // The whole row is the expand toggle (handled in onTableClick, which excludes the action
       // buttons); only one row is open at a time -- no chevron affordance (removed per request).
@@ -1693,7 +1693,7 @@
     var hoursItem = el("div");
     hoursItem.innerHTML = '<div class="lbl">RA hours</div><div class="val">' +
       (preview.complete
-        ? Math.round(preview.hours.expected) + ' h <span class="band">' + Math.round(preview.hours.min) + "–" + Math.round(preview.hours.max) + "</span>"
+        ? Math.round(preview.hours.expected) + ' h <span class="band">' + Math.round(preview.hours.min) + " – " + Math.round(preview.hours.max) + " h</span>"
         : "—") + "</div>";
     host.appendChild(hoursItem);
     host.appendChild(el("p", "vcl-bud-live-result__note", "Grouping cap & worksharing lead pricing applied automatically."));
