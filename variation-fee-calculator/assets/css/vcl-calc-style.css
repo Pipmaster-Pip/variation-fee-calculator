@@ -6,8 +6,8 @@
  * ============================================================================ */
 
 .vclcalc-app{
-  /* Warm neutrals (were cool navy/slate/blue-grey) so body text, role lines and
-     meta read in the calculator's warm gold scheme instead of a bluish cast. */
+  /* Cool blue-grey neutrals, matching the toolbox-wide redesign -- the gold
+     identity below is what carries the calculator's own accent. */
   --ink:#1b212c;
   --ink-soft:#4d5566;
   --ink-faint:#838da0;
