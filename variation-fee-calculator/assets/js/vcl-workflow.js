@@ -499,6 +499,7 @@
     state.submissionDate = ""; state.earliestImplDate = ""; state.iiSub = "60"; state.clockStopFraction = 1;
     state.strengthsDefault = 1; state.strengthsOverrides = {};
     state.summaryShowVariations = false;
+    state.prefillNote = null;
     rerender();
   }
 
@@ -532,6 +533,12 @@
   function buildStationA(body) {
     body.appendChild(el("div", "vcl-wf-body__title", "Variations"));
     body.appendChild(el("div", "vcl-wf-body__sub", "Which variation, or variations, are you submitting?"));
+
+    if (state.prefillNote) {
+      body.appendChild(el("div", "vcl-wf-prefill-note",
+        "<strong>Taken over from your summary:</strong> " + escapeHtml(state.prefillNote)
+        + ". You can still adjust the variations below."));
+    }
 
     // The (base) variation. Active substance and product information used to sit here; they drive
     // the RA effort, so they now live in the "RA tasks" station.
@@ -2315,6 +2322,17 @@
   // when there is more than one, tick Grouping and drop the rest into the grouping list (each
   // carrying its classification code). The user can still add more variations. A single variation
   // leaves Grouping off. vcl-app.js calls this right before switching to the workflow view.
+  // Compact type tally for the hand-off banner, e.g. "3 × Type IB" or "2 × Type IB · 1 × Type II".
+  function summaryTallyText(vars) {
+    const order = ["IA", "IAIN", "IB", "IB (default)", "II"];
+    const counts = {};
+    vars.forEach((v) => { const t = v.type || "?"; counts[t] = (counts[t] || 0) + 1; });
+    return Object.keys(counts)
+      .sort((a, b) => ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99))
+      .map((t) => counts[t] + " × Type " + t)
+      .join(" · ");
+  }
+
   function prefillFromVariations(vars) {
     resetAll();
     if (!vars || !vars.length) return;
@@ -2329,6 +2347,8 @@
       state.submission.grouping = true;
       state.grouping = rest.map((v) => ({ code: v.code || null, variantId: v.variantId, type: v.type || null, query: "" }));
     }
+    // Note describing the hand-off, shown on Station A (mirrors the Fee Calculator's prefill note).
+    state.prefillNote = summaryTallyText(vars);
     rerender();
   }
 

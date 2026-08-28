@@ -1054,6 +1054,12 @@
     var sub = d.submission;
     host.appendChild(el("div", "vcl-bud-body__title", "Product"));
 
+    if (modalState.prefillNote) {
+      host.appendChild(el("div", "vcl-bud-prefill-note",
+        "<strong>Taken over from your summary:</strong> " + escapeHtml(modalState.prefillNote)
+        + ", added as one new plan line. Complete the product and procedure details below."));
+    }
+
     // Product name -- gates Station A completion (Next / stepper checkmark).
     var productField = el("div", "vcl-bud-field");
     productField.appendChild(el("label", "vcl-bud-field-label", "Product"));
@@ -2496,6 +2502,14 @@
       draft.submission.variations = vars.map(function (v) {
         return { code: v.code || null, variantId: (v.variantId != null ? v.variantId : null), type: v.type || null };
       });
+      // Compact type tally for the hand-off banner, e.g. "3 × Type IB" or "2 × Type IB · 1 × Type II".
+      var order = ["IA", "IAIN", "IB", "IB (default)", "II"];
+      var counts = {};
+      vars.forEach(function (v) { var t = v.type || "?"; counts[t] = (counts[t] || 0) + 1; });
+      var tally = Object.keys(counts)
+        .sort(function (a, b) { return ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99); })
+        .map(function (t) { return counts[t] + " × Type " + t; })
+        .join(" · ");
       modalState = {
         editingId: null,
         draft: draft,
@@ -2503,6 +2517,7 @@
         reached: { A: true, B: false, C: false, D: false },
         query: "",
         searchResults: [],
+        prefillNote: vars.length ? tally : null,
       };
       if (container) rerender();
     },
