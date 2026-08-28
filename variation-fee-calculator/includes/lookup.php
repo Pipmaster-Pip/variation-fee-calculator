@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function vcl_register_assets() {
 	wp_register_style(
 		'vcl-fonts',
-		'https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap',
+		'https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:opt@9..40;ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap',
 		array(),
 		null
 	);
