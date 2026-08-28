@@ -20,7 +20,7 @@
    buttons-right. */
 .vcl-app .vcl-bud-header { padding: 0; margin-bottom: 24px; display: flex; flex-direction: column; }
 .vcl-app .vcl-bud-header__intro { padding: 0 0 16px; border-bottom: 2px solid var(--budget); }
-.vcl-app .vcl-bud-header h2 { font-family: "IBM Plex Serif", serif; font-weight: 600; font-size: 22px; margin: 0 0 6px; }
+.vcl-app .vcl-bud-header h2 { font-family: "Source Serif 4", serif; font-weight: 600; font-size: 22px; margin: 0 0 6px; }
 .vcl-app .vcl-bud-year { color: var(--budget); font-weight: 600; font-size: 0.8em; }
 .vcl-app .vcl-bud-header p { margin: 0; color: var(--muted); font-size: 14px; }
 .vcl-app .vcl-bud-header__actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
@@ -43,7 +43,7 @@
 .vcl-app .vcl-bud-rollup { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
 .vcl-app .vcl-bud-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
 .vcl-app .vcl-bud-tile__label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
-.vcl-app .vcl-bud-tile__value { font-family: "IBM Plex Serif", serif; font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 0; line-height: 1.15; }
+.vcl-app .vcl-bud-tile__value { font-family: "Source Serif 4", serif; font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 0; line-height: 1.15; }
 .vcl-app .vcl-bud-tile__sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-tile--fte .vcl-bud-tile__value { color: var(--budget); }
 .vcl-app .vcl-bud-fte-input { width: 62px; font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -68,7 +68,7 @@
 .vcl-app .vcl-bud-bdval { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 
 .vcl-app .vcl-bud-table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.vcl-app .vcl-bud-table-head h3 { font-size: 15px; margin: 0; font-weight: 600; font-family: "IBM Plex Serif", serif; }
+.vcl-app .vcl-bud-table-head h3 { font-size: 15px; margin: 0; font-weight: 600; font-family: "Source Serif 4", serif; }
 .vcl-app .vcl-bud-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
 /* The tool lives in a `.layout` grid ("300px 1fr": browse-col + content-col). A grid item defaults
    to min-width:auto, so a wide min-content in the content column can't shrink and instead blows the
@@ -320,7 +320,7 @@
 .vcl-app .vcl-bud-rm:hover { border-color: var(--ii); color: var(--ii); }
 .vcl-app .vcl-bud-live-result { margin-top: 4px; border-top: 1px dashed var(--border); padding-top: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 18px; }
 .vcl-app .vcl-bud-live-result .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-.vcl-app .vcl-bud-live-result .val { font-family: "IBM Plex Serif", serif; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-live-result .val { font-family: "Source Serif 4", serif; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-live-result .val .band { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 400; color: var(--ink-faint); margin-left: 4px; }
 .vcl-app .vcl-bud-live-result__note { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--ink-faint); }
 
@@ -329,7 +329,7 @@
    cancel (✕); the bottom nav mirrors the GW's Back / Next (with a final "Add / Save line"). --- */
 .vcl-app .vcl-bud-editor__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 0 0 16px; margin-bottom: 18px; border-bottom: 2px solid var(--budget); }
 /* Match the dashboard/result heading exactly (see .vcl-bud-header h2): same serif, size and year tint. */
-.vcl-app .vcl-bud-editor__head h2 { font-family: "IBM Plex Serif", serif; font-size: 22px; margin: 0 0 6px; font-weight: 600; }
+.vcl-app .vcl-bud-editor__head h2 { font-family: "Source Serif 4", serif; font-size: 22px; margin: 0 0 6px; font-weight: 600; }
 .vcl-app .vcl-bud-editor__subtitle { margin: 0; color: var(--muted); font-size: 14px; }
 /* New/Edit "plan line" kicker: sits under the header divider, above the stepper. Small, uppercase,
    budget-tinted -- names which line is being edited without repeating in the always-same header. */
