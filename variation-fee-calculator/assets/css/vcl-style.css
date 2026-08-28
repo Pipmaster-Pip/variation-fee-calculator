@@ -136,6 +136,38 @@
 .vcl-app .app-header__home svg,
 .vcl-app .app-header__guide svg { flex-shrink: 0; }
 
+/* Summary action button: filled plum pill (the Summary's own identity color), shown only once a
+   variation is selected -- it replaces the old Summary nav tile in the left column, so the running
+   selection stays visible in the masthead instead of getting lost among the tool tiles. */
+.vcl-app .app-header__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--plum);
+  background: var(--plum-bg);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.vcl-app .app-header__summary:hover { border-color: var(--plum); }
+.vcl-app .app-header__summary svg { flex-shrink: 0; }
+.vcl-app .app-header__summary.is-active { border-color: var(--plum); }
+.vcl-app .app-header__summary-count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--plum);
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--plum) 30%, transparent);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
 .vcl-app .app-header__eyebrow {
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;

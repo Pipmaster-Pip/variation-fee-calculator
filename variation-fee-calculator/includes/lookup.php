@@ -384,6 +384,11 @@ function vcl_shortcode( $atts ) {
 
 	<header class="app-header">
 	  <div class="app-header__actions">
+	    <button type="button" class="app-header__summary hidden" id="vcl-summaryHeaderBtn" aria-label="Show the summary of selected variations" title="Summary of selected variations">
+	      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h11"/><path d="M8 12h11"/><path d="M8 18h11"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>
+	      <span>Summary</span>
+	      <span class="app-header__summary-count" id="vcl-summaryHeaderCount">0</span>
+	    </button>
 	    <button type="button" class="app-header__guide" id="vcl-guideBtn" aria-label="How to use this toolbox" title="How to use this toolbox">
 	      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 1.7-2.4 3.4"/><path d="M12 17h.01"/></svg>
 	      <span>How to use</span>

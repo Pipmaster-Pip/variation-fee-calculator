@@ -111,6 +111,8 @@
   const el = {
     appRoot: document.getElementById("vcl-app"),
     browseTree: document.getElementById("vcl-browseTree"),
+    summaryHeaderBtn: document.getElementById("vcl-summaryHeaderBtn"),
+    summaryHeaderCount: document.getElementById("vcl-summaryHeaderCount"),
     search: document.getElementById("vcl-searchInput"),
     detail: document.getElementById("vcl-detailPanel"),
     detailEmpty: document.getElementById("vcl-detailEmpty"),
@@ -2168,36 +2170,9 @@
     });
     el.browseTree.appendChild(workflowBtn);
 
-    const totalQty = totalSelectedQty();
-    // Summary only appears once there's actually something to summarize -- before the first
-    // variation is selected, it would just be an empty page one click away for no reason.
-    if (totalQty > 0) {
-      const summaryBtn = document.createElement("button");
-      summaryBtn.type = "button";
-      summaryBtn.className = "tab" + (state.view === "summary" ? " tab--active" : "");
-      summaryBtn.style.setProperty("--accent", "var(--plum)");
-      summaryBtn.style.setProperty("--tint", "var(--plum-tint)");
-      summaryBtn.style.setProperty("--tab-bg", "var(--plum-bg)");
-      summaryBtn.innerHTML = `
-        <span class="tab__code">Summary</span>
-        <span class="tab__title">Selected variations for this application</span>
-        <span class="tab__count">${totalQty} ${totalQty === 1 ? "item" : "items"}</span>
-      `;
-      summaryBtn.addEventListener("click", () => {
-        state.view = "summary";
-        state.classifyOpen = false;
-        state.guidanceOpen = false;
-        renderBrowse();
-        switchViewVisibility();
-        renderSummary();
-        jumpToTop();
-      });
-      el.browseTree.appendChild(summaryBtn);
-
-      const divider = document.createElement("div");
-      divider.className = "tabs-divider tabs-divider--flush";
-      el.browseTree.appendChild(divider);
-    }
+    // The Summary now lives as a pill in the masthead (el.summaryHeaderBtn), not as a nav tile
+    // here -- so it stays visible instead of getting lost among the tool tiles. Keep it in sync.
+    updateSummaryHeaderBtn();
 
     const classifyBtn = document.createElement("button");
     classifyBtn.type = "button";
@@ -2427,6 +2402,28 @@
 
   function totalSelectedQty() {
     return Object.values(state.selections).reduce((sum, sel) => sum + sel.qty, 0);
+  }
+
+  // Keeps the masthead Summary pill in sync with the current selection: hidden until something is
+  // selected (same "nothing to summarize yet" rule the old nav tile had), otherwise shows the item
+  // count and an active outline while the Summary view is open. Called from renderBrowse(), which
+  // already re-runs on every selection/view change.
+  function updateSummaryHeaderBtn() {
+    if (!el.summaryHeaderBtn) return;
+    const totalQty = totalSelectedQty();
+    el.summaryHeaderBtn.classList.toggle("hidden", totalQty === 0);
+    el.summaryHeaderBtn.classList.toggle("is-active", state.view === "summary");
+    if (el.summaryHeaderCount) el.summaryHeaderCount.textContent = String(totalQty);
+  }
+
+  function openSummaryView() {
+    state.view = "summary";
+    state.classifyOpen = false;
+    state.guidanceOpen = false;
+    renderBrowse();
+    switchViewVisibility();
+    renderSummary();
+    jumpToTop();
   }
 
   function unitLineKey(key, unitIndex) {
@@ -3771,6 +3768,8 @@
   if (guideBtn) guideBtn.addEventListener("click", () => {
     if (window.VCL_GUIDE) window.VCL_GUIDE.open(guideToolForView(), guideBtn);
   });
+
+  if (el.summaryHeaderBtn) el.summaryHeaderBtn.addEventListener("click", openSummaryView);
 
   openEntryFromUrl();
   fillContactSlots();
