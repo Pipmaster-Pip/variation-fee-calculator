@@ -26,14 +26,14 @@
 .vcl-app .vcl-guide-shell {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   width: 100%;
   max-width: 640px;
   height: min(640px, 86vh);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(20, 30, 40, 0.25);
-  font-family: "IBM Plex Sans", -apple-system, sans-serif;
+  box-shadow: 0 20px 60px rgba(20, 30, 48, 0.28);
+  font-family: "Libre Franklin", -apple-system, sans-serif;
   color: var(--ink);
 }
 
@@ -45,7 +45,7 @@
   border-bottom: 1px solid var(--border);
   flex: none;
 }
-.vcl-app .vcl-guide-head h2 { margin: 0; font-size: 17px; font-weight: 600; font-family: "IBM Plex Serif", serif; }
+.vcl-app .vcl-guide-head h2 { margin: 0; font-size: 17px; font-weight: 600; font-family: "Source Serif 4", serif; }
 .vcl-app .vcl-guide-close {
   width: 30px; height: 30px;
   display: flex;
@@ -70,7 +70,7 @@
 
 .vcl-app .vcl-guide-page-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .vcl-app .vcl-guide-dot-lg { width: 10px; height: 10px; border-radius: 50%; background: var(--tc, var(--accent)); flex-shrink: 0; }
-.vcl-app .vcl-guide-page-head h3 { margin: 0; font-size: 16px; font-family: "IBM Plex Serif", serif; }
+.vcl-app .vcl-guide-page-head h3 { margin: 0; font-size: 16px; font-family: "Source Serif 4", serif; }
 .vcl-app .vcl-guide-tagline { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
 
 .vcl-app .vcl-guide-section {
