@@ -439,6 +439,7 @@ function vcl_shortcode( $atts ) {
 	        <div class="summary-header__actions">
 	          <button type="button" id="vcl-summaryExpandAll">Expand all</button>
 	          <button type="button" id="vcl-summaryCollapseAll">Collapse all</button>
+	          <button type="button" id="vcl-summaryClearAll" class="summary-header__clear">Clear all</button>
 	          <button type="button" id="vcl-summaryExportDocx">Export to .docx</button>
 	          <button type="button" id="vcl-summaryPrint">Print</button>
 	        </div>

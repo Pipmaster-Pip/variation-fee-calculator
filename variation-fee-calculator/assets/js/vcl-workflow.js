@@ -472,6 +472,9 @@
   // toolbox nav's jumpToTop) -- without this, Next/Back/Start over left the view at the
   // bottom of the new station.
   function jumpTop() {
+    // Share the toolbox's canonical scroll (offsets the site's fixed nav) when embedded; fall
+    // back to the container in the standalone dev harness.
+    if (window.VCL_APP && window.VCL_APP.scrollToTop) { window.VCL_APP.scrollToTop(); return; }
     if (container && container.scrollIntoView) container.scrollIntoView({ block: "start", behavior: "auto" });
   }
   function goto(key) { if (state.reached[key]) { state.station = key; rerender(); jumpTop(); } }
@@ -547,8 +550,9 @@
     } else {
       const entry = pickedEntry();
       const variant = pickedVariant();
-      if (!entry) { buildSearch(body); buildTypeQuickPick(body); return; }
-      if (!variant) {
+      if (!entry) {
+        buildSearch(body); buildTypeQuickPick(body);
+      } else if (!variant) {
         buildPickedHeader(body, entry, null);
         const chooser = el("div", "vcl-wf-variants");
         entry.variants.forEach((v) => {
@@ -558,13 +562,17 @@
           chooser.appendChild(row);
         });
         body.appendChild(chooser);
-        return;
+      } else {
+        buildPickedHeader(body, entry, variant);
       }
-      buildPickedHeader(body, entry, variant);
     }
 
-    // Further variations -- more than one is treated as a grouping automatically.
-    buildGroupingList(body);
+    // Further variations -- more than one is treated as a grouping automatically. Keep the list
+    // visible whenever a base is resolved OR grouped variations already exist, so re-picking the
+    // base (the "Change" button clears state.pickedCode) never appears to wipe the grouped
+    // variations: they stay in state.grouping regardless, and an early return here used to hide
+    // them, which read as data loss.
+    if (state.typeOnly || pickedVariant() || state.grouping.length) buildGroupingList(body);
   }
 
   // ---- Station "RA tasks": the optional RA modules, beyond the always-on core RA work. ----
@@ -882,7 +890,10 @@
   }
 
   function buildGroupingRow(g, idx) {
-    const row = el("div", "vcl-wf-brow");
+    // Resolved rows are a single line -- flag them so the CSS can vertically centre the text
+    // against the taller remove button (the row's default flex-start is only for the expanded
+    // search/pick form, which is multi-line).
+    const row = el("div", "vcl-wf-brow" + (g.type ? " is-resolved" : ""));
     if (g.type) {
       // Resolved -- either a classification code or a bare type.
       if (g.code) {

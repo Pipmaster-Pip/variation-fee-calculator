@@ -130,6 +130,7 @@
     summaryList: document.getElementById("vcl-summaryList"),
     summaryExpandAll: document.getElementById("vcl-summaryExpandAll"),
     summaryCollapseAll: document.getElementById("vcl-summaryCollapseAll"),
+    summaryClearAll: document.getElementById("vcl-summaryClearAll"),
     summaryExportDocx: document.getElementById("vcl-summaryExportDocx"),
     summaryPrint: document.getElementById("vcl-summaryPrint"),
     summaryExportCalculator: document.getElementById("vcl-summaryExportCalculator"),
@@ -513,6 +514,9 @@
             renderBrowse();
             renderDetail();
             el.detailCol.scrollTop = 0;
+            // Lift the page to the masthead like the chapter/section rows do, so the opened
+            // subsection lands at the top instead of leaving the user scrolled deep in the nav.
+            jumpToTop();
           });
           list.appendChild(toggle);
 
@@ -2578,6 +2582,20 @@
     renderSummary();
   });
 
+  // Clear all, mirrored in the summary header (the selection-bar copy is easy to miss). Same
+  // effect as the selection-bar's Clear all: drop every selection and its expanded state.
+  if (el.summaryClearAll) {
+    el.summaryClearAll.addEventListener("click", () => {
+      state.selections = {};
+      state.summaryExpandedUnits.clear();
+      saveSelections();
+      renderSelectionBar();
+      renderDetail();
+      renderBrowse();
+      renderSummary();
+    });
+  }
+
   el.summaryExportDocx.addEventListener("click", () => {
     exportSummaryToDocx();
   });
@@ -2885,18 +2903,20 @@
         const pscope = findPreciseScopeWording(item.entry, item.variant);
 
         return `
-          <div class="summary-item">
+          <div class="summary-item${isExpanded ? " is-open" : ""}">
             <div class="summary-item__row">
               <button class="summary-item__head" type="button" data-toggle-line="${lineKey}">
+                <span class="summary-item__chevron">${isExpanded ? "▾" : "▸"}</span>
                 <span class="summary-item__num">${idx + 1}.</span>
                 <span class="mono summary-item__code">${labelInfo.code}</span>
-                <span class="summary-item__typecol"><span class="${eff.badgeClass}">${eff.label}</span></span>
+                <span class="summary-item__dash">—</span>
                 <span class="summary-item__titles">
                   <span class="summary-item__title">${item.entry.title}</span>
                   ${labelInfo.subtitle ? `<span class="summary-item__subtitle">${labelInfo.subtitle}</span>` : ""}
                 </span>
               </button>
               ${docCount ? `<span class="summary-item__doccount">${docsConfirmed}/${docCount} docs</span>` : ""}
+              <span class="summary-item__typecol"><span class="${eff.badgeClass}">${eff.label}</span></span>
               <button class="summary-item__remove" type="button" data-remove-line="${lineKey}" title="Remove this item">&times;</button>
             </div>
             ${
@@ -3392,7 +3412,11 @@
   // Minimal additive hook so the self-contained tools (e.g. the Guided Workflow) can hand the
   // user over to another view -- used for the Workflow -> Fee Calculator cross-link. Purely
   // additive; nothing existing depends on it.
-  window.VCL_APP = { goTo: goToDestination };
+  // scrollToTop: the canonical "jump the toolbox heading back under the site's fixed nav" used by
+  // the top nav and Classification. Exposed so the embedded tools (Fee Calculator, Guided Workflow,
+  // Budget) can share the exact same landing on their own Back/Next/New-calculation transitions,
+  // instead of each scrolling to its own container top (which tucks the heading under the site nav).
+  window.VCL_APP = { goTo: goToDestination, scrollToTop: jumpToTop };
 
   // First-load overview: the main destinations as cards in the detail area (each shares its
   // nav identity color).

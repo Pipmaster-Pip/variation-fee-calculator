@@ -545,11 +545,17 @@ loadLiveRates();
 function setStep(n) {
   appState.step = n;
   render();
-  // Scroll to the calculator container
-  const appEl = document.getElementById('vclcalc-app');
-  if (appEl) {
-    const top = appEl.getBoundingClientRect().top + window.pageYOffset - 20;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  // Jump the toolbox heading of the new step back into view. Prefer the host's shared scroll
+  // (lands the masthead just under the site's fixed nav, same as the top nav / Classification);
+  // fall back to the calculator container when the calculator runs standalone (dev harness).
+  if (window.VCL_APP && window.VCL_APP.scrollToTop) {
+    window.VCL_APP.scrollToTop();
+  } else {
+    const appEl = document.getElementById('vclcalc-app');
+    if (appEl) {
+      const top = appEl.getBoundingClientRect().top + window.pageYOffset - 20;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }
   }
 }
 

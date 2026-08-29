@@ -1347,6 +1347,13 @@
 }
 
 .vcl-app .summary-header__actions button:hover { background: var(--paper); }
+/* Clear all: destructive accent so it's found at a glance in the header (the selection-bar copy
+   is easy to miss). */
+.vcl-app .summary-header__actions button.summary-header__clear { color: var(--ii); }
+.vcl-app .summary-header__actions button.summary-header__clear:hover {
+  background: rgba(178, 58, 46, 0.07);
+  border-color: var(--ii);
+}
 
 /* --- Handoff to the sibling Fee Calculator, below the variation list --- */
 .vcl-app .summary-footer {
@@ -2263,7 +2270,10 @@
 }
 
 .vcl-app .summary-item {
-  border: 1px solid var(--border);
+  /* Steel-Blue identity card, matching the Classification detail header (.entry-summary) so a
+     selected variation reads the same in both views. The header row is the blue band; the
+     expanded body (white, below) shares the same rounded card via overflow:hidden. */
+  border: 1.5px solid var(--classify);
   border-radius: 8px;
   background: var(--panel);
   margin-bottom: 10px;
@@ -2274,8 +2284,19 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 10px 14px;
+  background: var(--classify-bg);
 }
+.vcl-app .summary-item__row:hover { filter: brightness(1.02); }
+
+.vcl-app .summary-item__chevron {
+  font-size: 10px;
+  color: var(--classify);
+  flex-shrink: 0;
+  width: 10px;
+}
+
+.vcl-app .summary-item__dash { color: var(--classify); opacity: 0.5; flex-shrink: 0; }
 
 .vcl-app .summary-item__head {
   display: flex;
@@ -2295,26 +2316,25 @@
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--classify);
+  opacity: 0.7;
   flex-shrink: 0;
 }
 
 .vcl-app .summary-item__code {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--classify);
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
+/* Badge now sits hard-right in the row (like every Classification list row), not between the
+   code and the title -- so the row scans code -> title -> type, matching the browse view. */
 .vcl-app .summary-item__typecol {
   display: inline-flex;
-  justify-content: flex-start;
   flex-shrink: 0;
 }
-
-.vcl-app .summary-item__head .type-ia { box-shadow: inset 0 0 0 1.5px rgba(47, 125, 91, 0.35); }
-.vcl-app .summary-item__head .type-ib { box-shadow: inset 0 0 0 1.5px rgba(166, 121, 10, 0.35); }
-.vcl-app .summary-item__head .type-ii { box-shadow: inset 0 0 0 1.5px rgba(178, 58, 46, 0.35); }
 
 .vcl-app .summary-item__titles {
   display: flex;
@@ -2331,10 +2351,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Open: let the title wrap and bold it, mirroring the Classification detail header. */
+.vcl-app .summary-item.is-open .summary-item__title { white-space: normal; font-weight: 600; }
+.vcl-app .summary-item.is-open .summary-item__subtitle { white-space: normal; }
 
 .vcl-app .summary-item__subtitle {
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--classify);
+  opacity: 0.85;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2355,7 +2379,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--muted);
+  color: var(--classify);
   font-size: 18px;
   line-height: 1;
   padding: 2px 4px;

@@ -172,6 +172,9 @@
   // After navigating to a new station (or back to the results) the viewport is still scrolled down at
   // the Next/finish button; bring the top of the tool back into view so the user starts at the top.
   function scrollToTop() {
+    // Share the toolbox's canonical scroll (offsets the site's fixed nav) when embedded; fall
+    // back to the container in the standalone dev harness.
+    if (window.VCL_APP && window.VCL_APP.scrollToTop) { window.VCL_APP.scrollToTop(); return; }
     if (container && container.scrollIntoView) container.scrollIntoView({ block: "start" });
   }
   function applyModal() {

@@ -417,6 +417,9 @@
   padding: 7px 10px;
   margin-bottom: 6px;
 }
+/* Resolved (single-line) rows: centre text against the taller remove button. The flex-start
+   above is only needed while a row is expanded into its multi-line search/pick form. */
+.vcl-app .vcl-wf-brow.is-resolved { align-items: center; }
 .vcl-app .vcl-wf-brow__main { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; }
 /* Variant chooser inside a grouping row: full-width rows (reuses .vcl-wf-variant), stacked. */
 .vcl-app .vcl-wf-brow__pick { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
