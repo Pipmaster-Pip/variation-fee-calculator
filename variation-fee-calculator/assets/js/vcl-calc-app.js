@@ -350,6 +350,13 @@ const appState = {
   resultCurrencyMode: 'eur',
   // Which per-type result rows are expanded to their individual variations (keyed "cc|type").
   resultExpanded: {},
+  // Country details step: one "number of authorised strengths" that every country follows, so a
+  // 20-country procedure does not have to be clicked through country by country. The value is
+  // written straight into countryConfig[cc].strengths -- the single source the fee calculation
+  // reads; strengthsManual only remembers WHICH countries the user gave their own number, so
+  // those are the ones a later change of the default leaves alone. Keyed by country code.
+  strengthsDefault: 1,
+  strengthsManual: {},
   results: null
 };
 
@@ -690,6 +697,9 @@ function renderStepCountries() {
   document.getElementById('vclcalc-resetSelection').addEventListener('click', () => {
     appState.selectedCountries = [];
     appState.countryConfig = {};
+    // The per-country strengths are gone with countryConfig, so the record of which of them
+    // were hand-set has to go too -- otherwise a re-picked country would still count as manual.
+    appState.strengthsManual = {};
     renderStepCountries();
   });
 
@@ -717,6 +727,18 @@ function renderStepCountryDetails() {
     <div class="panel">
       <h2>Procedure role &amp; strengths per country</h2>
       <p class="hint">Choose the applicable procedure role and the number of authorised strengths for each country — these can differ from country to country (e.g. one country may have 2 authorised strengths where another only has 1).</p>
+      <div class="strength-default">
+        <div class="strength-default__head">Strengths for all countries</div>
+        <p class="strength-default__sub">Applies to every country below. Give a single country its own number afterwards and it keeps that number, even if you change this default again.</p>
+        <div class="strength-default__row">
+          <div>
+            <span class="field-label" style="margin-bottom:6px;">Number of authorised strengths</span>
+            ${stepperHTML('strengthsDefault', appState.strengthsDefault, 1, 99)}
+          </div>
+          <button type="button" class="strength-default__reset" id="vclcalc-strengthsReset">&#8634; Reset all to default</button>
+        </div>
+        <p class="strength-default__note" id="vclcalc-strengthsNote"></p>
+      </div>
       <div id="vclcalc-countryDetailList"></div>
     </div>
     ${calcInfoPanelsHtml()}
@@ -727,13 +749,41 @@ function renderStepCountryDetails() {
   `;
 
   const list = document.getElementById('vclcalc-countryDetailList');
+  const noteEl = document.getElementById('vclcalc-strengthsNote');
+  const resetBtn = document.getElementById('vclcalc-strengthsReset');
   const sortedCCs = [...appState.selectedCountries]
     .sort((a, b) => COUNTRY_NAMES[a].localeCompare(COUNTRY_NAMES[b], 'en'));
+
+  // A country follows the default until the user gives it a number of its own; from then on it
+  // is listed in strengthsManual and the default leaves it alone. Writing straight into
+  // countryConfig keeps the fee calculation reading the one field it always read.
+  function applyDefaultToFollowers() {
+    sortedCCs.forEach(cc => {
+      if (appState.strengthsManual[cc]) return;
+      ensureCountryConfig(cc).strengths = appState.strengthsDefault;
+      const input = list.querySelector(`[data-field-input="strengths_${cc}"]`);
+      if (input) input.value = appState.strengthsDefault;
+      const card = list.querySelector(`.row-card[data-cc="${cc}"]`);
+      if (card) card.classList.remove('has-own-strengths');
+    });
+  }
+
+  function refreshStrengthMeta() {
+    const n = sortedCCs.filter(cc => appState.strengthsManual[cc]).length;
+    resetBtn.disabled = n === 0;
+    noteEl.textContent = n === 0
+      ? `All ${sortedCCs.length} countries follow the default of ${appState.strengthsDefault} ` +
+        (appState.strengthsDefault === 1 ? 'strength.' : 'strengths.')
+      : `${n} of ${sortedCCs.length} countries ${n === 1 ? 'has' : 'have'} its own number ` +
+        'and keeps it when you change the default.';
+  }
+
   list.innerHTML = sortedCCs.map(cc => {
     const cfg = ensureCountryConfig(cc);
     const roles = rolesForCountry(cc);
+    const own = appState.strengthsManual[cc] ? ' has-own-strengths' : '';
     return `
-      <div class="row-card active" data-cc="${cc}" style="margin-bottom:10px;">
+      <div class="row-card active${own}" data-cc="${cc}" style="margin-bottom:10px;">
         <div class="row-card-top">
           <div class="row-card-title" style="flex:1;">
             <span class="t1">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span></span>
@@ -764,7 +814,30 @@ function renderStepCountryDetails() {
   bindRowSteppers(list, (field, value) => {
     const cc = field.split('_').slice(1).join('_');
     ensureCountryConfig(cc).strengths = value;
+    // Landing back on the default is not a deviation -- the country rejoins the group and will
+    // follow the default again, which is what makes the reset button reach a genuinely clean state.
+    if (value === appState.strengthsDefault) delete appState.strengthsManual[cc];
+    else appState.strengthsManual[cc] = true;
+    const card = list.querySelector(`.row-card[data-cc="${cc}"]`);
+    if (card) card.classList.toggle('has-own-strengths', !!appState.strengthsManual[cc]);
+    refreshStrengthMeta();
   });
+
+  bindRowSteppers(document.querySelector('.strength-default'), (field, value) => {
+    if (field !== 'strengthsDefault') return;
+    appState.strengthsDefault = value;
+    applyDefaultToFollowers();
+    refreshStrengthMeta();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    appState.strengthsManual = {};
+    applyDefaultToFollowers();
+    refreshStrengthMeta();
+  });
+
+  applyDefaultToFollowers();
+  refreshStrengthMeta();
 
   document.getElementById('vclcalc-back1').addEventListener('click', () => setStep(0));
   document.getElementById('vclcalc-toStep3').addEventListener('click', () => setStep(2));
@@ -1540,6 +1613,8 @@ function renderStepResult() {
     appState.results = null;
     appState.resultCurrencyMode = 'eur';
     appState.resultExpanded = {};
+    appState.strengthsDefault = 1;
+    appState.strengthsManual = {};
     setStep(0);
   });
 }

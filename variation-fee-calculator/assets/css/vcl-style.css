@@ -1303,8 +1303,11 @@
 .vcl-app .summary-header {
   margin-bottom: 18px;
   padding-bottom: 16px;
-  /* Summary's own identity color (the Summary nav card is --plum), not the Type-IB gold. */
-  border-bottom: 2px solid var(--plum);
+  /* Summary's own identity color (the Summary nav card is --plum), not the Type-IB gold --
+     but dialled back: full-strength plum at 2px read as a hard rule cutting the header off
+     from the list it introduces. Half a step of plum mixed into the paper keeps the identity
+     while letting the cards below stay the loudest thing on the screen. */
+  border-bottom: 1px solid color-mix(in srgb, var(--plum) 45%, var(--paper));
 }
 
 /* Title/count + action buttons row -- the hint below sits outside this flex row (as a normal
@@ -1346,7 +1349,13 @@
   cursor: pointer;
 }
 
-.vcl-app .summary-header__actions button:hover { background: var(--paper); }
+/* Lifts to the panel white, not --paper: these buttons sit directly on the app's --paper
+   ground, so the old hover painted the exact colour that was already behind them and nothing
+   happened. Only "Clear all" appeared to react, because it also swaps its border. */
+.vcl-app .summary-header__actions button:hover {
+  background: var(--panel);
+  border-color: var(--ink-faint);
+}
 /* Clear all: destructive accent so it's found at a glance in the header (the selection-bar copy
    is easy to miss). */
 .vcl-app .summary-header__actions button.summary-header__clear { color: var(--ii); }
@@ -2289,13 +2298,6 @@
 }
 .vcl-app .summary-item__row:hover { filter: brightness(1.02); }
 
-.vcl-app .summary-item__chevron {
-  font-size: 10px;
-  color: var(--plum);
-  flex-shrink: 0;
-  width: 10px;
-}
-
 .vcl-app .summary-item__dash { color: var(--plum); opacity: 0.5; flex-shrink: 0; }
 
 .vcl-app .summary-item__head {
@@ -2312,12 +2314,14 @@
   padding: 0;
 }
 
+/* Reads as one unit with the code next to it: same size, same weight, same full-strength plum.
+   It used to sit a step smaller and at 0.7 opacity, which made the numbering look like a
+   separate, fainter layer instead of the first part of "1. E.1(a)". */
 .vcl-app .summary-item__num {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--plum);
-  opacity: 0.7;
   flex-shrink: 0;
 }
 
@@ -2524,3 +2528,166 @@
   border-bottom-color: var(--accent);
 }
 .vcl-app .vcl-contact-link:hover .ico { opacity: 1; }
+
+/* --- Horizontal tool bar (#vcl-toolBar) -----------------------------------------------
+   Six flat buttons under the masthead, one per tool, each carrying its own identity colour
+   via the inline --tc / --tbg pair set in renderToolBar(). Active state is a plain 1px ring
+   (integer border width -- 1.5px renders visibly thicker along the bottom edge in Chrome),
+   deliberately no underline bar and no inset shadow. --- */
+.vcl-app .tool-bar { display: flex; gap: 8px; margin: 16px 0 0; }
+
+.vcl-app .tool-bar__btn {
+  --tc: #888;
+  --tbg: #F2F2F2;
+  flex: 1 1 0;
+  min-width: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 9px 12px;
+  cursor: pointer;
+  background: var(--tbg);
+  border: 1px solid color-mix(in srgb, var(--tc) 26%, var(--tbg));
+  border-radius: 10px;
+  font-family: inherit;
+  transition: filter .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.vcl-app .tool-bar__btn:hover { filter: brightness(1.035); }
+
+.vcl-app .tool-bar__btn[aria-current="true"] {
+  border-color: var(--tc);
+  box-shadow: 0 0 0 1px var(--tc);
+}
+
+.vcl-app .tool-bar__name {
+  font-family: "Libre Franklin", sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  /* Defaults to the button's identity colour; --tc-text lets a button darken just its label
+     where the identity colour alone is too light to read on its own tint. The old
+     .tab--calc tile did exactly this: gold border, darker gold text. */
+  color: var(--tc-text, var(--tc));
+  line-height: 1.25;
+}
+
+.vcl-app .tool-bar__btn[aria-current="true"] .tool-bar__name { font-weight: 700; }
+
+.vcl-app .tool-bar__meta {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Views that do not use the Classification/Guidance tree hide the browse column entirely
+   (switchViewVisibility sets data-tree); the grid then drops the 300px track so the detail
+   area gets the full shell width. */
+.vcl-app .layout[data-tree="off"] { grid-template-columns: 1fr; }
+
+/* Summary, Grouping, Timetables and Budget are pinned to `grid-column: 2` -- written back
+   when the browse column was permanent and column 2 was simply "the detail cell". With the
+   template down to a single track that pin no longer names an existing column, so the grid
+   creates an implicit second one sized to its own content: the detail area then measured
+   whatever its widest child happened to be (1196px in Timetables, 883px in Summary) while a
+   dead first track ate the rest. Re-pointing every direct child at the one real column keeps
+   the width a property of the layout instead of the content. */
+.vcl-app .layout[data-tree="off"] > * { grid-column: 1; }
+
+/* Collapse/expand control for the left Classification/Guidance tree. Its own row between the
+   tool bar and the layout grid; empty (and therefore hidden) in every view without a tree.
+   Deliberately neutral -- same --muted/--panel/--border tokens as the masthead's Home and
+   How-to-use buttons -- so it never competes with a tool identity color. */
+.vcl-app .tree-toggle-row { display: flex; margin: 14px 0 0; }
+.vcl-app .tree-toggle-row:empty { display: none; }
+.vcl-app .tree-toggle {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 11px; font-family: inherit; font-size: 12px; font-weight: 500;
+  color: var(--muted); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.vcl-app .tree-toggle:hover { color: var(--ink); border-color: var(--ink); }
+.vcl-app .tree-toggle svg { flex-shrink: 0; transition: transform .18s ease; }
+.vcl-app .tree-toggle[aria-expanded="false"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .vcl-app .tree-toggle svg { transition: none; }
+}
+
+/* Narrow screens: six 132px buttons need 832px, but .vcl-app clips its overflow, so on a phone
+   the last four would simply be cut off and unreachable -- no scrollbar, no wrap. Below the
+   layout's own 760px breakpoint the bar therefore breaks into rows of two. min-width:0 releases
+   the 132px floor from the base rule so the buttons may actually shrink to half the row. */
+@media (max-width: 760px) {
+  .vcl-app .tool-bar { flex-wrap: wrap; }
+  .vcl-app .tool-bar__btn { flex: 1 1 calc(50% - 4px); min-width: 0; }
+}
+
+/* --- Start screen: tools as a quiet list ---------------------------------------------
+   Replaces the six overview cards. The tool bar above already names every destination, so a
+   second grid of the same six read as a repetition once the nav moved from the left column to
+   the top. A list looks nothing like the bar and still carries the full descriptions, which
+   exist nowhere else -- the bar has room for a name and a two-word label only. */
+.vcl-app .guide-rows {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.vcl-app .guide-row {
+  display: grid;
+  grid-template-columns: 10px 190px 1fr;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 11px 15px;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--panel);
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  transition: background .12s ease;
+}
+.vcl-app .guide-row:first-child { border-top: 0; }
+.vcl-app .guide-row:hover { background: var(--paper); }
+.vcl-app .guide-row__dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--card-accent); flex-shrink: 0;
+}
+.vcl-app .guide-row__name { font-size: 13.5px; font-weight: 600; color: var(--card-accent); }
+.vcl-app .guide-row__desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+/* Below the layout's own breakpoint the fixed name column no longer fits; the description
+   moves under the name instead of being squeezed. */
+@media (max-width: 760px) {
+  .vcl-app .guide-row { grid-template-columns: 10px 1fr; }
+  .vcl-app .guide-row__desc { grid-column: 2; }
+}
+
+/* --- Start screen: the Summary box before anything is selected ------------------------
+   Keeps the box in place rather than hiding it, so the tool list below never shifts when the
+   first variation is added -- and so a first-time visitor is told where variations come from. */
+.vcl-app .sel-full--empty { margin-bottom: 24px; }
+.vcl-app .sel-full__empty { padding: 22px 18px 24px; text-align: center; }
+.vcl-app .sel-full__empty-title {
+  font-size: 13.5px; font-weight: 600; color: var(--ink); margin: 0 0 5px;
+}
+.vcl-app .sel-full__empty-text {
+  font-size: 12.5px; color: var(--muted); line-height: 1.55;
+  margin: 0 auto 14px; max-width: 48ch;
+}
+.vcl-app .sel-full__empty-go {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 8px 15px; border-radius: 8px; cursor: pointer;
+  color: var(--classify); background: var(--classify-bg); border: 1px solid var(--classify);
+  transition: background .12s ease, color .12s ease;
+}
+.vcl-app .sel-full__empty-go:hover { background: var(--classify); color: var(--panel); }
+.vcl-app .sel-full__empty-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0;
+}

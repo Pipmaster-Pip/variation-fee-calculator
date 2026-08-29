@@ -100,6 +100,10 @@
     // as a fraction (not a day count) so switching IB <-> II-90 keeps the slider where the
     // user put it proportionally, instead of clamping a 150-day value down to IB's 30.
     ttStopFraction: 1.0,
+    // Whether the user has collapsed the left Classification/Guidance tree. Not persisted:
+    // every page load starts open, and goToDestination() resets it on any tool switch so the
+    // tree can never end up hidden in a view the user did not collapse it in.
+    treeCollapsed: false,
   };
 
   // Entries currently "in scope" while browsing/searching Classification -- rebuilt as a side
@@ -110,7 +114,10 @@
 
   const el = {
     appRoot: document.getElementById("vcl-app"),
+    browseCol: document.getElementById("vcl-browseCol"),
+    treeToggleRow: document.getElementById("vcl-treeToggleRow"),
     browseTree: document.getElementById("vcl-browseTree"),
+    toolBar: document.getElementById("vcl-toolBar"),
     summaryHeaderBtn: document.getElementById("vcl-summaryHeaderBtn"),
     summaryHeaderCount: document.getElementById("vcl-summaryHeaderCount"),
     search: document.getElementById("vcl-searchInput"),
@@ -232,9 +239,29 @@
     return "classification";
   }
 
-  // The browse column (search + chapter/section/subsection accordion) stays on screen in every
-  // view -- only the right-hand column switches between the entry detail, the Summary, and the
-  // (static) Grouping guidance.
+  // Whether the current view uses the left Classification/Guidance tree at all. Single source
+  // of truth for both switchViewVisibility() (which decides whether the column is on screen)
+  // and renderTreeToggle() (which only offers the collapse button where there is something to
+  // collapse), so the two can never drift apart.
+  // "browse" covers two different screens: the welcome overview and the Classification /
+  // Guidance tree. Only the latter needs the left column -- the search box belongs to
+  // Classification, not to the start screen, so the welcome screen gets the full width like
+  // the Calculator and Budget do.
+  function viewHasTree() {
+    if (state.view === "browse") {
+      return state.classifyOpen || state.guidanceOpen || state.guidanceHub;
+    }
+    return (
+      state.view === "art5" ||
+      state.view === "grouping" ||
+      state.view === "precisescope" ||
+      state.view === "qa"
+    );
+  }
+
+  // Switches the right-hand column between the entry detail, the Summary and the other tool
+  // panels, and decides whether the browse column (search + chapter/section/subsection
+  // accordion) is on screen at all -- it only is in the views that actually use the tree.
   function switchViewVisibility() {
     if (window.VCL_USAGE) window.VCL_USAGE.track(usageToolForView(), "start");
     const isSummary = state.view === "summary";
@@ -256,6 +283,17 @@
     if (el.workflowCol) el.workflowCol.classList.toggle("hidden", !isWorkflow);
     if (el.budgetCol) el.budgetCol.classList.toggle("hidden", !isBudget);
     if (el.calculatorCol) el.calculatorCol.classList.toggle("hidden", !isCalculator);
+
+    // The left column exists only for the Classification/Guidance tree, so it is hidden in the
+    // views that never use it (calculator, workflow, budget, timetables, summary). data-tree on
+    // the .layout grid lets the CSS drop the 300px track and give the detail area the full width.
+    const showTree = viewHasTree() && !state.treeCollapsed;
+    if (el.browseCol) {
+      el.browseCol.classList.toggle("hidden", !showTree);
+      if (el.browseCol.parentElement) {
+        el.browseCol.parentElement.setAttribute("data-tree", showTree ? "on" : "off");
+      }
+    }
   }
 
   function normalize(s) {
@@ -512,6 +550,8 @@
             state.query = "";
             el.search.value = "";
             renderBrowse();
+            renderToolBar();
+            renderTreeToggle();
             renderDetail();
             el.detailCol.scrollTop = 0;
             // Lift the page to the masthead like the chapter/section rows do, so the opened
@@ -560,6 +600,8 @@
       el.search.value = "";
       state.view = "browse";
       renderBrowse();
+      renderToolBar();
+      renderTreeToggle();
       switchViewVisibility();
       renderDetail();
       el.detailCol.scrollTop = 0;
@@ -617,6 +659,8 @@
       el.search.value = "";
       state.view = "browse";
       renderBrowse();
+      renderToolBar();
+      renderTreeToggle();
       switchViewVisibility();
       renderDetail();
       el.detailCol.scrollTop = 0;
@@ -861,6 +905,8 @@
     if (!openEntryByCode(code, variantId)) return;
     state.guidanceReturn = { view: returnView, scrollY: scrollY };
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     switchViewVisibility();
     renderDetail();
     jumpToTop();
@@ -902,6 +948,8 @@
     else if (ret.view === "qa") renderQA();
     else renderGrouping();
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     switchViewVisibility();
     window.scrollTo({ top: ret.scrollY || 0 });
   }
@@ -2116,90 +2164,127 @@
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  // Rebuilds the entire browse column: pinned Summary card, then the Classification card
-  // (which expands into the chapter/section/subsection accordion, or the flat global search
-  // results, while open), then the Grouping and Timetables cards. Only Classification ever
-  // expands inline -- clicking Summary/Grouping/Timetables collapses it back down.
+  // Horizontal tool bar under the masthead (#vcl-toolBar). A second entry point to the same
+  // six destinations as the left-column tiles -- every button delegates to goToDestination(),
+  // which already owns the state reset, re-render and scroll. Re-rendered wherever
+  // renderBrowse() is, so the active state stays in sync.
+  function renderToolBar() {
+    if (!el.toolBar) return;
+
+    const items = [];
+    // Same condition as the left column's calculator tile: only offered when the embedded
+    // calculator column is actually present on the page.
+    if (el.calculatorCol) {
+      items.push({
+        label: "Variation Fee Calculator", meta: "€ Fees", dest: "calculator",
+        // Gold, not the toolbox teal: the Fee Calculator carries its own gold identity when
+        // embedded here (see the --accent override in vcl-calc-style.css and the .tab--calc
+        // rules in vcl-workload-style.css). These are that tile's own two values, verbatim.
+        tc: "#8F6E2E", tbg: "#F5EEDD", tcText: "#5F4A1E",
+        active: state.view === "calculator",
+      });
+    }
+    items.push({
+      label: "Guided Workflow", meta: "Step by step", dest: "workflow",
+      tc: "var(--workflow)", tbg: "var(--workflow-bg)",
+      active: state.view === "workflow",
+    });
+    items.push({
+      label: "Classification", meta: "E Q C M Art.5", dest: "classification",
+      tc: "var(--classify)", tbg: "var(--classify-bg)",
+      // The Guidance hub shares state.view === "browse" with Classification (see
+      // goToDestination), so "browse" alone is ambiguous -- the guidance flags decide which of
+      // the two owns the highlight. The left-column tiles never had to tell them apart, because
+      // their open branch already showed where you were.
+      // Requires the branch to actually be open, not merely state.view === "browse": the welcome
+      // screen runs under that same view, so testing the view alone lit Classification up while
+      // the user was still on the start screen with nothing chosen at all.
+      active: (state.view === "browse" && state.classifyOpen) || state.view === "art5",
+    });
+    items.push({
+      label: "Guidance", meta: "Q&A", dest: "guidance",
+      tc: "var(--group)", tbg: "var(--group-bg)",
+      active: state.view === "grouping" || state.view === "precisescope" || state.view === "qa" ||
+        ((state.view === "browse" || state.view === "art5") && (state.guidanceOpen || state.guidanceHub)),
+    });
+    items.push({
+      label: "Timetables", meta: "Timelines", dest: "timetables",
+      tc: "var(--slate)", tbg: "var(--slate-bg)",
+      active: state.view === "timetables",
+    });
+    items.push({
+      label: "Budget Planning", meta: "Portfolio", dest: "budget",
+      tc: "var(--budget)", tbg: "var(--budget-bg)",
+      active: state.view === "budget",
+    });
+
+    el.toolBar.innerHTML = "";
+    items.forEach((item) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tool-bar__btn";
+      btn.style.setProperty("--tc", item.tc);
+      btn.style.setProperty("--tbg", item.tbg);
+      if (item.tcText) btn.style.setProperty("--tc-text", item.tcText);
+      btn.setAttribute("aria-current", item.active ? "true" : "false");
+      const name = document.createElement("span");
+      name.className = "tool-bar__name";
+      name.textContent = item.label;
+      const meta = document.createElement("span");
+      meta.className = "tool-bar__meta";
+      meta.textContent = item.meta;
+      btn.appendChild(name);
+      btn.appendChild(meta);
+      btn.addEventListener("click", () => goToDestination(item.dest));
+      el.toolBar.appendChild(btn);
+    });
+  }
+
+  // Collapse/expand button for the left tree. It lives in its own row (#vcl-treeToggleRow)
+  // between the tool bar and the layout grid -- deliberately not inside any of the detail
+  // containers, which belong to the individual tool renderers. Rendered only in the views that
+  // actually have a tree (viewHasTree), so the row stays empty -- and, via :empty, invisible --
+  // everywhere else.
+  function renderTreeToggle() {
+    if (!el.treeToggleRow) return;
+    el.treeToggleRow.innerHTML = "";
+    if (!viewHasTree()) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tree-toggle";
+    btn.setAttribute("aria-expanded", state.treeCollapsed ? "false" : "true");
+    btn.setAttribute("aria-controls", "vcl-browseCol");
+    // Static markup, no interpolated data: the chevron points left and is flipped by CSS via
+    // the aria-expanded attribute, so the icon state never has to be tracked in JS.
+    btn.innerHTML =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>';
+    const label = document.createElement("span");
+    // English, like every other control in this app ("How to use", "Summary", "Start") -- the
+    // German wording came from the design mockup, not from the product.
+    label.textContent = state.treeCollapsed ? "Show list" : "Hide list";
+    btn.appendChild(label);
+    btn.addEventListener("click", () => {
+      state.treeCollapsed = !state.treeCollapsed;
+      switchViewVisibility();
+      renderTreeToggle();
+    });
+    el.treeToggleRow.appendChild(btn);
+  }
+
+  // Rebuilds the browse column, which now holds only the Classification/Guidance tree: while
+  // state.classifyOpen is set, the chapter/section/subsection accordion plus the Art. 5 row;
+  // while state.guidanceOpen is set, the guidance document rows. The six tool tiles that used
+  // to live here moved into the horizontal tool bar (renderToolBar); the Summary moved into
+  // the masthead pill, which this function keeps in sync.
   function renderBrowse() {
     el.browseTree.innerHTML = "";
     visibleEntries = [];
 
-    // Fee Calculator -- pinned "hero" nav at the very top (the most important destination),
-    // above everything else. Opens the embedded calculator copy in the detail area. Only shown
-    // when the calculator column is actually present on the page.
-    if (el.calculatorCol) {
-      const calcBtn = document.createElement("button");
-      calcBtn.type = "button";
-      calcBtn.className = "tab tab--calc" + (state.view === "calculator" ? " tab--active" : "");
-      calcBtn.innerHTML = `
-        <span class="tab--calc__row">
-          <span class="tab--calc__euro">&euro;</span>
-          <span class="tab__code">Variation Fee Calculator</span>
-          <span class="tab--calc__chip">&euro; Fees</span>
-        </span>
-        <span class="tab__title">The classic calculator for variation fees.</span>
-      `;
-      calcBtn.addEventListener("click", () => {
-        state.view = "calculator";
-        state.classifyOpen = false;
-        state.guidanceOpen = false;
-        renderBrowse();
-        switchViewVisibility();
-        fillCalcHead();
-        jumpToTop();
-      });
-      el.browseTree.appendChild(calcBtn);
-    }
-
-    // Guided Workflow -- promoted to the #2 slot, right below the Fee Calculator: the two action
-    // tools sit at the top, above the reference views. Self-contained (window.VCL_WORKFLOW).
-    const workflowBtn = document.createElement("button");
-    workflowBtn.type = "button";
-    workflowBtn.className = "tab" + (state.view === "workflow" ? " tab--active" : "");
-    workflowBtn.style.setProperty("--accent", "var(--workflow)");
-    workflowBtn.style.setProperty("--tint", "var(--workflow-tint)");
-    workflowBtn.style.setProperty("--tab-bg", "var(--workflow-bg)");
-    workflowBtn.innerHTML = `
-      <span class="tab__code">Guided Workflow</span>
-      <span class="tab__title">Step by step from classification, through the calculation of RA hours to fees.</span>
-    `;
-    workflowBtn.addEventListener("click", () => {
-      state.view = "workflow";
-      state.classifyOpen = false;
-      state.guidanceOpen = false;
-      renderBrowse();
-      switchViewVisibility();
-      if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol);
-      jumpToTop();
-    });
-    el.browseTree.appendChild(workflowBtn);
-
     // The Summary now lives as a pill in the masthead (el.summaryHeaderBtn), not as a nav tile
     // here -- so it stays visible instead of getting lost among the tool tiles. Keep it in sync.
     updateSummaryHeaderBtn();
-
-    const classifyBtn = document.createElement("button");
-    classifyBtn.type = "button";
-    classifyBtn.className = "tab" + (state.view === "browse" || state.view === "art5" ? " tab--active" : "");
-    classifyBtn.style.setProperty("--accent", "var(--classify)");
-    classifyBtn.style.setProperty("--tint", "var(--classify-tint)");
-    classifyBtn.style.setProperty("--tab-bg", "var(--classify-bg)");
-    classifyBtn.innerHTML = `
-      <span class="tab__code">Classification of Variations</span>
-      <span class="tab__title">Browse the Classification Guideline by chapter E, Q, C, M, Art. 5.</span>
-    `;
-    classifyBtn.addEventListener("click", () => {
-      state.classifyOpen = !state.classifyOpen;
-      state.guidanceOpen = false;
-      state.guidanceHub = false;
-      state.view = "browse";
-      renderBrowse();
-      switchViewVisibility();
-      renderDetail();
-      el.detailCol.scrollTop = 0;
-      jumpToTop();
-    });
-    el.browseTree.appendChild(classifyBtn);
 
     const q = normalize(state.query);
     if (state.classifyOpen) {
@@ -2235,6 +2320,8 @@
           state.activeSection = null;
           state.guidanceOpen = false;
           renderBrowse();
+          renderToolBar();
+          renderTreeToggle();
           switchViewVisibility();
           renderArt5();
           jumpToTop();
@@ -2256,31 +2343,6 @@
       }
     }
 
-    const guidanceBtn = document.createElement("button");
-    guidanceBtn.type = "button";
-    guidanceBtn.className =
-      "tab" + (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" ? " tab--active" : "");
-    guidanceBtn.style.setProperty("--accent", "var(--group)");
-    guidanceBtn.style.setProperty("--tint", "var(--group-tint)");
-    guidanceBtn.style.setProperty("--tab-bg", "var(--group-bg)");
-    guidanceBtn.innerHTML = `
-      <span class="tab__code">Guidance on Variations</span>
-      <span class="tab__title">Procedural guidance and Q&amp;A on variations.</span>
-    `;
-    guidanceBtn.addEventListener("click", () => {
-      state.guidanceOpen = !state.guidanceOpen;
-      state.classifyOpen = false;
-      // Like the Classification button: opening the branch also shows its overview in the
-      // detail area (the three documents as cards); closing falls back to the welcome overview.
-      state.guidanceHub = state.guidanceOpen;
-      state.view = "browse";
-      renderBrowse();
-      switchViewVisibility();
-      renderDetail();
-      jumpToTop();
-    });
-    el.browseTree.appendChild(guidanceBtn);
-
     // Sub-nav: same flat-card language as the Classification chapter rows (see
     // renderChapterBranch), just in the Guidance branch's own ("--group") color. Each row is a
     // separate guidance document; more will join this list over time.
@@ -2299,6 +2361,8 @@
           state.classifyOpen = false;
           state.guidanceHub = false;
           renderBrowse();
+          renderToolBar();
+          renderTreeToggle();
           switchViewVisibility();
           // Its two siblings are static and rendered once at init; this one carries state
           // (open chapter/question, filter, deleted toggle) and so repaints on entry.
@@ -2312,50 +2376,6 @@
       guidanceRow(PRECISE_SCOPE_GUIDANCE.title, "precisescope");
       if (QA_DATA) guidanceRow("Q&A on Variations", "qa");
     }
-
-    const timetablesBtn = document.createElement("button");
-    timetablesBtn.type = "button";
-    timetablesBtn.className = "tab" + (state.view === "timetables" ? " tab--active" : "");
-    timetablesBtn.style.setProperty("--accent", "var(--slate)");
-    timetablesBtn.style.setProperty("--tint", "var(--slate-tint)");
-    timetablesBtn.style.setProperty("--tab-bg", "var(--slate-bg)");
-    timetablesBtn.innerHTML = `
-      <span class="tab__code">Timetables for Variations</span>
-      <span class="tab__title">A visual representation of the timelines of variations.</span>
-    `;
-    timetablesBtn.addEventListener("click", () => {
-      state.view = "timetables";
-      state.classifyOpen = false;
-      state.guidanceOpen = false;
-      renderBrowse();
-      switchViewVisibility();
-      renderTimetables();
-      jumpToTop();
-    });
-    el.browseTree.appendChild(timetablesBtn);
-
-    // Budget Planning sits at the very bottom of the nav (below the reference views), per the
-    // user's layout preference.
-    const budgetBtn = document.createElement("button");
-    budgetBtn.type = "button";
-    budgetBtn.className = "tab" + (state.view === "budget" ? " tab--active" : "");
-    budgetBtn.style.setProperty("--accent", "var(--budget)");
-    budgetBtn.style.setProperty("--tint", "var(--budget-tint)");
-    budgetBtn.style.setProperty("--tab-bg", "var(--budget-bg)");
-    budgetBtn.innerHTML = `
-      <span class="tab__code">Budget Planning</span>
-      <span class="tab__title">Plan next year's fees and RA effort across your portfolio.</span>
-    `;
-    budgetBtn.addEventListener("click", () => {
-      state.view = "budget";
-      state.classifyOpen = false;
-      state.guidanceOpen = false;
-      renderBrowse();
-      switchViewVisibility();
-      if (window.VCL_BUDGET) window.VCL_BUDGET.render(el.budgetCol);
-      jumpToTop();
-    });
-    el.browseTree.appendChild(budgetBtn);
   }
 
   function conditionKey(entryCode, variantId) {
@@ -2402,6 +2422,8 @@
     saveSelections();
     renderSelectionBar();
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
   }
 
   function totalSelectedQty() {
@@ -2425,6 +2447,8 @@
     state.classifyOpen = false;
     state.guidanceOpen = false;
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     switchViewVisibility();
     renderSummary();
     jumpToTop();
@@ -2468,6 +2492,8 @@
     renderSelectionBar();
     renderDetail();
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
   }
 
   function escapeAttr(s) {
@@ -2561,12 +2587,16 @@
     renderSelectionBar();
     renderDetail();
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     if (state.view === "summary") renderSummary();
   });
 
   el.selectionViewSummary.addEventListener("click", () => {
     state.view = "summary";
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     switchViewVisibility();
     renderSummary();
     jumpToTop();
@@ -2592,6 +2622,8 @@
       renderSelectionBar();
       renderDetail();
       renderBrowse();
+      renderToolBar();
+      renderTreeToggle();
       renderSummary();
     });
   }
@@ -2906,7 +2938,6 @@
           <div class="summary-item${isExpanded ? " is-open" : ""}">
             <div class="summary-item__row">
               <button class="summary-item__head" type="button" data-toggle-line="${lineKey}">
-                <span class="summary-item__chevron">${isExpanded ? "▾" : "▸"}</span>
                 <span class="summary-item__num">${idx + 1}.</span>
                 <span class="mono summary-item__code">${labelInfo.code}</span>
                 <span class="summary-item__dash">—</span>
@@ -3215,6 +3246,8 @@
         state.forcedClosedHeadings.clear();
         state.activeVariant = null;
         renderBrowse();
+        renderToolBar();
+        renderTreeToggle();
         renderDetail();
         el.detailCol.scrollTop = 0;
       });
@@ -3345,6 +3378,8 @@
           state.activeChapter = null;
           state.activeSection = null;
           renderBrowse();
+          renderToolBar();
+          renderTreeToggle();
           switchViewVisibility();
           renderArt5();
           jumpToTop();
@@ -3367,6 +3402,8 @@
         }
         state.activeVariant = null;
         renderBrowse();
+        renderToolBar();
+        renderTreeToggle();
         renderDetail();
         el.detailCol.scrollTop = 0;
       });
@@ -3387,6 +3424,7 @@
     state.guidanceReturn = null; // explicit nav supersedes any pending "back to guidance" context
     state.classifyOpen = false;
     state.guidanceOpen = false;
+    state.treeCollapsed = false;
     state.guidanceHub = dest === "guidance";
     if (dest === "calculator") state.view = "calculator";
     else if (dest === "classification") { state.view = "browse"; state.classifyOpen = true; }
@@ -3399,6 +3437,8 @@
     else if (dest === "budget") state.view = "budget";
     else state.view = "browse";
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     switchViewVisibility();
     if (dest === "timetables") renderTimetables();
     else if (dest === "qa") renderQA();
@@ -3432,21 +3472,27 @@
     { dest: "timetables", label: "Timetables for Variations", color: "var(--slate)", desc: "A visual representation of the timelines of variations." },
   ];
   function overviewHtml() {
-    const cards = OVERVIEW_DESTINATIONS.map((d) => `
-      <button type="button" class="guide-overview__card" data-dest="${d.dest}" style="--card-accent: ${d.color}">
-        <span class="guide-overview__title"><span class="guide-overview__dot"></span>${d.label}</span>
-        <span class="guide-overview__desc">${d.desc}</span>
+    // Rows, not cards: the tool bar above already names every destination, and two grids of the
+    // same six things read as a repetition. A quiet list carries the full descriptions -- which
+    // live nowhere else, since the bar had no room for them -- without competing with the bar.
+    const rows = OVERVIEW_DESTINATIONS.map((d) => `
+      <button type="button" class="guide-row" data-dest="${d.dest}" style="--card-accent: ${d.color}">
+        <span class="guide-row__dot"></span>
+        <span class="guide-row__name">${d.label}</span>
+        <span class="guide-row__desc">${d.desc}</span>
       </button>`).join("");
     return `
       <div class="guide-overview">
         <h3 class="guide-overview__heading">Welcome to the Variation Toolbox</h3>
-        <p class="guide-overview__intro">Search a variation in the box on the left to classify it &mdash; or pick a tool below. Everything for variation applications in one place.</p>
-        <div class="guide-overview__grid">${cards}</div>
+        <p class="guide-overview__intro">Everything for variation applications in one place.</p>
         ${homeSelectionPreviewHtml()}
+        <div class="guide-rows">${rows}</div>
       </div>`;
   }
   function wireOverviewCards(container) {
-    container.querySelectorAll(".guide-overview__card[data-dest]").forEach((btn) => {
+    // Two shapes share this wiring: the start screen's tool rows and the Guidance hub, which
+    // still uses the original card. Both carry data-dest and behave identically on click.
+    container.querySelectorAll(".guide-row[data-dest], .guide-overview__card[data-dest]").forEach((btn) => {
       btn.addEventListener("click", () => goToDestination(btn.getAttribute("data-dest")));
     });
     wireHomeSelectionPreview(container);
@@ -3458,7 +3504,33 @@
   // view's job. "Expand all" and clicking a row both jump into the full Summary, expanded.
   function homeSelectionPreviewHtml() {
     const items = buildSummaryLineItems();
-    if (items.length === 0) return "";
+    // Empty is not "absent": the box keeps its place and says where variations come from, so
+    // nothing below it shifts once the first one is picked, and a first-time visitor is not left
+    // guessing. Clear all / Expand all are omitted here -- they would have nothing to act on.
+    if (items.length === 0) {
+      return `
+        <div class="sel-full sel-full--empty" id="vcl-homeSelectionPreview">
+          <div class="sel-full__head">
+            <div class="sel-full__head-top">
+              <div>
+                <p class="sel-full__title">Summary of Variations</p>
+                <p class="sel-full__count">Nothing selected yet</p>
+              </div>
+            </div>
+          </div>
+          <div class="sel-full__empty">
+            <p class="sel-full__empty-title">No variations selected yet</p>
+            <p class="sel-full__empty-text">
+              Start in <strong>Classification of Variations</strong>: look up the changes you are
+              filing and add them. Everything you pick collects here, ready to hand over to the
+              Fee Calculator, the Guided Workflow or Budget Planning.
+            </p>
+            <button type="button" class="sel-full__empty-go" id="vcl-homePreviewToClassification">
+              <span class="sel-full__empty-dot"></span>Open Classification of Variations
+            </button>
+          </div>
+        </div>`;
+    }
     const rows = items
       .map((item) => {
         const eff = effectiveVariantType(item.entry, item.variant);
@@ -3494,12 +3566,22 @@
   function wireHomeSelectionPreview(container) {
     const preview = container.querySelector("#vcl-homeSelectionPreview");
     if (!preview) return;
+
+    // Empty state: the one button it carries leads to where variations are picked. Nothing else
+    // in this box is interactive while it is empty, so we are done here.
+    const toClassification = preview.querySelector("#vcl-homePreviewToClassification");
+    if (toClassification) {
+      toClassification.addEventListener("click", () => goToDestination("classification"));
+      return;
+    }
     const openFullSummary = () => {
       buildSummaryLineItems().forEach((item) => state.summaryExpandedUnits.add(unitLineKey(item.key, item.unitIndex)));
       state.view = "summary";
       state.classifyOpen = false;
       state.guidanceOpen = false;
       renderBrowse();
+      renderToolBar();
+      renderTreeToggle();
       switchViewVisibility();
       renderSummary();
       jumpToTop();
@@ -3519,6 +3601,8 @@
         saveSelections();
         renderSelectionBar();
         renderBrowse();
+        renderToolBar();
+        renderTreeToggle();
         renderDetail();
       });
     }
@@ -3711,6 +3795,8 @@
       switchViewVisibility();
     }
     renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
     renderDetail();
   });
 
@@ -3798,6 +3884,8 @@
   openEntryFromUrl();
   fillContactSlots();
   renderBrowse();
+  renderToolBar();
+  renderTreeToggle();
   switchViewVisibility();
   renderDetail();
   renderSelectionBar();

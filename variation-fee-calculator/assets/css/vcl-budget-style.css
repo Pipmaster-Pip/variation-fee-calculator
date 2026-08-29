@@ -96,6 +96,12 @@
 .vcl-app table.vcl-bud-table th,
 .vcl-app table.vcl-bud-table tbody tr.vcl-bud-line-row > td,
 .vcl-app table.vcl-bud-table tbody tr.vcl-bud-annual-row > td { border-bottom: 0; }
+/* Same theme leak one edge further up, and the one that was missed: the WP border-top on <th>
+   stacks on the wrapper's own 1px top border and is darker than it (rgba(0,0,0,.15) against
+   --border), so the table opened on a line visibly heavier than the one it closed on. Only the
+   header row is zeroed -- <td> keeps its border-top, which is what separates the data rows, and
+   tfoot keeps its deliberate 2px rule above the Total row. */
+.vcl-app table.vcl-bud-table th { border-top: 0; }
 /* WP themes also give <table> a bottom margin; inside the rounded wrapper that opens a gap below
    the Total row before the rounded corner. Zero it so the footer fill reaches the rounding. */
 .vcl-app .vcl-bud-table-wrap table.vcl-bud-table { margin: 0; }

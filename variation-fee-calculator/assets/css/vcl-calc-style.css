@@ -753,7 +753,11 @@
 
 /* ---- Step 1: country chips ---- */
 .vclcalc-app .country-search{ border-radius:8px; }
-.vclcalc-app .country-grid{ grid-template-columns:repeat(auto-fill, minmax(112px,1fr)); gap:6px; }
+/* 132px, not 112px: "United Kingdom" was the one country name that wrapped to a second line,
+   and because grid rows are equal-height that made its whole row taller than the others. The
+   wider track fits the longest name on one line instead of padding every tile to two. Room for
+   it exists since the toolbox nav moved to the top -- the calculator now gets the full shell. */
+.vclcalc-app .country-grid{ grid-template-columns:repeat(auto-fill, minmax(132px,1fr)); gap:6px; }
 .vclcalc-app .country-tile{ border:1px solid var(--line-strong); border-radius:8px; padding:7px 10px; background:var(--panel); }
 .vclcalc-app .country-tile:hover{ border-color:var(--accent); background:var(--panel); }
 .vclcalc-app .country-tile.selected{ border-color:var(--accent); background:var(--accent-soft); box-shadow:none; }
@@ -1011,4 +1015,43 @@
 @media print{
   .vclcalc-app .vres-curtoggle{ display:none; }
   .vclcalc-app .vres-subrow.vres-hidden{ display:table-row !important; }
+}
+
+/* ---- Step 2: one strengths default for every country ----------------------
+   A 20-country procedure meant 20 separate steppers; this bar sets them all at once.
+   Countries the user gave their own number keep it and are marked, so the two groups
+   stay tellable apart at a glance. Colours are the calculator's own gold tokens. */
+.vclcalc-app .strength-default{
+  background:var(--accent-soft);
+  border:1px solid var(--accent);
+  border-radius:8px;
+  padding:14px 16px;
+  margin-bottom:16px;
+}
+.vclcalc-app .strength-default__head{
+  font-size:13px; font-weight:600; color:var(--accent-deep); margin-bottom:4px;
+}
+.vclcalc-app .strength-default__sub{
+  font-size:12px; color:var(--ink-soft); margin:0 0 12px;
+}
+.vclcalc-app .strength-default__row{
+  display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;
+}
+.vclcalc-app .strength-default__reset{
+  margin-left:auto;
+  font-family:var(--sans); font-size:12px; font-weight:500;
+  padding:7px 12px; border-radius:var(--radius); cursor:pointer;
+  color:var(--accent-deep); background:var(--panel); border:1px solid var(--accent);
+}
+.vclcalc-app .strength-default__reset:hover:not(:disabled){ background:var(--accent); color:var(--panel); }
+.vclcalc-app .strength-default__reset:disabled{
+  opacity:.45; cursor:default; color:var(--ink-faint); border-color:var(--line-strong);
+}
+.vclcalc-app .strength-default__note{
+  font-size:12px; color:var(--ink-soft); margin:12px 0 0; min-height:1.4em;
+}
+/* Wins over the neutral .row-card.active further up by carrying one class more. */
+.vclcalc-app .row-card.has-own-strengths,
+.vclcalc-app .row-card.active.has-own-strengths{
+  border-color:var(--accent); background:var(--accent-soft);
 }

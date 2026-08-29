@@ -1,0 +1,22 @@
+{
+  "captured": "2026-08-29",
+  "source": "http://192.168.178.43/wordpress/ra-toolbox/variations-reference-guide/",
+  "gitTag": "anchor-before-nav-top",
+  "commit": "2cb55dc",
+  "version": "1.3.11",
+  "viewport": "1600x1000",
+  "shellWidth": 1224,
+  "note": "textHash is layout-independent (identical at 415px and 1600px), so it detects content changes only. navW=300 in EVERY view confirms the dead-column problem. styleHash covers colour/background/font-family/size/weight of the first element per tag+class.",
+  "views": [
+    {"view":"calculator",   "txt":"16b45716","len":1290,"mainW":896,"navW":300,"els":186,"sty":"84777910"},
+    {"view":"workflow",     "txt":"8522b7c2","len":856, "mainW":896,"navW":300,"els":113,"sty":"d485704c"},
+    {"view":"classification","txt":"2c78d7d2","len":594,"mainW":896,"navW":300,"els":110,"sty":"e9ecc932"},
+    {"view":"guidance",     "txt":"cb49f66a","len":310, "mainW":896,"navW":300,"els":71, "sty":"7d7c6106"},
+    {"view":"grouping",     "txt":"25dc4a50","len":1455,"mainW":896,"navW":300,"els":77, "sty":"dae83e99"},
+    {"view":"precisescope", "txt":"133c00dd","len":2513,"mainW":896,"navW":300,"els":97, "sty":"4e278f8b"},
+    {"view":"qa",           "txt":"f45e1c19","len":1352,"mainW":896,"navW":300,"els":105,"sty":"90234a10"},
+    {"view":"timetables",   "txt":"ca75eaac","len":1855,"mainW":896,"navW":300,"els":128,"sty":"2c36f56f"},
+    {"view":"budget",       "txt":"0bb2d68b","len":917, "mainW":896,"navW":300,"els":167,"sty":"9599f626"},
+    {"view":"summary",      "txt":"c8ec4230","len":469, "mainW":896,"navW":300,"els":64, "sty":"049c71fc"}
+  ]
+}

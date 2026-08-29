@@ -412,6 +412,9 @@ function vcl_shortcode( $atts ) {
 	  </p>
 	</header>
 
+	<nav class="tool-bar" id="vcl-toolBar" aria-label="Tools"></nav>
+	<div class="tree-toggle-row" id="vcl-treeToggleRow"></div>
+
 	<div class="layout">
 	  <div class="browse-col" id="vcl-browseCol">
 	    <div class="search-box">
