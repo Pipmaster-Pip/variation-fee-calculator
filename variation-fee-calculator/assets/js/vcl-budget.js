@@ -893,7 +893,7 @@
     var head = el("div", "vcl-bud-table-head");
     head.appendChild(el("h3", null, 'Plan lines — Annual maintenance fees <span class="vcl-bud-year">for ' + escapeHtml(planYearLabel()) + "</span>"));
     var addWrap = el("div", "vcl-bud-annual__addwrap");
-    var addBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "+ Add product");
+    var addBtn = el("button", "vcl-bud-btn", "+ Add product");
     addBtn.type = "button";
     addBtn.dataset.act = "add-annual";
     addWrap.appendChild(addBtn);
@@ -1846,19 +1846,13 @@
     normalizeModeEnablement(sub);
     var wrap = el("div", "vcl-bud-editor");
 
-    // Header: a "Budget Planning for <year>" kicker (so the tool identity never disappears while a
-    // line is being edited -- the editor is a full takeover of the dashboard) above the New/Edit
-    // line title, and a ✕ that cancels back to the dashboard (discarding the draft copy).
+    // Header names the editor directly ("New/Edit Variation Plan Line") -- no separate kicker line
+    // and no repeat of the dashboard's "Budget Planning" identity/reference, since the overlay
+    // already reads as part of the Budget tool. Just the title and a ✕ back to the dashboard
+    // (discarding the draft copy).
     var head = el("div", "vcl-bud-editor__head");
     var titleWrap = el("div");
-    // Header year tracks the line's own Year field so the kicker names the year being planned; the
-    // year select's change handler rerenders, so this heading updates live as the user picks a year.
-    var editorYear = d.year || (new Date().getFullYear() + 1);
-    // Same heading as the dashboard/result ("Budget Planning for <year>") so the editor reads as the
-    // exact same tool. The New/Edit context is NOT shown here (the header carries only the always-same
-    // identity + reference); it becomes a kicker under the header divider, above the stepper (below).
-    titleWrap.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + editorYear + "</span>"));
-    appendCalcRefLines(titleWrap, { skipUpdated: true });
+    titleWrap.appendChild(el("h2", null, (modalState.editingId ? "Edit" : "New") + " Variation Plan Line"));
     head.appendChild(titleWrap);
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
@@ -1866,10 +1860,6 @@
     closeBtn.addEventListener("click", requestOverlayClose);
     head.appendChild(closeBtn);
     wrap.appendChild(head);
-
-    // New/Edit context as a small kicker below the header divider, directly above the A·B·C stepper
-    // (the header itself stays identical across every line, so this is where "which line" belongs).
-    wrap.appendChild(el("p", "vcl-bud-editor__kicker", (modalState.editingId ? "Edit" : "New") + " plan line"));
 
     // Product identity (name / strengths / year / quarter / probability) now lives IN Station A
     // (renderStationProduct), not in a persistent meta row -- so stations B–D read as focused steps.

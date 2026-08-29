@@ -67,7 +67,11 @@
 .vcl-app .vcl-bud-bdbar > span { display: block; height: 100%; background: var(--budget); border-radius: 4px; }
 .vcl-app .vcl-bud-bdval { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 
-.vcl-app .vcl-bud-table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* align-items: flex-end (not center) -- the annual table's head also carries the "+ Add product"
+   button + hint line, which is taller than the plain h3. Centering would float the h3 above that
+   taller block and widen the visual gap to the table below it; anchoring both to the bottom keeps
+   the gap the same as the plain Variations table head. */
+.vcl-app .vcl-bud-table-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 10px; }
 .vcl-app .vcl-bud-table-head h3 { font-size: 15px; margin: 0; font-weight: 600; font-family: "Source Serif 4", serif; }
 .vcl-app .vcl-bud-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
 /* The tool lives in a `.layout` grid ("300px 1fr": browse-col + content-col). A grid item defaults
@@ -86,7 +90,10 @@
 /* WP themes ALSO add a dark border-bottom to every cell, on top of our own border-top row rule --
    in a tall row (e.g. the actions column, icons at the top) that bottom rule reads as a stray
    horizontal line floating below the icons. Drop it on data rows; the border-top rule is the single
-   clean separator (the detail row keeps its own explicit rules via a more specific selector). */
+   clean separator (the detail row keeps its own explicit rules via a more specific selector). The
+   header row needs the same treatment -- otherwise its WP-added border-bottom stacks with the first
+   data row's border-top, making that one line read thicker than every other row separator. */
+.vcl-app table.vcl-bud-table th,
 .vcl-app table.vcl-bud-table tbody tr.vcl-bud-line-row > td,
 .vcl-app table.vcl-bud-table tbody tr.vcl-bud-annual-row > td { border-bottom: 0; }
 /* WP themes also give <table> a bottom margin; inside the rounded wrapper that opens a gap below
