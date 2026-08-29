@@ -92,6 +92,12 @@
   background: var(--paper);
   color: var(--ink);
   font-family: "Libre Franklin", -apple-system, sans-serif;
+  /* The theme's page background is plain white, and --paper is only four steps off it, so
+     without an outline the card had no top edge at all -- the soft shadow alone never closed
+     it. A hairline in a faintly warm grey sets the card down on the page; it is deliberately
+     one step darker than our own --border (#DDE2E9) so the outer edge stays legible against
+     white while the inner panel borders keep their lighter weight. */
+  border: 1px solid #D6D1DE;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(20, 30, 48, 0.05), 0 6px 20px rgba(20, 30, 48, 0.06);
