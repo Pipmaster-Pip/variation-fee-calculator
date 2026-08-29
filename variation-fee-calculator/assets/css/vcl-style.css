@@ -2270,10 +2270,10 @@
 }
 
 .vcl-app .summary-item {
-  /* Steel-Blue identity card, matching the Classification detail header (.entry-summary) so a
-     selected variation reads the same in both views. The header row is the blue band; the
+  /* Plum identity card, matching the home-screen selection preview (.sel-full, --plum) so a
+     selected variation reads in the Summary's own colour. The header row is the plum band; the
      expanded body (white, below) shares the same rounded card via overflow:hidden. */
-  border: 1.5px solid var(--classify);
+  border: 1.5px solid var(--plum);
   border-radius: 8px;
   background: var(--panel);
   margin-bottom: 10px;
@@ -2285,18 +2285,18 @@
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: var(--classify-bg);
+  background: var(--plum-bg);
 }
 .vcl-app .summary-item__row:hover { filter: brightness(1.02); }
 
 .vcl-app .summary-item__chevron {
   font-size: 10px;
-  color: var(--classify);
+  color: var(--plum);
   flex-shrink: 0;
   width: 10px;
 }
 
-.vcl-app .summary-item__dash { color: var(--classify); opacity: 0.5; flex-shrink: 0; }
+.vcl-app .summary-item__dash { color: var(--plum); opacity: 0.5; flex-shrink: 0; }
 
 .vcl-app .summary-item__head {
   display: flex;
@@ -2316,7 +2316,7 @@
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
   font-weight: 700;
-  color: var(--classify);
+  color: var(--plum);
   opacity: 0.7;
   flex-shrink: 0;
 }
@@ -2324,7 +2324,7 @@
 .vcl-app .summary-item__code {
   font-size: 13px;
   font-weight: 700;
-  color: var(--classify);
+  color: var(--plum);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -2357,7 +2357,7 @@
 
 .vcl-app .summary-item__subtitle {
   font-size: 11.5px;
-  color: var(--classify);
+  color: var(--plum);
   opacity: 0.85;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2379,7 +2379,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--classify);
+  color: var(--plum);
   font-size: 18px;
   line-height: 1;
   padding: 2px 4px;

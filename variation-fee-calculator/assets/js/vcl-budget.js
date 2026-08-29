@@ -145,6 +145,17 @@
   // { editingId, draft, station:"A"|"B", reached:{A,B}, collision:<id>|null }.
   var annualEditor = null;
 
+  // Editor overlay: a single persistent layer (created lazily, parented to the tool's own .vcl-app
+  // so its .vcl-app-scoped styles apply and it survives the container.innerHTML wipe on every
+  // rerender). overlayShown tracks whether it's currently on screen, so the soft entrance plays only
+  // on open -- not on the in-place rebuilds that happen while a line is being edited.
+  var overlayHost = null;
+  var overlayShown = false;
+
+  function prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
   // Per-line result cache, keyed by line id, kept current by the mutation points below
   // (applyModal/duplicateLine/deleteLine) rather than rebuilt wholesale on every render -- see
   // spec's "Very large plans (50+ lines)" edge case. This is the only "recompute everything"
@@ -172,10 +183,128 @@
   // After navigating to a new station (or back to the results) the viewport is still scrolled down at
   // the Next/finish button; bring the top of the tool back into view so the user starts at the top.
   function scrollToTop() {
+    // While the overlay is open, "top" means the top of the overlay's own scroll area (the card),
+    // not the page behind it.
+    if (overlayShown && overlayHost) { overlayHost.scrollTop = 0; return; }
     // Share the toolbox's canonical scroll (offsets the site's fixed nav) when embedded; fall
     // back to the container in the standalone dev harness.
     if (window.VCL_APP && window.VCL_APP.scrollToTop) { window.VCL_APP.scrollToTop(); return; }
     if (container && container.scrollIntoView) container.scrollIntoView({ block: "start" });
+  }
+
+  // ---- Editor overlay controller -------------------------------------------------------------
+  // The plan-line editor (renderEditor) and the annual "Add product" editor (renderAnnualEditor)
+  // are shown inside a shared fixed overlay above the dimmed dashboard. syncOverlay() is called at
+  // the tail of every rerender(): it fills the overlay when an editor is open and fades it out when
+  // not. A refresh while editing (a search pick, a year change) rebuilds the card in place WITHOUT
+  // replaying the entrance -- only the first open animates.
+  function ensureOverlayHost() {
+    if (overlayHost) return overlayHost;
+    var root = (container && container.closest) ? container.closest(".vcl-app") : null;
+    overlayHost = el("div", "vcl-bud-overlay");
+    overlayHost.setAttribute("aria-hidden", "true");
+    // Backdrop click (outside the card) requests a guarded close.
+    overlayHost.addEventListener("click", function (e) {
+      if (e.target === overlayHost) requestOverlayClose();
+    });
+    // Escape: dismiss a discard prompt first if one is up, else request a guarded close.
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape" || !overlayShown) return;
+      var box = overlayHost.querySelector(".vcl-bud-confirm");
+      if (box) { if (box.parentNode) box.parentNode.removeChild(box); return; }
+      requestOverlayClose();
+    });
+    (root || document.body).appendChild(overlayHost);
+    return overlayHost;
+  }
+
+  function syncOverlay() {
+    var node = modalState ? renderEditor() : annualEditor ? renderAnnualEditor() : null;
+    if (!node) { hideOverlay(); return; }
+
+    var host = ensureOverlayHost();
+    var firstOpen = !overlayShown;
+    host.innerHTML = "";
+    var card = el("div", "vcl-bud-editorcard");
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    card.appendChild(node);
+    host.appendChild(card);
+    host.setAttribute("aria-hidden", "false");
+
+    if (firstOpen && !prefersReducedMotion()) {
+      overlayShown = true;
+      // Insert closed, then flip to is-open next frame so the entrance transition runs.
+      requestAnimationFrame(function () { host.classList.add("is-open"); });
+    } else {
+      // Already on screen (an in-place refresh) OR reduced-motion: show at rest, no replay.
+      overlayShown = true;
+      card.classList.add("is-static");
+      host.classList.add("is-open");
+    }
+  }
+
+  function hideOverlay() {
+    if (!overlayHost) return;
+    if (!overlayShown) { overlayHost.innerHTML = ""; return; }
+    overlayShown = false;
+    overlayHost.classList.remove("is-open");
+    overlayHost.setAttribute("aria-hidden", "true");
+    if (prefersReducedMotion()) { overlayHost.innerHTML = ""; return; }
+    // Keep the (now stale) card in place for the fade-out, then clear -- unless it was reopened
+    // within the transition window (overlayShown flipped back to true).
+    window.setTimeout(function () { if (!overlayShown && overlayHost) overlayHost.innerHTML = ""; }, 300);
+  }
+
+  // Does the open editor hold work worth guarding against an accidental dismissal?
+  function editorIsDirty() {
+    if (modalState) {
+      var d = modalState.draft;
+      if (!modalState.editingId) {
+        var sub = d.submission;
+        return !!((d.product && d.product.trim()) || (sub.variations && sub.variations.length));
+      }
+      var saved = state.lines.find(function (l) { return l.id === modalState.editingId; });
+      return saved ? JSON.stringify(saved) !== JSON.stringify(d) : true;
+    }
+    if (annualEditor) {
+      var ad = annualEditor.draft;
+      if (!annualEditor.editingId) return !!(ad.product && ad.product.trim());
+      var savedA = (state.annualLines || []).find(function (r) { return r.id === annualEditor.editingId; });
+      return savedA ? JSON.stringify(savedA) !== JSON.stringify(ad) : true;
+    }
+    return false;
+  }
+
+  // Actually close whichever editor is open (discarding its draft copy).
+  function doOverlayClose() {
+    if (modalState) closeModal();
+    else if (annualEditor) closeAnnualEditor();
+  }
+
+  // Guarded close: with unsaved work, ask before discarding; otherwise close straight away.
+  function requestOverlayClose() {
+    if (overlayHost && overlayHost.querySelector(".vcl-bud-confirm")) return; // prompt already up
+    if (!editorIsDirty()) { doOverlayClose(); return; }
+    showDiscardConfirm();
+  }
+
+  function showDiscardConfirm() {
+    var host = ensureOverlayHost();
+    var box = el("div", "vcl-bud-confirm");
+    var inner = el("div", "vcl-bud-confirm__box");
+    inner.appendChild(el("p", "vcl-bud-confirm__msg",
+      "Discard your changes? Anything you entered here will be lost."));
+    var acts = el("div", "vcl-bud-confirm__actions");
+    var keep = el("button", "vcl-bud-btn", "Keep editing"); keep.type = "button";
+    keep.addEventListener("click", function () { if (box.parentNode) box.parentNode.removeChild(box); });
+    var disc = el("button", "vcl-bud-btn vcl-bud-btn--danger", "Discard"); disc.type = "button";
+    disc.addEventListener("click", function () { if (box.parentNode) box.parentNode.removeChild(box); doOverlayClose(); });
+    acts.appendChild(keep); acts.appendChild(disc);
+    inner.appendChild(acts);
+    box.appendChild(inner);
+    host.appendChild(box);
+    disc.focus();
   }
   function applyModal() {
     // Final guard: never persist a strategy that is no longer allowed for the current variations.
@@ -229,11 +358,14 @@
   // Reference / "Last updated" note for the budget headers -- Budget Planning prices the same
   // official fees as the Fee Calculator, so it mirrors the calculator's admin-editable VCL_CONFIG
   // keys with the fee-data date as the fallback (same pattern as the Guided Workflow head).
-  function appendCalcRefLines(host) {
+  function appendCalcRefLines(host, opts) {
     var cfg = window.VCL_CONFIG || {};
     var ref = (cfg.referenceText && cfg.referenceText.calculator) || "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).";
-    var upd = (cfg.lastUpdated && cfg.lastUpdated.calculator) || (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     host.appendChild(el("p", "ref-line", "Reference: " + escapeHtml(ref)));
+    // The overlay editors pass { skipUpdated:true } -- the "Last updated" date belongs on the
+    // dashboard, not inside every editor header (keeps the overlay header compact).
+    if (opts && opts.skipUpdated) return;
+    var upd = (cfg.lastUpdated && cfg.lastUpdated.calculator) || (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     host.appendChild(el("p", "ref-updated", "Last updated in Variation Toolbox: " + escapeHtml(upd)));
   }
 
@@ -659,7 +791,9 @@
     totalTr.innerHTML =
       '<td colspan="5">Total</td>' +
       '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(rollup.totals.fee)) + "</td>" +
-      '<td class="vcl-bud-num">' + Math.round(rollup.totals.hoursExpected) + " h</td>" +
+      '<td class="vcl-bud-num">' + Math.round(rollup.totals.hoursExpected) +
+        ' h<div class="vcl-bud-hours-band">(' + Math.round(rollup.totals.hoursMin) + " – " +
+        Math.round(rollup.totals.hoursMax) + " h)</div></td>" +
       "<td></td>";
     tfoot.appendChild(totalTr);
     table.appendChild(tfoot);
@@ -838,16 +972,9 @@
       container.appendChild(el("div", "vcl-bud-warn", "Your plan isn't being saved in this browser."));
     }
 
-    // Editor is a full "takeover": while a line is being built/edited the station flow replaces the
-    // dashboard (header actions + tiles + breakdown + table) entirely -- no pop-up overlay.
-    if (modalState) {
-      container.appendChild(renderEditor());
-      return;
-    }
-    if (annualEditor) {
-      container.appendChild(renderAnnualEditor());
-      return;
-    }
+    // The dashboard is ALWAYS rendered underneath; the plan-line / annual editor now enters as a
+    // soft overlay above the dimmed dashboard (syncOverlay, at the end of this function) rather than
+    // replacing it -- so the user keeps their bearings, guide-modal style.
 
     var rollup = BUD.computeRollup(state.lines, state.resultsById);
     var annualRollup = BUD.computeAnnualRollup(state.annualLines, annualCountries(), fxByCurrency());
@@ -861,7 +988,7 @@
     header.appendChild(left);
     var actions = el("div", "vcl-bud-header__actions");
     actions.innerHTML =
-      '<button type="button" class="vcl-bud-btn vcl-bud-btn--ghost" data-act="clear-plan">Clear plan</button>' +
+      '<button type="button" class="vcl-bud-btn" data-act="clear-plan">Clear plan</button>' +
       '<button type="button" class="vcl-bud-btn" data-act="export">⭳ Export to Excel</button>' +
       '<button type="button" class="vcl-bud-btn vcl-bud-btn--primary" data-act="new-line">+ Add variation line</button>';
     header.appendChild(actions);
@@ -881,7 +1008,7 @@
 
     var bdSection = el("div", "vcl-bud-breakdown-section");
     var bdHead = el("div", "vcl-bud-breakdown-head");
-    bdHead.appendChild(el("span", "vcl-bud-breakdown-title", "Agency spend breakdown"));
+    // "Agency spend breakdown" title removed -- the segment toggle now sits left-aligned on its own.
     // Active segment carries a subtle tint in its own mode's bar colour (Combined plum / Variations
     // budget-red / Annual petrol), so the toggle echoes the chart it drives.
     var segTint = { combined: "rgba(107,85,102,0.14)", "var": "var(--budget-bg)", ann: "rgba(75,138,156,0.16)" };
@@ -907,6 +1034,9 @@
 
     container.appendChild(renderTable(rollup));
     container.appendChild(renderAnnualTable());
+
+    // Editor overlay on top (or fade it out if no editor is open).
+    syncOverlay();
   }
 
   // Worksharing / Super-Grouping / Annual Update are EU-only procedures: these three authorities
@@ -1728,12 +1858,12 @@
     // exact same tool. The New/Edit context is NOT shown here (the header carries only the always-same
     // identity + reference); it becomes a kicker under the header divider, above the stepper (below).
     titleWrap.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + editorYear + "</span>"));
-    appendCalcRefLines(titleWrap);
+    appendCalcRefLines(titleWrap, { skipUpdated: true });
     head.appendChild(titleWrap);
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Cancel and return to plan");
-    closeBtn.addEventListener("click", closeModal);
+    closeBtn.addEventListener("click", requestOverlayClose);
     head.appendChild(closeBtn);
     wrap.appendChild(head);
 
@@ -1814,22 +1944,18 @@
     paintNav();
     wrap.appendChild(nav);
 
-    // Live preview strip
-    var strip = el("div", "vcl-bud-live-result");
-    wrap.appendChild(strip);
-    renderPreviewStrip(strip);
-
-    // De-emphasised summary line
-    var summaryP = el("p", "vcl-bud-modal__summary", escapeHtml(summaryLine(d)));
-    wrap.appendChild(summaryP);
+    // (The old live fee/hours preview strip + one-line summary that sat under a dashed rule were
+    // removed -- that running total is visible in the dashboard once the line is saved; inside the
+    // editor it only added noise. refreshEditor() guards on previewHost/summaryHost, so leaving them
+    // unset is safe.)
 
     // Capture the live host references for refreshEditor()'s targeted (non-full-rerender) updates.
     // Reset on every renderEditor() so they always point at the current DOM nodes.
     modalState.paintStepper = paintStepper;
     modalState.paintNav = paintNav;
     modalState.bodyHost = bodyInner;
-    modalState.previewHost = strip;
-    modalState.summaryHost = summaryP;
+    modalState.previewHost = null;
+    modalState.summaryHost = null;
 
     return wrap;
   }
@@ -2357,12 +2483,12 @@
     var titleWrap = el("div");
     var editorYear = d.year || (new Date().getFullYear() + 1);
     titleWrap.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + editorYear + "</span>"));
-    appendCalcRefLines(titleWrap);
+    appendCalcRefLines(titleWrap, { skipUpdated: true });
     head.appendChild(titleWrap);
     var closeBtn = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Cancel and return to plan");
-    closeBtn.addEventListener("click", closeAnnualEditor);
+    closeBtn.addEventListener("click", requestOverlayClose);
     head.appendChild(closeBtn);
     wrap.appendChild(head);
 
@@ -2410,7 +2536,7 @@
       if (idx === 0) {
         var toPlan = el("button", "vcl-bud-btn", "← Back to plan");
         toPlan.type = "button";
-        toPlan.addEventListener("click", closeAnnualEditor);
+        toPlan.addEventListener("click", requestOverlayClose);
         nav.appendChild(toPlan);
       } else {
         var back = el("button", "vcl-bud-btn", "← Back");
@@ -2435,14 +2561,13 @@
     paintNav();
     wrap.appendChild(nav);
 
-    var strip = el("div", "vcl-bud-live-result");
-    wrap.appendChild(strip);
-    renderAnnualPreviewStrip(strip);
+    // (Live fee/coverage preview strip removed -- see the note in renderEditor. The annual fee shows
+    // in the dashboard's annual table once saved.)
 
     annualEditor.paintStepper = paintStepper;
     annualEditor.paintNav = paintNav;
     annualEditor.bodyHost = bodyInner;
-    annualEditor.previewHost = strip;
+    annualEditor.previewHost = null;
 
     return wrap;
   }

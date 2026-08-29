@@ -41,7 +41,8 @@
   <script src="../../variation-fee-calculator/assets/js/vcl-budget.js?v=7"></script>
   <script>
     // Optional demo data for a quick populated preview: open ...budget-harness.html?demo=1
-    // (seeds one grouping line with mixed variations + an MRP/DCP procedure, then renders).
+    // (seeds one grouping line). ?demo=3 seeds a three-line plan (Grouping / Grouping+WS / Single)
+    // so the table styling -- zebra striping, hover, totals -- is visible with several rows.
     if (/[?&]demo=1/.test(location.search)) {
       localStorage.setItem("vcl_budget_plan_v2", JSON.stringify({ version: 2, hoursPerHead: 1600, lines: [{
         id: "line-demo", product: "Ibuprofen", quarter: "Q2", probability: 100,
@@ -51,6 +52,28 @@
           lead: null, raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
           strengths: { default: 1, overrides: {} }, specials: { line: {}, ws: {}, lead: null } }
       }] }));
+    }
+    if (/[?&]demo=3/.test(location.search)) {
+      localStorage.setItem("vcl_budget_plan_v2", JSON.stringify({ version: 2, hoursPerHead: 1520, lines: [
+        { id: "line-a", product: "Ketamin 50 C Plus", year: 2027, quarter: "Q4", probability: 100,
+          submission: { mode: null,
+            variations: [{ code: null, variantId: null, type: "IB" }, { code: null, variantId: null, type: "IB" }, { code: null, variantId: null, type: "II" }, { code: null, variantId: null, type: "II" }],
+            procedures: [{ kind: "mrpdcp", nat: null, rms: "DE", cms: ["BE", "LT", "LU", "HR", "CY", "DK", "EE", "AT"] }],
+            lead: null, raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+            strengths: { default: 5, overrides: {} }, specials: { line: {}, ws: {}, lead: null } } },
+        { id: "line-b", product: "Aspirin", year: 2027, quarter: "Q2", probability: 100,
+          submission: { mode: null,
+            variations: [{ code: null, variantId: null, type: "IB" }, { code: null, variantId: null, type: "IB" }, { code: null, variantId: null, type: "II" }],
+            procedures: [{ kind: "mrpdcp", nat: null, rms: "FR", cms: ["BE", "LT", "LU", "HR", "CY", "DK", "EE", "AT", "IE"] }, { kind: "national", nat: "EL", countries: ["EL"] }, { kind: "national", nat: "DK", countries: ["DK"] }],
+            lead: null, raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+            strengths: { default: 4, overrides: {} }, specials: { line: {}, ws: {}, lead: null } } },
+        { id: "line-c", product: "Pantoprazol 40 mg", year: 2027, quarter: "Q1", probability: 100,
+          submission: { mode: null,
+            variations: [{ code: null, variantId: null, type: "IA" }, { code: null, variantId: null, type: "IA" }, { code: null, variantId: null, type: "IA" }],
+            procedures: [{ kind: "national", nat: "DE", countries: ["DE"] }],
+            lead: null, raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+            strengths: { default: 1, overrides: {} }, specials: { line: {}, ws: {}, lead: null } } }
+      ] }));
     }
     window.VCL_BUDGET.render(document.getElementById("vcl-budgetCol"));
   </script>
