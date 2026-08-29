@@ -146,7 +146,7 @@
 .vcl-app .vcl-bud-icon-btn svg { display: block; }
 .vcl-app .vcl-bud-warn { display: inline-flex; align-items: center; gap: 5px; color: var(--ib); font-size: 12px; font-weight: 600; }
 .vcl-app .vcl-bud-warn::before { content: "!"; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--ib-bg); font-size: 10px; }
-.vcl-app .vcl-bud-table tfoot td { padding: 11px 12px; font-weight: 600; border-top: 2px solid var(--border); border-bottom: 0; background: var(--panel); font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-table tfoot td { padding: 11px 12px; font-weight: 600; border-top: 2px solid var(--border); border-bottom: 0; background: var(--panel); font-variant-numeric: tabular-nums; vertical-align: top; }
 /* Round the Total row's bottom corners so its (bluish) fill ends flush with the wrapper's 12px
    radius instead of poking square corners past the rounded border. */
 .vcl-app .vcl-bud-table tfoot tr:last-child td:first-child { border-bottom-left-radius: 11px; }
