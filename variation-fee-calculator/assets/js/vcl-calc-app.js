@@ -350,6 +350,8 @@ const appState = {
   resultCurrencyMode: 'eur',
   // Which per-type result rows are expanded to their individual variations (keyed "cc|type").
   resultExpanded: {},
+  // Result overview table sort: empty key keeps the natural order (RMS first, then alphabetical).
+  resultOverviewSort: { key: '', dir: 1 },
   // Country details step: one "number of authorised strengths" that every country follows, so a
   // 20-country procedure does not have to be clicked through country by country. The value is
   // written straight into countryConfig[cc].strengths -- the single source the fee calculation
@@ -749,6 +751,8 @@ function renderStepCountryDetails() {
   `;
 
   const list = document.getElementById('vclcalc-countryDetailList');
+  // Two columns of country cards: 33 countries used to be 33 full-width rows of scrolling.
+  list.className = 'vc-ccgrid';
   const noteEl = document.getElementById('vclcalc-strengthsNote');
   const resetBtn = document.getElementById('vclcalc-strengthsReset');
   const sortedCCs = [...appState.selectedCountries]
@@ -783,7 +787,7 @@ function renderStepCountryDetails() {
     const roles = rolesForCountry(cc);
     const own = appState.strengthsManual[cc] ? ' has-own-strengths' : '';
     return `
-      <div class="row-card active${own}" data-cc="${cc}" style="margin-bottom:10px;">
+      <div class="row-card active${own}" data-cc="${cc}">
         <div class="row-card-top">
           <div class="row-card-title" style="flex:1;">
             <span class="t1">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span></span>
@@ -797,7 +801,7 @@ function renderStepCountryDetails() {
             </select>
           </div>
           <div>
-            <span class="field-label" style="margin-bottom:6px;">Number of authorised strengths</span>
+            <span class="field-label" style="margin-bottom:6px;">Strengths</span>
             ${stepperHTML('strengths_'+cc, cfg.strengths, 1, 99)}
           </div>
         </div>
@@ -865,17 +869,18 @@ function renderStepVariations() {
   `;
 
   const counters = document.getElementById('vclcalc-typeCounters');
+  counters.className = 'vc-typegrid';
   counters.innerHTML = ['IA','IB','II'].map(type => `
-    <div class="field-group">
-      <div class="num-row">
-        <div style="width:130px;font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;">${typeLabel(type)} ${typePillHTML(type)}</div>
-        ${stepperHTML('global_'+type, appState.globalCounts[type], 0, 99)}
-      </div>
+    <div class="vc-typecard${appState.globalCounts[type] === 0 ? ' vc-typecard--zero' : ''}" data-typecard="${type}">
+      <div class="vc-typecard__t">${typeLabel(type)} ${typePillHTML(type)}</div>
+      ${stepperHTML('global_'+type, appState.globalCounts[type], 0, 99)}
     </div>
   `).join('');
   bindRowSteppers(counters, (field, value) => {
     const type = field.split('_')[1];
     appState.globalCounts[type] = value;
+    const card = counters.querySelector(`[data-typecard="${type}"]`);
+    if (card) card.classList.toggle('vc-typecard--zero', value === 0);
     updateResultButtonState();
     renderSpecialPanel();
   });
@@ -961,20 +966,31 @@ function renderSpecialPanel() {
         if (hint && seenHints.indexOf(hint) === -1) { seenHints.push(hint); hintRefs.push({ type, label }); }
       });
     });
+    // One table per country: type, how many variations it covers, and the variant --
+    // three columns the eye can follow, instead of a pill and a select at opposite edges.
     return `
       <div class="sp-card">
         <div class="sp-card__head">${COUNTRY_NAMES[cc]} <span class="badge">${cc}</span></div>
-        ${rows.map(({type, options, hasStandard}) => {
-          const current = cfg.specialByType[type] || '';
-          return `
-            <div class="sp-row">
-              ${typePillHTML(type)}
-              <select class="field-select" style="width:auto; min-width:220px;" data-special-select="${cc}|${type}">
-                ${hasStandard ? `<option value="" ${current===''?'selected':''}>Standard</option>` : ''}
-                ${options.map(o => `<option value="${o}" ${current===o?'selected':''}>${o}</option>`).join('')}
-              </select>
-            </div>`;
-        }).join('')}
+        <table class="sp-tbl">
+          <thead><tr><th style="width:90px;">Type</th><th>Applies to</th><th>Variant</th></tr></thead>
+          <tbody>
+            ${rows.map(({type, options, hasStandard}) => {
+              const current = cfg.specialByType[type] || '';
+              const n = appState.globalCounts[type] || 0;
+              return `
+                <tr>
+                  <td>${typePillHTML(type)}</td>
+                  <td class="sp-scope">${n} variation${n === 1 ? '' : 's'}</td>
+                  <td>
+                    <select class="field-select" data-special-select="${cc}|${type}">
+                      ${hasStandard ? `<option value="" ${current===''?'selected':''}>Standard</option>` : ''}
+                      ${options.map(o => `<option value="${o}" ${current===o?'selected':''}>${o}</option>`).join('')}
+                    </select>
+                  </td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
         ${hintRefs.map(h => `<div class="sp-hint">${specialHintHTML(cc, h.type, h.label)}</div>`).join('')}
       </div>`;
   }).join('');
@@ -1370,6 +1386,12 @@ function computeCountryBreakdown(cc, full) {
   const order = ['II', 'IB', 'IA'].filter(t => (counts[t] || 0) > 0);
   const totalFor = (cnts, str) => (computeCountryResult(cc, Object.assign({}, cfg, { strengths: str }), cnts).total || 0);
   const labelFor = t => { const r = resolveRow(cc, cfg.role, t, cfg.specialByType[t]); return (r && r.special) ? r.special : ''; };
+  // Whether this country/type offers a variant choice at all -- decides between "standard"
+  // and a plain dash in the result's Special case column.
+  const hasVariants = t => {
+    const candidates = rowsFor(cc, cfg.role, t);
+    return candidates.length > 1 && candidates.some(r => r.special && !/worksharing/i.test(r.special));
+  };
   const clamp0 = x => (x < 0 ? 0 : x);
   const mkVar = (base, line) => ({ base, perAdd: (s > 1 && line > 0.005) ? clamp0((line - base) / (s - 1)) : null, line });
 
@@ -1400,7 +1422,7 @@ function computeCountryBreakdown(cc, full) {
         pvS = tS; pv1 = t1;
       }
       const line = vars.reduce((a, v) => a + v.line, 0), base = vars.reduce((a, v) => a + v.base, 0);
-      types.push({ type: t, special: labelFor(t), count: cnt, base, perAdd: (s > 1 && Math.abs(line - base) > 0.005) ? (line - base) / (s - 1) : null, line, incl: false, vars });
+      types.push({ type: t, special: labelFor(t), variants: hasVariants(t), count: cnt, base, perAdd: (s > 1 && Math.abs(line - base) > 0.005) ? (line - base) / (s - 1) : null, line, incl: false, vars });
     });
   } else if (mechanic === 'grouping') {
     // Genuine grouping fee (BE/DK/UK): a single flat fee for the whole group that is not
@@ -1411,7 +1433,7 @@ function computeCountryBreakdown(cc, full) {
       const cnt = counts[t] || 0;
       const vars = [];
       for (let k = 1; k <= cnt; k++) vars.push(mkVar(0, 0));
-      types.push({ type: t, special: labelFor(t), count: cnt, base: 0, perAdd: null, line: 0, incl: true, vars });
+      types.push({ type: t, special: labelFor(t), variants: hasVariants(t), count: cnt, base: 0, perAdd: null, line: 0, incl: true, vars });
     });
   } else {
     // Marginal contribution of each type in turn (II -> +IB -> +IA), split by variation.
@@ -1428,7 +1450,7 @@ function computeCountryBreakdown(cc, full) {
         pvS = tS; pv1 = t1;
       }
       const line = vars.reduce((a, v) => a + v.line, 0), base = vars.reduce((a, v) => a + v.base, 0);
-      types.push({ type: t, special: labelFor(t), count: cnt, base, perAdd: (s > 1 && Math.abs(line - base) > 0.005) ? (line - base) / (s - 1) : null, line, incl: (line < 0.005), vars });
+      types.push({ type: t, special: labelFor(t), variants: hasVariants(t), count: cnt, base, perAdd: (s > 1 && Math.abs(line - base) > 0.005) ? (line - base) / (s - 1) : null, line, incl: (line < 0.005), vars });
       prefix[t] = cnt; baseS = pvS; base1 = pv1;
     });
   }
@@ -1442,33 +1464,46 @@ function renderStepResult() {
   if (appState.results && window.VCL_USAGE) window.VCL_USAGE.track("calculator", "finish");
 
   const mode = appState.resultCurrencyMode || 'eur';
+  const counts = appState.globalCounts;
+  const varTotal = ['IA','IB','II'].reduce((a,t) => a + (counts[t] || 0), 0);
+  const varBreakdown = ['IA','IB','II'].filter(t => counts[t] > 0).map(t => `${counts[t]} &times; ${t}`).join(', ');
 
-  const countryCards = res.countries.map((cr) => {
+  // One entry per country carrying its own breakdown, so the overview table above and the
+  // detail card below are built from exactly the same numbers (and it is computed once).
+  const entries = res.countries.map(cr => ({ cr, bd: cr.hasData ? computeCountryBreakdown(cr.cc, cr) : null }));
+
+  const mechChipHTML = (bd) => {
+    if (!bd || bd.mechanic === 'none') return '<span class="vres-chip vres-chip--none">&ndash;</span>';
+    return bd.mechanic === 'cap'
+      ? '<span class="vres-chip vres-chip--cap">Cap</span>'
+      : '<span class="vres-chip">Grouping</span>';
+  };
+  // Amount in the country's own view (local currency when toggled), as used everywhere below.
+  const money = (cr) => (v) => (mode === 'local' && cr.currency && cr.fxRate != null)
+    ? fmtLocalCurrency(v * cr.fxRate, cr.currency)
+    : fmtEUR(v);
+
+  const countryCards = entries.map(({ cr, bd }) => {
     if (!cr.hasData) {
       return `
-      <div class="vres-cty">
+      <div class="vres-cty" data-ctycard="${cr.cc}">
         <div class="vres-top">
           <div>
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
             <div class="vres-meta"><b>${roleLabel(cr.role)}</b></div>
           </div>
-          <div class="vres-total"><span class="vres-amt">–</span></div>
+          <div class="vres-total"><span class="vres-amt">&ndash;</span></div>
         </div>
       </div>`;
     }
 
-    const bd = computeCountryBreakdown(cr.cc, cr);
     const useLocal = mode === 'local' && cr.currency && cr.fxRate != null;
-    const m = v => useLocal ? fmtLocalCurrency(v * cr.fxRate, cr.currency) : fmtEUR(v);
+    const m = money(cr);
 
     // Header caption: exchange rate (local view) or "EUR equivalent" (foreign country shown in EUR).
     let caption = '';
     if (useLocal) caption = `<span class="vres-eq">${fmtRate(cr.fxRate, cr.currency)}</span>`;
     else if (cr.currency) caption = `<span class="vres-eq">EUR equivalent</span>`;
-
-    // The mechanic (grouping / cap) is shown only as the subtle footer note below, to keep
-    // the header calm -- no badge next to the country code.
-    const inclLabel = bd.mechanic === 'grouping' ? 'included in grouped fee' : 'no extra fee';
 
     // One row per variation type; rows with more than one variation expand to the individual ones.
     const rowsHtml = bd.types.map((ty) => {
@@ -1478,75 +1513,134 @@ function renderStepResult() {
       const caret = expandable
         ? `<span class="vres-caret">${open ? '&#9662;' : '&#9656;'}</span>`
         : `<span class="vres-caret vres-caret--none"></span>`;
-      const inclNote = ty.incl ? ` <span class="vres-subnote">· ${inclLabel}</span>` : '';
+      // A grouping fee makes every single line "included" -- saying so once in the footer beats
+      // repeating it on every row. Elsewhere a zero line is genuine news and stays annotated.
+      const inclNote = (ty.incl && bd.mechanic !== 'grouping')
+        ? ` <span class="vres-subnote">&middot; no extra fee</span>` : '';
+      const scText = ty.special ? escapeHtml(ty.special) : (ty.variants ? 'standard' : '&ndash;');
+      const scClass = ty.special ? 'vres-sc' : 'vres-sc vres-sc--std';
       const main = `<tr class="vres-trow${expandable ? ' vres-exp' : ''}"${expandable ? ` data-exp="${escapeHtml(key)}"` : ''}>
-          <td><span class="vres-var">${caret}${typePillHTML(ty.type)}<span class="vres-cnt">${ty.count}&times;</span> Type ${ty.type} <small>${ty.special || ''}</small>${inclNote}</span></td>
+          <td><span class="vres-var">${caret}${typePillHTML(ty.type)}<span class="vres-cnt">${ty.count}&times;</span> Type ${ty.type}${inclNote}</span></td>
+          <td class="${scClass}">${scText}</td>
           <td class="vres-num">${m(ty.base)}</td>
-          <td class="vres-num">${ty.perAdd != null ? m(ty.perAdd) : '–'}</td>
+          <td class="vres-num">${ty.perAdd != null ? m(ty.perAdd) : '&ndash;'}</td>
           <td class="vres-num">${m(ty.line)}</td>
         </tr>`;
       const subs = expandable ? ty.vars.map((v, vi) => `
         <tr class="vres-subrow${open ? '' : ' vres-hidden'}" data-sub="${escapeHtml(key)}">
           <td><span class="vres-var"><span class="vres-caret vres-caret--none"></span><span class="vres-vno">Var ${vi + 1}</span></span></td>
+          <td class="vres-sc vres-sc--std"></td>
           <td class="vres-num">${m(v.base)}</td>
-          <td class="vres-num">${v.perAdd != null ? m(v.perAdd) : '–'}</td>
+          <td class="vres-num">${v.perAdd != null ? m(v.perAdd) : '&ndash;'}</td>
           <td class="vres-num">${m(v.line)}</td>
         </tr>`).join('') : '';
       return main + subs;
     }).join('');
 
-    // Footer: always "Country subtotal" (white); a subtle mechanic note beside it, and for a
+    // Footer: always "Country subtotal"; a subtle mechanic note beside it, and for a
     // cap the raw (uncapped) sum struck through before the capped subtotal.
     let note = '';
-    if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">· Grouping fee applies</span>`;
-    else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">· Cap fee applies</span>`;
+    if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; all variations covered by one grouping fee</span>`;
+    else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">&middot; Cap fee applies</span>`;
     const amtCell = bd.mechanic === 'cap'
       ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(cr.total)}</span>`
       : `<span class="vres-num">${m(cr.total)}</span>`;
 
     return `
-      <div class="vres-cty">
+      <div class="vres-cty" data-ctycard="${cr.cc}">
         <div class="vres-top">
           <div>
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
-            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> · <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b></div>
+            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b></div>
           </div>
-          <div class="vres-total">${caption}<span class="vres-amt">${m(cr.total)}</span></div>
+          <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(cr.total)}</span></div>
         </div>
         <table class="vres-tbl${bd.mechanic !== 'none' ? ' vres-tbl--indicative' : ''}">
-          <thead><tr><th>Variation</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
+          <thead><tr><th>Variation</th><th>Special case</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
           <tbody>${rowsHtml}</tbody>
-          <tfoot><tr><td colspan="3">Country subtotal${note}</td><td>${amtCell}</td></tr></tfoot>
+          <tfoot><tr><td colspan="4">Country subtotal${note}</td><td>${amtCell}</td></tr></tfoot>
         </table>
       </div>`;
   }).join('');
+
+  // ---- Overview table: every country with its final sum, before any detail ----
+  const sort = appState.resultOverviewSort || { key: '', dir: 1 };
+  const ordered = entries.slice();
+  if (sort.key) {
+    ordered.sort((a, b) => {
+      let r;
+      if (sort.key === 'name') r = COUNTRY_NAMES[a.cr.cc].localeCompare(COUNTRY_NAMES[b.cr.cc], 'en');
+      else if (sort.key === 'strengths') r = (a.cr.strengths || 0) - (b.cr.strengths || 0);
+      else r = (a.cr.total || 0) - (b.cr.total || 0);
+      return r * sort.dir;
+    });
+  }
+  const sortTh = (key, label) => {
+    const on = sort.key === key;
+    const car = on ? (sort.dir === 1 ? '&#9650;' : '&#9660;') : '&#9650;';
+    return `<button type="button" data-ovsort="${key}">${label} <span class="vres-sortcar${on ? ' on' : ''}">${car}</span></button>`;
+  };
+  const overviewHTML = `
+    <div class="vres-ovwrap">
+      <table class="vres-ov">
+        <thead><tr>
+          <th>${sortTh('name','Country')}</th>
+          <th>Role</th>
+          <th>${sortTh('strengths','Strengths')}</th>
+          <th>Variations</th>
+          <th>Mechanic</th>
+          <th>${sortTh('total','Total')}</th>
+        </tr></thead>
+        <tbody>
+          ${ordered.map(({ cr, bd }) => {
+            const m = money(cr);
+            const amount = cr.hasData ? m(cr.total) : '&ndash;';
+            const zero = cr.hasData && cr.total < 0.005;
+            return `
+            <tr data-ovrow="${cr.cc}" tabindex="0">
+              <td><span class="vres-ovname"><span class="badge vres-ovcode">${cr.cc}</span>${COUNTRY_NAMES[cr.cc]}</span></td>
+              <td>${roleLabel(cr.role)}</td>
+              <td>${cr.hasData ? cr.strengths : '&ndash;'}</td>
+              <td>${varTotal}</td>
+              <td>${mechChipHTML(bd)}</td>
+              <td class="vres-ovmoney${zero ? ' vres-ovmoney--zero' : ''}">${amount}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot><tr>
+          <td colspan="5">Total &mdash; ${res.countries.length} ${res.countries.length===1?'country':'countries'} &middot; ${varTotal} variation${varTotal===1?'':'s'}${varBreakdown ? ` <span class="vres-varbd">(${varBreakdown})</span>` : ''}</td>
+          <td>${fmtEUR(res.grandTotal)}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
 
   const anyForeign = res.countries.some(cr => cr.hasData && cr.currency);
 
   const anySubsumed = res.countries.some(cr => cr.items.some(it => it.subsumed));
   const anyNoData = res.countries.some(cr => !cr.hasData);
 
-  const lastUpdated = (typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) ? formatImprintDate(IMPRINT[0].date) : null;
-
   contentEl.innerHTML = `
-    <div class="result-panel">
-      <div class="rp-top-row">
-        <div class="rp-label">Total fee — ${res.countries.length} ${res.countries.length===1?'country':'countries'}</div>
-        ${lastUpdated ? `<div class="rp-updated">Last updated: ${lastUpdated}</div>` : ''}
-      </div>
-      <div class="rp-total"><span class="cur">EUR</span>${new Intl.NumberFormat('en-IE',{minimumFractionDigits:2,maximumFractionDigits:2}).format(res.grandTotal)}</div>
-      <div class="rp-sub">${res.countries.map(cr=>cr.cc).join(' · ')}</div>
-    </div>
-
     <div class="panel" style="margin-bottom:18px;">
       <div class="vres-panelhead">
-        <h2 class="bd-heading" style="margin:0;">Fees by country</h2>
-        ${anyForeign ? `
-        <div class="vres-curtoggle" role="group" aria-label="Currency">
-          <button type="button" class="vres-ct${mode==='eur'?' on':''}" data-cmode="eur">EUR</button>
-          <button type="button" class="vres-ct${mode==='local'?' on':''}" data-cmode="local">Local currency</button>
-        </div>` : ''}
+        <h2 class="bd-heading" style="margin:0;">Overview - fees by country</h2>
+        <div class="vres-headtools">
+          <button class="btn-export" data-calc-print>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print
+          </button>
+          <button class="btn-export" data-calc-excel>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            Export Excel
+          </button>
+          ${anyForeign ? `
+          <div class="vres-curtoggle" role="group" aria-label="Currency">
+            <button type="button" class="vres-ct${mode==='eur'?' on':''}" data-cmode="eur">EUR</button>
+            <button type="button" class="vres-ct${mode==='local'?' on':''}" data-cmode="local">Local currency</button>
+          </div>` : ''}
+        </div>
       </div>
+      ${overviewHTML}
+      <div class="vres-subhead"><h3>Details - fees by country</h3></div>
       ${countryCards}
       <div class="vres-grand">
         <span class="vres-grand-l">Total${anyForeign ? ' (EUR)' : ''}</span>
@@ -1555,11 +1649,11 @@ function renderStepResult() {
     </div>
 
     <div class="export-buttons">
-      <button class="btn-export" id="vclcalc-btnPrint">
+      <button class="btn-export" data-calc-print>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
         Print
       </button>
-      <button class="btn-export" id="vclcalc-btnExcel">
+      <button class="btn-export" data-calc-excel>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
         Export Excel
       </button>
@@ -1585,6 +1679,34 @@ function renderStepResult() {
     });
   });
 
+  // Overview table: sort by country, strengths or total. Same column twice flips direction.
+  contentEl.querySelectorAll('[data-ovsort]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.ovsort;
+      const cur = appState.resultOverviewSort || { key: '', dir: 1 };
+      appState.resultOverviewSort = (cur.key === key)
+        ? { key, dir: -cur.dir }
+        : { key, dir: key === 'name' ? 1 : -1 };
+      renderStepResult();
+    });
+  });
+
+  // A row in the overview leads to that country's detail card -- scrolled into view and
+  // briefly outlined, so a 33-country result never turns into a hunt.
+  contentEl.querySelectorAll('[data-ovrow]').forEach(row => {
+    const jump = () => {
+      const card = contentEl.querySelector(`[data-ctycard="${row.dataset.ovrow}"]`);
+      if (!card) return;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('vres-flash');
+      setTimeout(() => card.classList.remove('vres-flash'), 1400);
+    };
+    row.addEventListener('click', jump);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); }
+    });
+  });
+
   // Expand/collapse a type row to its individual variations (DOM + stored state, no re-render
   // -- so the open state survives a later currency-toggle re-render).
   contentEl.querySelectorAll('[data-exp]').forEach(row => {
@@ -1597,11 +1719,11 @@ function renderStepResult() {
     });
   });
 
-  // ── Print ──
-  document.getElementById('vclcalc-btnPrint').addEventListener('click', () => window.print());
-
-  // ── Export Excel ──
-  document.getElementById('vclcalc-btnExcel').addEventListener('click', () => exportExcel(res));
+  // ── Print / Export Excel ──
+  // The pair exists twice (above the overview and below the cards), so a long result never
+  // makes the reader scroll back for them; both copies share one handler.
+  contentEl.querySelectorAll('[data-calc-print]').forEach(b => b.addEventListener('click', () => window.print()));
+  contentEl.querySelectorAll('[data-calc-excel]').forEach(b => b.addEventListener('click', () => exportExcel(res)));
 
   wireCalcInfoPanels();
 
@@ -1613,6 +1735,7 @@ function renderStepResult() {
     appState.results = null;
     appState.resultCurrencyMode = 'eur';
     appState.resultExpanded = {};
+    appState.resultOverviewSort = { key: '', dir: 1 };
     appState.strengthsDefault = 1;
     appState.strengthsManual = {};
     setStep(0);

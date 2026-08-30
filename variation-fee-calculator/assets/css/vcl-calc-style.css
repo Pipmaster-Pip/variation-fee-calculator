@@ -955,6 +955,9 @@
  * table styling can't add vertical column lines.
  * ========================================================================== */
 .vclcalc-app .vres-panelhead{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+/* Currency toggle and the export pair travel together at the right of the heading. */
+.vclcalc-app .vres-headtools{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.vclcalc-app .vres-headtools .btn-export{ padding:6px 12px; font-size:11.5px; }
 .vclcalc-app .vres-curtoggle{ display:inline-flex; border:1.5px solid var(--accent); border-radius:999px; overflow:hidden; }
 .vclcalc-app .vres-curtoggle .vres-ct{ font-family:var(--sans); font-size:11.5px; font-weight:600; padding:5px 14px; border:none; background:#fff; color:var(--accent-deep); cursor:pointer; }
 .vclcalc-app .vres-curtoggle .vres-ct.on{ background:var(--accent); color:#fff; }
@@ -1055,3 +1058,151 @@
 .vclcalc-app .row-card.active.has-own-strengths{
   border-color:var(--accent); background:var(--accent-soft);
 }
+
+/* ============================================================================
+ * Modernisation batch (2026-08-30)
+ * The toolbox frame offers ~1280px of column, the calculator only ever used 880 --
+ * every rule below spends that new width: steppers side by side, country details in
+ * two columns, special cases as a real table, and a calmer result step. Appended
+ * last so these rules win over the earlier blocks.
+ * ========================================================================== */
+
+/* No cap of its own: the calculator fills the column the toolbox gives it, exactly as wide
+   as the view heading above it. Any ceiling here reappears as a dead strip on the right the
+   moment the window is wider than the number picked. The frame's own 1280px shell is the limit. */
+.vclcalc-app{ max-width:none; }
+
+/* ---- Step 3: the three variation types side by side ---- */
+.vclcalc-app .vc-typegrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.vclcalc-app .vc-typecard{
+  border:1px solid var(--line); border-radius:10px; background:var(--paper);
+  padding:12px 14px; display:flex; flex-direction:column; gap:10px;
+}
+/* A type nobody is filing stays readable but steps back, so the actual selection reads first. */
+.vclcalc-app .vc-typecard--zero{ opacity:.72; }
+.vclcalc-app .vc-typecard__t{
+  display:flex; align-items:center; gap:8px;
+  font-size:13px; font-weight:600; color:var(--ink);
+}
+@media (max-width:760px){ .vclcalc-app .vc-typegrid{ grid-template-columns:1fr; } }
+
+/* ---- Step 2: country details in two columns ---- */
+.vclcalc-app .vc-ccgrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
+@media (max-width:880px){ .vclcalc-app .vc-ccgrid{ grid-template-columns:1fr; } }
+/* Role stretches, strengths keeps its natural width -- so the steppers line up across cards. */
+.vclcalc-app .vc-ccgrid .row-card-body{ grid-template-columns:1fr auto; gap:14px; align-items:end; }
+
+/* ---- Step 3: special cases as a table per country ----
+   Pill and select used to sit at opposite edges of a very wide card; over 1120px
+   that is a lost row. The table keeps type, scope and variant within one glance. */
+.vclcalc-app .sp-tbl{ width:100%; border-collapse:collapse; font-size:13px; }
+.vclcalc-app .sp-tbl thead th{
+  font-size:10px; letter-spacing:.05em; text-transform:uppercase; font-weight:600;
+  color:var(--ink-faint); text-align:left; padding:6px 10px 6px 0; border-bottom:1px solid var(--line);
+}
+.vclcalc-app .sp-tbl thead th:last-child{ text-align:right; }
+.vclcalc-app .sp-tbl td{ padding:7px 10px 7px 0; border-bottom:1px solid var(--line); vertical-align:middle; }
+.vclcalc-app .sp-tbl tbody tr:last-child td{ border-bottom:0; }
+.vclcalc-app .sp-tbl td:last-child{ text-align:right; padding-right:0; }
+.vclcalc-app .sp-tbl .sp-scope{ font-size:12px; color:var(--ink-faint); }
+.vclcalc-app .sp-tbl select.field-select{ width:auto; min-width:200px; background:var(--panel); }
+
+/* ---- Result step: quieter tables, sans-serif money ----
+   IBM Plex Mono draws a slashed zero, which the rest of the toolbox does not use for
+   amounts -- money moves to the body face with tabular figures, and mono stays where it
+   means code (country codes, type pills, classification codes). */
+.vclcalc-app .vres-num,
+.vclcalc-app .vres-capraw,
+.vclcalc-app .vres-cnt,
+.vclcalc-app .vres-meta,
+.vclcalc-app .vres-eq,
+.vclcalc-app .num-stepper input{ font-family:var(--sans); font-variant-numeric:tabular-nums; }
+.vclcalc-app .vres-subnote,
+.vclcalc-app .vres-fnote{ font-family:var(--sans); }
+
+/* One gold accent per card (the total), not a gold band over every table. */
+.vclcalc-app .vres-top{ background:var(--panel); border-bottom:0; }
+.vclcalc-app .vres-tbl thead th{
+  font-family:var(--sans); font-size:10px; letter-spacing:.06em; color:var(--ink-faint);
+  background:#fbfcfd; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding:6px 15px;
+}
+.vclcalc-app .vres-tbl tbody td{ border-bottom:0; }
+.vclcalc-app .vres-tbl tbody tr:nth-child(even) td{ background:#fafbfd; }
+.vclcalc-app .vres-exp:hover td{ background:#fbf7ee; }
+/* The footer band closes the card itself, so no stray rule floats under the subtotal. */
+.vclcalc-app .vres-tbl tfoot td{ background:var(--paper); border-top:1px solid var(--line); }
+
+/* The chosen variant gets its own column instead of trailing the type in small grey. */
+.vclcalc-app .vres-sc{ font-size:12px; color:var(--ink-soft); text-align:left !important; white-space:nowrap; }
+.vclcalc-app .vres-sc--std{ color:var(--ink-faint); }
+
+/* Mechanic chip in the card head, matching the overview table's column. */
+.vclcalc-app .vres-chip{
+  display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600;
+  padding:1px 7px; border-radius:999px; margin-right:8px;
+  background:var(--accent-soft); color:var(--accent-deep);
+}
+.vclcalc-app .vres-chip--cap{ background:var(--amber-soft); color:var(--amber); }
+.vclcalc-app .vres-chip--none{ background:transparent; color:var(--ink-faint); }
+
+/* ---- Result step: country overview above the detail cards ---- */
+.vclcalc-app .vres-subhead{
+  display:flex; align-items:baseline; gap:10px;
+  margin:22px 2px 6px;
+}
+.vclcalc-app .vres-subhead:first-child{ margin-top:0; }
+.vclcalc-app .vres-subhead h3{
+  font-family:var(--sans); font-size:14px; font-weight:600; color:var(--ink); margin:0;
+}
+.vclcalc-app .vres-ovwrap{ border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); }
+.vclcalc-app .vres-ov{ width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
+/* Fixed measures for every column but the country name: switching EUR to a local currency
+   makes the amounts longer, and an auto layout would re-measure and shove all columns left. */
+.vclcalc-app .vres-ov th:nth-child(2), .vclcalc-app .vres-ov td:nth-child(2){ width:150px; }
+.vclcalc-app .vres-ov th:nth-child(3), .vclcalc-app .vres-ov td:nth-child(3){ width:110px; }
+.vclcalc-app .vres-ov th:nth-child(4), .vclcalc-app .vres-ov td:nth-child(4){ width:110px; }
+.vclcalc-app .vres-ov th:nth-child(5), .vclcalc-app .vres-ov td:nth-child(5){ width:120px; }
+.vclcalc-app .vres-ov th:nth-child(6), .vclcalc-app .vres-ov td:nth-child(6){ width:190px; }
+.vclcalc-app .vres-ov td{ overflow:hidden; text-overflow:ellipsis; }
+.vclcalc-app .vres-ov thead th{
+  font-size:10px; letter-spacing:.06em; text-transform:uppercase; font-weight:600;
+  color:var(--ink-faint); background:#fbfcfd; padding:9px 14px;
+  text-align:right; border-bottom:1px solid var(--line); white-space:nowrap;
+}
+.vclcalc-app .vres-ov thead th:first-child, .vclcalc-app .vres-ov thead th:nth-child(2){ text-align:left; }
+.vclcalc-app .vres-ov thead th button{
+  all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:4px; font:inherit; color:inherit;
+}
+.vclcalc-app .vres-ov thead th button:hover{ color:var(--accent-deep); }
+.vclcalc-app .vres-ov thead th button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.vclcalc-app .vres-ov .vres-sortcar{ font-size:9px; opacity:.5; }
+.vclcalc-app .vres-ov .vres-sortcar.on{ opacity:1; color:var(--accent); }
+.vclcalc-app .vres-ov tbody td{
+  padding:9px 14px; text-align:right; color:var(--ink-soft);
+  font-family:var(--sans); font-variant-numeric:tabular-nums; border-bottom:0;
+}
+.vclcalc-app .vres-ov tbody td:first-child, .vclcalc-app .vres-ov tbody td:nth-child(2){ text-align:left; }
+.vclcalc-app .vres-ov tbody tr:nth-child(even) td{ background:#fafbfd; }
+.vclcalc-app .vres-ov tbody tr{ cursor:pointer; }
+.vclcalc-app .vres-ov tbody tr:hover td{ background:#fbf7ee; }
+.vclcalc-app .vres-ov tbody tr:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+.vclcalc-app .vres-ov .vres-ovname{ display:flex; align-items:center; gap:8px; font-weight:600; color:var(--ink); }
+.vclcalc-app .vres-ov tfoot td{
+  padding:11px 14px; font-weight:600; text-align:right;
+  border-top:1.5px solid var(--accent); background:var(--accent-soft); color:var(--accent-deep);
+  font-variant-numeric:tabular-nums;
+}
+.vclcalc-app .vres-ov tfoot td:first-child{ text-align:left; }
+.vclcalc-app .vres-ovmoney{ font-weight:600; color:var(--ink); }
+.vclcalc-app .vres-ovmoney--zero{ font-weight:400; color:var(--ink-faint); }
+/* Jumping from an overview row to its card: a short highlight, no scroll hunt. */
+.vclcalc-app .vres-cty.vres-flash{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+@media (prefers-reduced-motion:reduce){ .vclcalc-app .vres-cty{ transition:none; } }
+/* The type split lives once, in the total row -- normal weight beside the bold label. */
+.vclcalc-app .vres-varbd{ font-weight:400; font-size:12px; }
+/* Country code first, in a column of its own width, so the names line up down the table. */
+.vclcalc-app .vres-ov .vres-ovname{ gap:10px; }
+.vclcalc-app .vres-ovcode{ min-width:30px; text-align:center; flex-shrink:0; }
+/* Special case is a text column: its header sits left with the cells, not right with the money. */
+.vclcalc-app .vres-tbl thead th:nth-child(2){ text-align:left; }
