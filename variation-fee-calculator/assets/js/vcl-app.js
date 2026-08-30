@@ -115,7 +115,8 @@
   const el = {
     appRoot: document.getElementById("vcl-app"),
     browseCol: document.getElementById("vcl-browseCol"),
-    treeToggleRow: document.getElementById("vcl-treeToggleRow"),
+    treeRail: document.getElementById("vcl-treeRail"),
+    browseColHead: document.getElementById("vcl-browseColHead"),
     browseTree: document.getElementById("vcl-browseTree"),
     toolBar: document.getElementById("vcl-toolBar"),
     summaryHeaderBtn: document.getElementById("vcl-summaryHeaderBtn"),
@@ -287,11 +288,17 @@
     // The left column exists only for the Classification/Guidance tree, so it is hidden in the
     // views that never use it (calculator, workflow, budget, timetables, summary). data-tree on
     // the .layout grid lets the CSS drop the 300px track and give the detail area the full width.
-    const showTree = viewHasTree() && !state.treeCollapsed;
+    // Three states, not two: "on" (list open), "collapsed" (list hidden, narrow rail holds the
+    // Show-list control) and "off" (this view has no tree at all -- no rail either).
+    const hasTree = viewHasTree();
+    const showTree = hasTree && !state.treeCollapsed;
     if (el.browseCol) {
       el.browseCol.classList.toggle("hidden", !showTree);
       if (el.browseCol.parentElement) {
-        el.browseCol.parentElement.setAttribute("data-tree", showTree ? "on" : "off");
+        el.browseCol.parentElement.setAttribute(
+          "data-tree",
+          showTree ? "on" : hasTree ? "collapsed" : "off"
+        );
       }
     }
   }
@@ -715,7 +722,7 @@
       const isOpen = state.groupingOpen === key;
       return `
         <div class="grouping-section">
-          <button type="button" class="grouping-section__title" data-grouping-toggle="${key}">
+          <button type="button" class="grouping-section__title" data-grouping-toggle="${key}" aria-expanded="${isOpen}">
             <span class="grouping-section__badge ${badgeClass}">${label}</span>
             <span class="grouping-section__count">${items.length}</span>
           </button>
@@ -802,7 +809,7 @@
       const isOpen = state.preciseScopeOpen === sec.key;
       return `
         <div class="grouping-section">
-          <button type="button" class="grouping-section__title" data-precise-scope-toggle="${sec.key}">
+          <button type="button" class="grouping-section__title" data-precise-scope-toggle="${sec.key}" aria-expanded="${isOpen}">
             <span class="grouping-section__badge grouping-section__badge--alt">${sec.label}</span>
             <span class="grouping-section__count">${sec.items.length}</span>
           </button>
@@ -999,8 +1006,10 @@
       const isOpen = filtering || state.qaOpenChapter === ch.key;
       return (
         '<div class="grouping-section">' +
-        '<button type="button" class="grouping-section__title" data-qa-chapter="' + ch.key + '">' +
-        '<span class="grouping-section__badge grouping-section__badge--alt">' + ch.key + ". " + ch.title + "</span>" +
+        '<button type="button" class="grouping-section__title" data-qa-chapter="' + ch.key +
+        '" aria-expanded="' + (isOpen ? "true" : "false") + '">' +
+        '<span class="grouping-section__key">' + ch.key + "</span>" +
+        '<span class="grouping-section__badge grouping-section__badge--alt">' + ch.title + "</span>" +
         '<span class="grouping-section__count">' + qs.length + "</span>" +
         "</button>" +
         (isOpen ? '<div class="qa-list">' + qs.map(questionRow).join("") + "</div>" : "") +
@@ -1106,16 +1115,25 @@
   // "changed in Rev. N" badges the way REVISION_HISTORY does for the classification codes.
   function qaRevisionsHtml() {
     if (!QA_DATA.revisions.length) return "";
+    // Newest first: the latest revision is the one a reader actually needs, so it heads the
+    // table and is the only row marked. The source lists them oldest-first, hence the reverse.
+    const rows = QA_DATA.revisions.slice().reverse();
     return (
-      '<div class="qa-revisions"><h4>Revision history of the source document</h4><table><tbody>' +
-      QA_DATA.revisions
+      '<div class="qa-revisions"><h4>Revision history of the source document</h4>' +
+      '<div class="qa-revisions__wrap"><table>' +
+      "<thead><tr><th scope=\"col\">Revision</th><th scope=\"col\">What changed</th>" +
+      '<th scope="col" class="qa-rev-date">Date</th></tr></thead><tbody>' +
+      rows
         .map(
-          (r) =>
-            "<tr><th>Rev. " + r.rev + "</th><td>" + escapePreciseScopeText(r.summary) +
+          (r, i) =>
+            '<tr' + (i === 0 ? ' class="is-latest"' : "") + '><th scope="row">' +
+            '<span class="qa-rev-no">Rev. ' + r.rev + "</span></th><td>" +
+            escapePreciseScopeText(r.summary) +
+            (i === 0 ? ' <span class="qa-rev-latest">Latest</span>' : "") +
             '</td><td class="qa-rev-date">' + r.date + "</td></tr>"
         )
         .join("") +
-      "</tbody></table></div>"
+      "</tbody></table></div></div>"
     );
   }
 
@@ -1214,7 +1232,8 @@
       const open = filtering || state.art5OpenGroup === g.key;
       return (
         '<div class="grouping-section">' +
-        '<button type="button" class="grouping-section__title" data-art5-group="' + escapeAttr(g.key) + '">' +
+        '<button type="button" class="grouping-section__title" data-art5-group="' + escapeAttr(g.key) +
+        '" aria-expanded="' + (open ? "true" : "false") + '">' +
         '<span class="grouping-section__badge grouping-section__badge--alt">' + escapePreciseScopeText(g.key) + "</span>" +
         '<span class="grouping-section__count">' + g.recs.length + "</span>" +
         "</button>" +
@@ -2240,37 +2259,55 @@
     });
   }
 
-  // Collapse/expand button for the left tree. It lives in its own row (#vcl-treeToggleRow)
-  // between the tool bar and the layout grid -- deliberately not inside any of the detail
-  // containers, which belong to the individual tool renderers. Rendered only in the views that
-  // actually have a tree (viewHasTree), so the row stays empty -- and, via :empty, invisible --
-  // everywhere else.
+  // Collapse/expand control for the left tree. The "Hide list" button lives in the browse
+  // column's own header row (#vcl-browseColHead), and its collapsed counterpart lives in a
+  // narrow rail (#vcl-treeRail) inside the layout grid -- both deliberately in the horizontal
+  // axis, so opening or closing the list never pushes the content up or down. Rendered only in
+  // the views that actually have a tree (viewHasTree).
   function renderTreeToggle() {
-    if (!el.treeToggleRow) return;
-    el.treeToggleRow.innerHTML = "";
+    if (el.browseColHead) el.browseColHead.innerHTML = "";
+    if (el.treeRail) el.treeRail.innerHTML = "";
     if (!viewHasTree()) return;
 
+    // Static markup, no interpolated data: the chevron points left and is flipped by CSS via
+    // the aria-expanded attribute, so the icon state never has to be tracked in JS.
+    const chevron =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>';
+
+    if (state.treeCollapsed) {
+      if (!el.treeRail) return;
+      const rail = document.createElement("button");
+      rail.type = "button";
+      rail.className = "tree-rail__btn";
+      rail.setAttribute("aria-expanded", "false");
+      rail.setAttribute("aria-controls", "vcl-browseCol");
+      // English, like every other control in this app ("How to use", "Summary", "Start").
+      rail.innerHTML = chevron + '<span class="tree-rail__label">Show list</span>';
+      rail.addEventListener("click", toggleTree);
+      el.treeRail.appendChild(rail);
+      return;
+    }
+
+    if (!el.browseColHead) return;
+    const title = document.createElement("span");
+    title.className = "browse-col__head-title";
+    title.textContent = state.classifyOpen || state.view === "art5" ? "Variation codes" : "Guidance";
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "tree-toggle";
-    btn.setAttribute("aria-expanded", state.treeCollapsed ? "false" : "true");
+    btn.setAttribute("aria-expanded", "true");
     btn.setAttribute("aria-controls", "vcl-browseCol");
-    // Static markup, no interpolated data: the chevron points left and is flipped by CSS via
-    // the aria-expanded attribute, so the icon state never has to be tracked in JS.
-    btn.innerHTML =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-      'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>';
-    const label = document.createElement("span");
-    // English, like every other control in this app ("How to use", "Summary", "Start") -- the
-    // German wording came from the design mockup, not from the product.
-    label.textContent = state.treeCollapsed ? "Show list" : "Hide list";
-    btn.appendChild(label);
-    btn.addEventListener("click", () => {
-      state.treeCollapsed = !state.treeCollapsed;
-      switchViewVisibility();
-      renderTreeToggle();
-    });
-    el.treeToggleRow.appendChild(btn);
+    btn.innerHTML = chevron + "<span>Hide list</span>";
+    btn.addEventListener("click", toggleTree);
+    el.browseColHead.appendChild(title);
+    el.browseColHead.appendChild(btn);
+  }
+
+  function toggleTree() {
+    state.treeCollapsed = !state.treeCollapsed;
+    switchViewVisibility();
+    renderTreeToggle();
   }
 
   // Rebuilds the browse column, which now holds only the Classification/Guidance tree: while
@@ -3636,10 +3673,14 @@
         <span class="guide-overview__title"><span class="guide-overview__dot"></span>${d.label}</span>
         <span class="guide-overview__desc">${d.desc}</span>
       </button>`).join("");
+    // Same head shape as every other tool (title in its own colour, one quiet rule beneath it) --
+    // the hub was the one view that carried the colour but not the rule.
     return `
       <div class="guide-overview">
-        <h3 class="guide-overview__heading" style="color: var(--group);">Guidance on Variations</h3>
-        <p class="guide-overview__intro">Procedural guidance and Q&amp;A on variations &mdash; pick a document.</p>
+        <div class="guide-overview__head guide-overview__head--group">
+          <h3 class="guide-overview__heading">Guidance on Variations</h3>
+          <p class="guide-overview__intro">Procedural guidance and Q&amp;A on variations &mdash; pick a document.</p>
+        </div>
         <div class="guide-overview__grid">${cards}</div>
       </div>`;
   }

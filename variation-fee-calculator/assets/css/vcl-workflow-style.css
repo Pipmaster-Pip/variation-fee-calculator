@@ -17,13 +17,14 @@
 .vcl-app .vcl-wf-head {
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--workflow);
+  border-bottom: 1px solid color-mix(in srgb, var(--workflow) 35%, var(--border));
 }
 .vcl-app .vcl-wf-head h3 {
   font-family: "Source Serif 4", serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
+  color: var(--workflow);
 }
 .vcl-app .vcl-wf-head p {
   margin: 0;

@@ -690,7 +690,10 @@
     // Column widths: Product gets more room (long names were overrunning Mode), Procedures is
     // narrower now that each procedure sits on its own compact line, and Variations gets a touch
     // more for the single-row aggregated badges. <col> hints; auto table-layout still lets cells grow.
-    function sortArrow(key){ return state.sortKey === key ? (state.sortDir === "desc" ? " ▾" : " ▴") : ""; }
+    function sortArrow(key){
+      if (state.sortKey !== key) return "";
+      return '<span class="vcl-bud-sortarrow" aria-hidden="true">' + (state.sortDir === "desc" ? "▾" : "▴") + "</span>";
+    }
     table.innerHTML =
       '<colgroup><col style="width:14%"><col style="width:12%"><col style="width:17%">' +
       '<col style="width:17%"><col style="width:6%"><col style="width:9%">' +

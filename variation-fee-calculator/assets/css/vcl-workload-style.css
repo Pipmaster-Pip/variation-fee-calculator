@@ -34,7 +34,7 @@
 .vcl-app .vcl-wl-head {
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--workload);
+  border-bottom: 1px solid color-mix(in srgb, var(--workload) 35%, var(--border));
 }
 
 .vcl-app .vcl-wl-head h3 {
@@ -42,6 +42,7 @@
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
+  color: var(--workload);
 }
 
 .vcl-app .vcl-wl-head p {
@@ -536,6 +537,14 @@
 /* Runs the full width of the detail area (no max-width) so it lines up with the
    card grid's right edge below it. */
 .vcl-app .guide-overview__intro { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0 0 18px; }
+/* Head block for the Guidance hub: heading + intro above one quiet identity rule, the same
+   shape the Classification, Grouping, Timetables, Workflow and Budget heads use. */
+.vcl-app .guide-overview__head { padding-bottom: 16px; margin-bottom: 20px; }
+.vcl-app .guide-overview__head .guide-overview__intro { margin-bottom: 0; }
+.vcl-app .guide-overview__head--group {
+  border-bottom: 1px solid color-mix(in srgb, var(--group) 35%, var(--border));
+}
+.vcl-app .guide-overview__head--group .guide-overview__heading { color: var(--group); }
 .vcl-app .guide-overview__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .vcl-app .guide-overview__card {
   display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%;
@@ -568,6 +577,10 @@
    identity, so the selection is visible on Start without a click into the full Summary view. */
 .vcl-app .sel-full {
   margin-top: 22px;
+  /* Sits just above the tool list on the start screen: a small gap only, so the selection and
+     the destinations it feeds read as one block. The empty state keeps the larger gap (see
+     .sel-full--empty in vcl-style.css). */
+  margin-bottom: 10px;
   border: 1.5px solid var(--plum);
   border-radius: 10px;
   background: var(--panel);

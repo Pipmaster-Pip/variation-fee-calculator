@@ -19,9 +19,11 @@
    line) sit BELOW that rule, so the header now stacks vertically instead of title-left /
    buttons-right. */
 .vcl-app .vcl-bud-header { padding: 0; margin-bottom: 24px; display: flex; flex-direction: column; }
-.vcl-app .vcl-bud-header__intro { padding: 0 0 16px; border-bottom: 2px solid var(--budget); }
-.vcl-app .vcl-bud-header h2 { font-family: "Source Serif 4", serif; font-weight: 600; font-size: 22px; margin: 0 0 6px; }
-.vcl-app .vcl-bud-year { color: var(--budget); font-weight: 600; font-size: 0.8em; }
+.vcl-app .vcl-bud-header__intro { padding: 0 0 16px; border-bottom: 1px solid color-mix(in srgb, var(--budget) 35%, var(--border)); }
+.vcl-app .vcl-bud-header h2 { font-family: "Source Serif 4", serif; font-weight: 600; font-size: 22px; margin: 0 0 6px; color: var(--budget); }
+/* The year already sits inside a budget-coloured heading now, so it reads as one phrase; it
+   keeps the smaller size, which is what separated it in the first place. */
+.vcl-app .vcl-bud-year { color: var(--budget); font-weight: 600; font-size: 0.8em; opacity: 0.75; }
 .vcl-app .vcl-bud-header p { margin: 0; color: var(--muted); font-size: 14px; }
 .vcl-app .vcl-bud-header__actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
 
@@ -155,6 +157,18 @@
 .vcl-app .vcl-bud-table tfoot td { padding: 11px 12px; font-weight: 600; border-top: 2px solid var(--border); border-bottom: 0; background: var(--panel); font-variant-numeric: tabular-nums; vertical-align: top; }
 /* Round the Total row's bottom corners so its (bluish) fill ends flush with the wrapper's 12px
    radius instead of poking square corners past the rounded border. */
+.vcl-app .vcl-bud-table tfoot tr:last-child td:first-child { border-bottom-left-radius: 11px; }
+.vcl-app .vcl-bud-table tfoot tr:last-child td:last-child { border-bottom-right-radius: 11px; }
+/* The wrapper is rounded (12px) but scrolls, so it cannot clip its own children: without these
+   the white header cells sit square inside the rounded frame and the top corners read as
+   clipped. Header and last body row therefore round themselves, 11px = 12px minus the
+   wrapper's 1px border, so the curves sit concentric instead of a hair off. */
+.vcl-app .vcl-bud-table thead tr:first-child th:first-child { border-top-left-radius: 11px; }
+.vcl-app .vcl-bud-table thead tr:first-child th:last-child { border-top-right-radius: 11px; }
+/* Tables without a tfoot (or with an empty one) close on their last body row instead. */
+.vcl-app .vcl-bud-table tbody tr:last-child td:first-child { border-bottom-left-radius: 11px; }
+.vcl-app .vcl-bud-table tbody tr:last-child td:last-child { border-bottom-right-radius: 11px; }
+.vcl-app .vcl-bud-table tfoot tr td { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .vcl-app .vcl-bud-table tfoot tr:last-child td:first-child { border-bottom-left-radius: 11px; }
 .vcl-app .vcl-bud-table tfoot tr:last-child td:last-child { border-bottom-right-radius: 11px; }
 
@@ -428,7 +442,7 @@
 /* --- Inline "takeover" editor: New/Edit line replaces the dashboard (tiles + table) with the
    station flow, GW-style, instead of a pop-up modal. Head carries the title + a budget rule and a
    cancel (✕); the bottom nav mirrors the GW's Back / Next (with a final "Add / Save line"). --- */
-.vcl-app .vcl-bud-editor__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 0 0 16px; margin-bottom: 18px; border-bottom: 2px solid var(--budget); }
+.vcl-app .vcl-bud-editor__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 0 0 16px; margin-bottom: 18px; border-bottom: 1px solid color-mix(in srgb, var(--budget) 35%, var(--border)); }
 /* Match the dashboard/result heading exactly (see .vcl-bud-header h2): same serif, size and year tint. */
 .vcl-app .vcl-bud-editor__head h2 { font-family: "Source Serif 4", serif; font-size: 22px; margin: 0 0 6px; font-weight: 600; }
 .vcl-app .vcl-bud-editor__subtitle { margin: 0; color: var(--muted); font-size: 14px; }
@@ -471,6 +485,17 @@
 
 .vcl-app .vcl-bud-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 .vcl-app .vcl-bud-sortable:hover { color: var(--budget); }
+/* The header runs at 11px uppercase; a caret at that size is barely a smudge. Lift it clear of
+   the label's own size and give it the tool colour, so the sorted column is readable at a
+   glance instead of needing a second look. */
+.vcl-app .vcl-bud-sortarrow {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 15px;
+  line-height: 1;
+  vertical-align: -2px;
+  color: var(--budget);
+}
 
 /* --- Annual maintenance-fees table (second "Plan lines" section). Reuses the variations table's own
    classes (.vcl-bud-table, .vcl-bud-table-head, .vcl-bud-num, .vcl-bud-proc-cell/-line, .vcl-bud-cc,

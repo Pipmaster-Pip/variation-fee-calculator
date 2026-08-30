@@ -413,10 +413,17 @@ function vcl_shortcode( $atts ) {
 	</header>
 
 	<nav class="tool-bar" id="vcl-toolBar" aria-label="Tools"></nav>
-	<div class="tree-toggle-row" id="vcl-treeToggleRow"></div>
 
 	<div class="layout">
+	  <!-- Collapsed-tree rail: holds the "Show list" control while the browse column is hidden,
+	       so re-opening the list never costs vertical space above the content. -->
+	  <div class="tree-rail" id="vcl-treeRail"></div>
+
 	  <div class="browse-col" id="vcl-browseCol">
+	    <!-- Header row of the list: section label + the Hide-list toggle. Lives inside the column
+	         (not in a row of its own above the grid) so collapsing the list never moves the
+	         content up or down. Filled by renderTreeToggle() in vcl-app.js. -->
+	    <div class="browse-col__head" id="vcl-browseColHead"></div>
 	    <div class="search-box">
 	      <input type="text" id="vcl-searchInput" placeholder="Search by code or keyword (i. e. shape, shelf, leaflet) ..." autocomplete="off" />
 	    </div>
@@ -478,7 +485,9 @@ function vcl_shortcode( $atts ) {
 	       vcl-calcHead by vcl-app.js; the .vclcalc-app block below is the copied
 	       calculator scaffold with its own header intentionally omitted. -->
 	  <div class="calculator-col hidden" id="vcl-calculatorCol">
-	    <div class="classification-head" id="vcl-calcHead"></div>
+	    <!-- Shares the shared reference-header shape, but carries the Calculator's own gold
+	         identity instead of the Classification blue (see .classification-head--calc). -->
+	    <div class="classification-head classification-head--calc" id="vcl-calcHead"></div>
 	    <div class="vclcalc-app" id="vclcalc-app">
 	      <div class="rail" id="vclcalc-rail"></div>
 	      <div id="vclcalc-stepContent"></div>

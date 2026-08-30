@@ -1119,6 +1119,17 @@
 @media (max-width: 760px) {
   .vcl-app .layout { grid-template-columns: 1fr; }
   .vcl-app .browse-col { margin-bottom: 20px; }
+  /* Single column here, so the collapsed rail becomes a full-width bar above the content
+     rather than a 34px stripe next to it. */
+  .vcl-app .layout[data-tree="collapsed"] { grid-template-columns: 1fr; }
+  .vcl-app .layout[data-tree="collapsed"] > * { grid-column: 1; }
+  .vcl-app .layout[data-tree="collapsed"] > .tree-rail { grid-column: 1; }
+  .vcl-app .tree-rail__btn {
+    flex-direction: row; width: 100%; height: auto; min-height: 0;
+    padding: 8px 12px; margin: 20px 0 12px;
+  }
+  .vcl-app .tree-rail__label { writing-mode: horizontal-tb; }
+  .vcl-app .tree-rail__btn svg { transform: none; }
 }
 
 /* --- Quantity stepper (per variant type) --- */
@@ -1430,7 +1441,9 @@
      rhythm when both are stacked. */
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--classify);
+  /* One hairline in a damped mix of the tool colour and the neutral border, not a 2px bar: the
+     identity now lives in the heading itself (below), so the rule only has to separate. */
+  border-bottom: 1px solid color-mix(in srgb, var(--classify) 35%, var(--border));
 }
 
 .vcl-app .classification-head h3 {
@@ -1438,7 +1451,15 @@
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
+  color: var(--classify);
 }
+
+/* The Fee Calculator borrows this header shape but is its own tool: gold, matching its tile in
+   the tool bar (#8F6E2E) and the .vclcalc-app palette inside the panel below. */
+.vcl-app .classification-head--calc {
+  border-bottom-color: color-mix(in srgb, #8F6E2E 35%, var(--border));
+}
+.vcl-app .classification-head--calc h3 { color: #8F6E2E; }
 
 .vcl-app .classification-head p {
   margin: 0;
@@ -1471,7 +1492,7 @@
 .vcl-app .grouping-head {
   margin-bottom: 4px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--group);
+  border-bottom: 1px solid color-mix(in srgb, var(--group) 35%, var(--border));
 }
 
 .vcl-app .grouping-head h3 {
@@ -1479,6 +1500,7 @@
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
+  color: var(--group);
 }
 
 .vcl-app .grouping-head p {
@@ -1502,43 +1524,100 @@
 
 .vcl-app .grouping-section { margin-top: 24px; }
 
+/* Section rows, not chips: the whole row is the target, shaped like the Classification chapter
+   boxes so Guidance and Classification read as one system. The chapter number keeps the mono
+   voice in its own small tile; the title itself moved to the body face, since a long sentence
+   set in a monospace pill read as a code, not a heading. */
 .vcl-app .grouping-section__title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   text-align: left;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 6px;
-  margin: 0 0 6px -6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 11px 14px;
+  margin: 0 0 8px;
   cursor: pointer;
   color: var(--ink);
 }
 
-.vcl-app .grouping-section__title:hover { background: var(--paper); }
+.vcl-app .grouping-section__title:hover {
+  background: var(--group-tint);
+  border-color: color-mix(in srgb, var(--group) 40%, var(--border));
+}
+.vcl-app .grouping-section__title[aria-expanded="true"] {
+  background: var(--group-tint);
+  border-color: color-mix(in srgb, var(--group) 40%, var(--border));
+}
+.vcl-app .grouping-section__title:focus-visible { outline: 2px solid var(--group); outline-offset: 2px; }
 
-.vcl-app .grouping-section__count {
-  font-size: 12px;
-  color: var(--muted);
+/* Chevron, drawn from borders so no icon file is needed: points right when closed, down when
+   the section is open. */
+.vcl-app .grouping-section__title::after {
+  content: "";
+  flex: none;
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--ink-faint);
+  border-bottom: 2px solid var(--ink-faint);
+  transform: rotate(-45deg);
+  margin-right: 2px;
+  transition: transform .18s ease;
+}
+.vcl-app .grouping-section__title[aria-expanded="true"]::after { transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .vcl-app .grouping-section__title::after { transition: none; }
 }
 
-.vcl-app .grouping-section__badge {
+/* Chapter number tile -- same shape as the E/Q/C/M keys in the Classification tree. */
+.vcl-app .grouping-section__key {
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 7px;
+  background: var(--group-bg);
+  color: var(--group);
   font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  letter-spacing: 0.01em;
 }
 
-.vcl-app .grouping-section__badge--ok { background: var(--ia-bg); color: var(--ia); }
-.vcl-app .grouping-section__badge--no { background: var(--ii-bg); color: var(--ii); }
-.vcl-app .grouping-section__badge--alt { background: var(--group-bg); color: var(--group); }
+/* Count pill, hard right next to the chevron. */
+.vcl-app .grouping-section__count {
+  flex: none;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--group);
+  background: var(--group-bg);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The label is now the row's heading, so no pill of its own -- only the identity colour of the
+   category it names (acceptable / not acceptable / everything else). */
+.vcl-app .grouping-section__badge {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.vcl-app .grouping-section__badge--ok { color: var(--ia); }
+.vcl-app .grouping-section__badge--no { color: var(--ii); }
+.vcl-app .grouping-section__badge--alt { color: var(--ink); }
+/* The count pill follows the label it belongs to, so an "acceptable"/"not acceptable" row reads
+   in one colour instead of a green title beside a blue number. */
+.vcl-app .grouping-section__title:has(.grouping-section__badge--ok) .grouping-section__count { color: var(--ia); background: var(--ia-bg); }
+.vcl-app .grouping-section__title:has(.grouping-section__badge--no) .grouping-section__count { color: var(--ii); background: var(--ii-bg); }
 
 .vcl-app .grouping-list {
   margin: 0;
@@ -1572,7 +1651,8 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  /* The head's rule sits directly above; without this the search field almost touched it. */
+  margin: 20px 0 18px;
 }
 .vcl-app .qa-search {
   flex: 1;
@@ -1689,32 +1769,81 @@
 }
 .vcl-app .vcl-guidance-return:hover { color: var(--classify); text-decoration: underline; }
 
+/* Revision history of the source Q&A document -- a quiet card rather than a bare table: real
+   column headings, room around the text, only horizontal hairlines, and a narrow revision
+   column (the old 30% one left the prose squeezed). Newest row first and marked (see
+   qaRevisionsHtml), since that is the one anyone actually reads. */
 .vcl-app .qa-revisions { margin-top: 26px; }
 .vcl-app .qa-revisions h4 {
   font-family: "Source Serif 4", serif;
   font-size: 13.5px;
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   color: var(--ink);
 }
-.vcl-app .qa-revisions table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.vcl-app .qa-revisions th,
-.vcl-app .qa-revisions td {
+.vcl-app .qa-revisions__wrap {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.vcl-app .qa-revisions table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 0; }
+.vcl-app .qa-revisions thead th {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: left;
+  padding: 10px 16px;
+  background: var(--paper);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.vcl-app .qa-revisions tbody th,
+.vcl-app .qa-revisions tbody td {
   text-align: left;
   vertical-align: top;
-  padding: 6px 10px 6px 0;
+  padding: 13px 16px;
+  border: 0;
   border-top: 1px solid var(--border-soft);
   color: var(--muted);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.6;
 }
-.vcl-app .qa-revisions th {
+.vcl-app .qa-revisions tbody tr:first-child th,
+.vcl-app .qa-revisions tbody tr:first-child td { border-top: 0; }
+.vcl-app .qa-revisions tbody th { width: 96px; white-space: nowrap; }
+.vcl-app .qa-rev-no {
+  display: inline-block;
   font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--group);
+  background: var(--group-bg);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.vcl-app .qa-revisions tr.is-latest .qa-rev-no { color: var(--panel); background: var(--group); }
+.vcl-app .qa-revisions tr.is-latest td { color: var(--ink); }
+.vcl-app .qa-rev-latest {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--group);
   white-space: nowrap;
 }
-.vcl-app .qa-rev-date { white-space: nowrap; color: var(--ink-faint); }
+.vcl-app .qa-revisions thead th.qa-rev-date { text-align: right; }
+.vcl-app .qa-rev-date {
+  width: 120px;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 /* --- Art. 5 recommendations (fifth Classification chapter) --------------------------------
    Reuses .grouping-head / .grouping-section for the shell; the rest is its own. --- */
@@ -1809,7 +1938,7 @@
 .vcl-app .tt-head {
   margin-bottom: 4px;
   padding-bottom: 16px;
-  border-bottom: 2px solid var(--slate);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate) 35%, var(--border));
 }
 
 .vcl-app .tt-head h3 {
@@ -1817,6 +1946,7 @@
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 8px;
+  color: var(--slate);
 }
 
 .vcl-app .tt-head p {
@@ -2285,23 +2415,27 @@
 }
 
 .vcl-app .summary-item {
-  /* Plum identity card, matching the home-screen selection preview (.sel-full, --plum) so a
-     selected variation reads in the Summary's own colour. The header row is the plum band; the
-     expanded body (white, below) shares the same rounded card via overflow:hidden. */
-  border: 1.5px solid var(--plum);
+  /* Same restraint as the home-screen selection preview (.sel-full): a neutral hairline border
+     and the faint plum tint for the header band, with the identity colour carried by the code,
+     the number and the badge rather than by a heavy frame. An open item gets the plum border --
+     that is where the emphasis is actually useful. */
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
   margin-bottom: 10px;
   overflow: hidden;
 }
+.vcl-app .summary-item.is-open { border-color: color-mix(in srgb, var(--plum) 45%, var(--border)); }
 
 .vcl-app .summary-item__row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: var(--plum-bg);
+  background: var(--plum-tint);
+  border-bottom: 1px solid transparent;
 }
+.vcl-app .summary-item.is-open .summary-item__row { border-bottom-color: var(--border-soft); }
 .vcl-app .summary-item__row:hover { filter: brightness(1.02); }
 
 .vcl-app .summary-item__dash { color: var(--plum); opacity: 0.5; flex-shrink: 0; }
@@ -2367,8 +2501,7 @@
 
 .vcl-app .summary-item__subtitle {
   font-size: 11.5px;
-  color: var(--plum);
-  opacity: 0.85;
+  color: var(--ink-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2603,15 +2736,48 @@
    the width a property of the layout instead of the content. */
 .vcl-app .layout[data-tree="off"] > * { grid-column: 1; }
 
-/* Collapse/expand control for the left Classification/Guidance tree. Its own row between the
-   tool bar and the layout grid; empty (and therefore hidden) in every view without a tree.
+/* Collapse/expand control for the left Classification/Guidance tree. The button sits in the
+   list column's own header row, its collapsed counterpart in a narrow rail in the grid's first
+   track -- both purely horizontal, so toggling the list never shifts the content vertically.
    Deliberately neutral -- same --muted/--panel/--border tokens as the masthead's Home and
    How-to-use buttons -- so it never competes with a tool identity color. */
-.vcl-app .tree-toggle-row { display: flex; margin: 14px 0 0; }
-.vcl-app .tree-toggle-row:empty { display: none; }
+.vcl-app .browse-col__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 11px 11px 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.vcl-app .browse-col__head:empty { display: none; }
+.vcl-app .browse-col__head-title {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-faint); margin-right: auto;
+}
+/* Rail holding the "Show list" control while the tree is collapsed. Empty (and hidden) in every
+   other state, so the grid's first track only exists when there is something in it. */
+.vcl-app .tree-rail { display: none; }
+.vcl-app .layout[data-tree="collapsed"] .tree-rail { display: block; grid-column: 1; align-self: start; }
+.vcl-app .layout[data-tree="collapsed"] { grid-template-columns: 34px 1fr; column-gap: 16px; }
+.vcl-app .layout[data-tree="collapsed"] > * { grid-column: 2; }
+.vcl-app .layout[data-tree="collapsed"] > .tree-rail { grid-column: 1; }
+.vcl-app .tree-rail__btn {
+  width: 34px; height: auto; min-height: 150px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  margin: 24px 0;
+  padding: 0;
+  font-family: inherit;
+  color: var(--muted); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px; cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.vcl-app .tree-rail__btn:hover { color: var(--ink); border-color: var(--ink); }
+.vcl-app .tree-rail__label {
+  writing-mode: vertical-rl;
+  font-size: 11px; font-weight: 500; letter-spacing: .04em;
+}
+.vcl-app .tree-rail__btn svg { transform: rotate(180deg); flex: none; }
 .vcl-app .tree-toggle {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 6px 11px; font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 5px 10px; font-family: inherit; font-size: 11.5px; font-weight: 500;
   color: var(--muted); background: var(--panel);
   border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
   transition: color .12s, border-color .12s;
