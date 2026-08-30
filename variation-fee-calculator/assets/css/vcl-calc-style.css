@@ -1095,17 +1095,23 @@
 /* ---- Step 3: special cases as a table per country ----
    Pill and select used to sit at opposite edges of a very wide card; over 1120px
    that is a lost row. The table keeps type, scope and variant within one glance. */
-.vclcalc-app .sp-tbl{ width:100%; border-collapse:collapse; font-size:13px; }
+/* The table spans the whole card: type and scope fixed at the left, the field at the right
+   edge. What carries the row over that distance is the full-width rule above it plus a very
+   quiet stripe -- a table that stopped after 410px left the eye without a line to follow.
+   separate, not collapse, so nothing but the borders set here can appear. */
+.vclcalc-app .sp-tbl{ width:100%; border-collapse:separate; border-spacing:0; font-size:13px; table-layout:fixed; }
+.vclcalc-app .sp-tbl th:nth-child(1), .vclcalc-app .sp-tbl td:nth-child(1){ width:80px; }
+.vclcalc-app .sp-tbl th:nth-child(2), .vclcalc-app .sp-tbl td:nth-child(2){ width:150px; }
 .vclcalc-app .sp-tbl thead th{
   font-size:10px; letter-spacing:.05em; text-transform:uppercase; font-weight:600;
-  color:var(--ink-faint); text-align:left; padding:6px 10px 6px 0; border-bottom:1px solid var(--line);
+  color:var(--ink-faint); text-align:left; padding:8px 10px 6px 0; border:0;
 }
-.vclcalc-app .sp-tbl thead th:last-child{ text-align:right; }
-.vclcalc-app .sp-tbl td{ padding:7px 10px 7px 0; border-bottom:1px solid var(--line); vertical-align:middle; }
-.vclcalc-app .sp-tbl tbody tr:last-child td{ border-bottom:0; }
-.vclcalc-app .sp-tbl td:last-child{ text-align:right; padding-right:0; }
+.vclcalc-app .sp-tbl td{ padding:6px 10px 6px 0; border:0; border-top:1px solid var(--line); vertical-align:middle; }
+/* Rules sit on top of each row, so the last row closes without a stray line under it. */
+.vclcalc-app .sp-tbl tbody tr:nth-child(even) td{ background:#fafbfd; }
+.vclcalc-app .sp-tbl th:last-child, .vclcalc-app .sp-tbl td:last-child{ text-align:right; padding-right:0; }
 .vclcalc-app .sp-tbl .sp-scope{ font-size:12px; color:var(--ink-faint); }
-.vclcalc-app .sp-tbl select.field-select{ width:auto; min-width:200px; background:var(--panel); }
+.vclcalc-app .sp-tbl select.field-select{ width:auto; background:var(--panel); }
 
 /* ---- Result step: quieter tables, sans-serif money ----
    IBM Plex Mono draws a slashed zero, which the rest of the toolbox does not use for
@@ -1131,7 +1137,11 @@
 .vclcalc-app .vres-tbl tbody tr:nth-child(even) td{ background:#fafbfd; }
 .vclcalc-app .vres-exp:hover td{ background:#fbf7ee; }
 /* The footer band closes the card itself, so no stray rule floats under the subtotal. */
+/* Same reason as the overview table: rounded foot cells need a non-collapsing table. */
+.vclcalc-app .vres-tbl{ border-collapse:separate; border-spacing:0; }
 .vclcalc-app .vres-tbl tfoot td{ background:var(--paper); border-top:1px solid var(--line); }
+.vclcalc-app .vres-tbl tfoot td:first-child{ border-bottom-left-radius:11px; }
+.vclcalc-app .vres-tbl tfoot td:last-child{ border-bottom-right-radius:11px; }
 
 /* The chosen variant gets its own column instead of trailing the type in small grey. */
 .vclcalc-app .vres-sc{ font-size:12px; color:var(--ink-soft); text-align:left !important; white-space:nowrap; }
@@ -1147,16 +1157,10 @@
 .vclcalc-app .vres-chip--none{ background:transparent; color:var(--ink-faint); }
 
 /* ---- Result step: country overview above the detail cards ---- */
-.vclcalc-app .vres-subhead{
-  display:flex; align-items:baseline; gap:10px;
-  margin:22px 2px 6px;
-}
-.vclcalc-app .vres-subhead:first-child{ margin-top:0; }
-.vclcalc-app .vres-subhead h3{
-  font-family:var(--sans); font-size:14px; font-weight:600; color:var(--ink); margin:0;
-}
 .vclcalc-app .vres-ovwrap{ border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); }
-.vclcalc-app .vres-ov{ width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
+/* separate, not collapse: a collapsing table ignores border-radius on its cells, and the
+   filled head/foot rows have to round themselves -- see the radii further down. */
+.vclcalc-app .vres-ov{ width:100%; border-collapse:separate; border-spacing:0; font-size:13px; table-layout:fixed; }
 /* Fixed measures for every column but the country name: switching EUR to a local currency
    makes the amounts longer, and an auto layout would re-measure and shove all columns left. */
 .vclcalc-app .vres-ov th:nth-child(2), .vclcalc-app .vres-ov td:nth-child(2){ width:150px; }
@@ -1193,7 +1197,10 @@
   border-top:1.5px solid var(--accent); background:var(--accent-soft); color:var(--accent-deep);
   font-variant-numeric:tabular-nums;
 }
-.vclcalc-app .vres-ov tfoot td:first-child{ text-align:left; }
+.vclcalc-app .vres-ov tfoot td:first-child{ text-align:left; border-bottom-left-radius:11px; }
+.vclcalc-app .vres-ov tfoot td:last-child{ border-bottom-right-radius:11px; }
+.vclcalc-app .vres-ov thead th:first-child{ border-top-left-radius:11px; }
+.vclcalc-app .vres-ov thead th:last-child{ border-top-right-radius:11px; }
 .vclcalc-app .vres-ovmoney{ font-weight:600; color:var(--ink); }
 .vclcalc-app .vres-ovmoney--zero{ font-weight:400; color:var(--ink-faint); }
 /* Jumping from an overview row to its card: a short highlight, no scroll hunt. */
@@ -1206,3 +1213,27 @@
 .vclcalc-app .vres-ovcode{ min-width:30px; text-align:center; flex-shrink:0; }
 /* Special case is a text column: its header sits left with the cells, not right with the money. */
 .vclcalc-app .vres-tbl thead th:nth-child(2){ text-align:left; }
+
+/* ---- Guard against the host theme's table borders ----------------------------
+   WordPress themes routinely style `table td { border: 1px solid ... }`. That is why the
+   older result table zeroes its side borders explicitly (see .vres-tbl above); these two
+   tables are new and need the same guard, or the theme draws a full grid over them and a
+   second rounded line under the footer band. Only the borders this file sets survive. */
+/* Cells first: only the borders this file sets may survive. */
+.vclcalc-app .vres-ov th, .vclcalc-app .vres-ov td,
+.vclcalc-app .sp-tbl th, .vclcalc-app .sp-tbl td{ border-left:0; border-right:0; }
+.vclcalc-app .vres-ov tbody td{ border-top:0; border-bottom:0; }
+/* The wrapper's own border already draws the top edge -- a theme border here doubles it. */
+.vclcalc-app .vres-ov thead th{ border-top:0; }
+.vclcalc-app .vres-ov tfoot td{ border-bottom:0; }
+.vclcalc-app .vres-tbl tbody td, .vclcalc-app .vres-tbl tfoot td{ border-bottom:0; }
+/* And the containers: themes also style `tr`, the row groups and the table itself. A row
+   border or a `table { margin-bottom }` shows up as a stray line or a white band above the
+   filled footer -- invisible in the harness, which loads no theme, and obvious live. */
+.vclcalc-app .vres-ov, .vclcalc-app .vres-tbl, .vclcalc-app .sp-tbl,
+.vclcalc-app .vres-ov tr, .vclcalc-app .vres-tbl tr, .vclcalc-app .sp-tbl tr,
+.vclcalc-app .vres-ov thead, .vclcalc-app .vres-tbl thead, .vclcalc-app .sp-tbl thead,
+.vclcalc-app .vres-ov tbody, .vclcalc-app .vres-tbl tbody, .vclcalc-app .sp-tbl tbody,
+.vclcalc-app .vres-ov tfoot, .vclcalc-app .vres-tbl tfoot{
+  border:0; margin:0; padding:0; background-image:none; box-shadow:none;
+}

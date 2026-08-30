@@ -1478,6 +1478,11 @@ function renderStepResult() {
       ? '<span class="vres-chip vres-chip--cap">Cap</span>'
       : '<span class="vres-chip">Grouping</span>';
   };
+  // The overview's code column is a fixed 30px so the names line up; "DE - BfArM" would blow
+  // that apart. Only the ISO part goes in the pill -- the authority stays in the name beside it
+  // ("Germany (BfArM)"), so nothing is lost.
+  const ccShort = (cc) => String(cc).split(/[^A-Za-z]/)[0].toUpperCase();
+
   // Amount in the country's own view (local currency when toggled), as used everywhere below.
   const money = (cr) => (v) => (mode === 'local' && cr.currency && cr.fxRate != null)
     ? fmtLocalCurrency(v * cr.fxRate, cr.currency)
@@ -1598,7 +1603,7 @@ function renderStepResult() {
             const zero = cr.hasData && cr.total < 0.005;
             return `
             <tr data-ovrow="${cr.cc}" tabindex="0">
-              <td><span class="vres-ovname"><span class="badge vres-ovcode">${cr.cc}</span>${COUNTRY_NAMES[cr.cc]}</span></td>
+              <td><span class="vres-ovname"><span class="badge vres-ovcode">${ccShort(cr.cc)}</span>${COUNTRY_NAMES[cr.cc]}</span></td>
               <td>${roleLabel(cr.role)}</td>
               <td>${cr.hasData ? cr.strengths : '&ndash;'}</td>
               <td>${varTotal}</td>
@@ -1620,7 +1625,7 @@ function renderStepResult() {
   const anyNoData = res.countries.some(cr => !cr.hasData);
 
   contentEl.innerHTML = `
-    <div class="panel" style="margin-bottom:18px;">
+    <div class="panel" style="margin-bottom:14px;">
       <div class="vres-panelhead">
         <h2 class="bd-heading" style="margin:0;">Overview - fees by country</h2>
         <div class="vres-headtools">
@@ -1640,7 +1645,12 @@ function renderStepResult() {
         </div>
       </div>
       ${overviewHTML}
-      <div class="vres-subhead"><h3>Details - fees by country</h3></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:18px;">
+      <div class="vres-panelhead">
+        <h2 class="bd-heading" style="margin:0;">Details - fees by country</h2>
+      </div>
       ${countryCards}
       <div class="vres-grand">
         <span class="vres-grand-l">Total${anyForeign ? ' (EUR)' : ''}</span>
