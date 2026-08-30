@@ -21,9 +21,9 @@
 .vcl-app .vcl-bud-header { padding: 0; margin-bottom: 24px; display: flex; flex-direction: column; }
 .vcl-app .vcl-bud-header__intro { padding: 0 0 16px; border-bottom: 1px solid color-mix(in srgb, var(--budget) 35%, var(--border)); }
 .vcl-app .vcl-bud-header h2 { font-family: "Source Serif 4", serif; font-weight: 600; font-size: 22px; margin: 0 0 6px; color: var(--budget); }
-/* The year already sits inside a budget-coloured heading now, so it reads as one phrase; it
-   keeps the smaller size, which is what separated it in the first place. */
-.vcl-app .vcl-bud-year { color: var(--budget); font-weight: 600; font-size: 0.8em; opacity: 0.75; }
+/* Reads as one phrase with the heading -- same size, same colour, no dimming; it names which
+   year the whole page is about, which is not secondary information. */
+.vcl-app .vcl-bud-year { color: inherit; font-weight: 600; font-size: 1em; }
 .vcl-app .vcl-bud-header p { margin: 0; color: var(--muted); font-size: 14px; }
 .vcl-app .vcl-bud-header__actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
 
@@ -514,10 +514,35 @@
 .vcl-app .vcl-bud-annual__track { color: var(--muted); font-size: 11.5px; }
 /* Special case / tariff <select>: same field styling as the editor's inputs/selects, just compact
    enough to sit inline in a table cell instead of a full-width form row. */
-.vcl-app .vcl-bud-select--tariff { height: 28px; width: auto; min-width: 0; max-width: 100%; font-size: 12px; padding: 3px 6px; }
+/* One width for every tariff select in the column (they used to size to their own longest
+   option, so three rows meant three different widths). 100% of the flex track plus the fixed
+   country column above makes them start on one line and end on one line. */
+.vcl-app .vcl-bud-select--tariff { height: 28px; width: 100%; min-width: 0; max-width: 100%; font-size: 12px; padding: 3px 6px; }
 /* Special-cases pick: keep the country code and its <select> on one line (they were wrapping in the
    narrow column). */
-.vcl-app .vcl-bud-annual__scpick { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); white-space: nowrap; }
+/* One picker per market: fixed country column, then the select filling the rest -- so the
+   controls stack in a straight line instead of stepping in and out with the country name. */
+.vcl-app .vcl-bud-annual__scpick { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink); white-space: nowrap; margin-bottom: 6px; }
+.vcl-app .vcl-bud-annual__scpick:last-child { margin-bottom: 0; }
+.vcl-app .vcl-bud-annual__scpick-cc {
+  flex: none;
+  width: 26px;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* .vcl-bud-proc-cell aligns its rows to flex-start, which let each picker shrink to its own
+   content -- three markets, three widths. Stretching them makes every select share one track. */
+/* Strengths column: centred and padded on the right, so header and number keep clear of the
+   "Special cases" controls instead of butting straight against them. */
+.vcl-app .vcl-bud-table th.vcl-bud-annual__str,
+.vcl-app .vcl-bud-table td.vcl-bud-annual__str {
+  text-align: center;
+  padding-right: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.vcl-app .vcl-bud-annual__scpicks { width: 100%; align-items: stretch; gap: 0; }
+.vcl-app .vcl-bud-annual__scpick .vcl-bud-select--tariff { flex: 1 1 0; min-width: 0; }
 /* Country chip modifiers for the Markets cell (base .vcl-bud-cc-chip already exists, previously
    unused): RMS gets the same tint+border treatment as the procedures column's .vcl-bud-cc--rms;
    no-annual/turnover-based markets are dimmed rather than hidden (spec: "€0 rows stay visible"). */

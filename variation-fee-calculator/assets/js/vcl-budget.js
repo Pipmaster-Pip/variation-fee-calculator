@@ -494,7 +494,9 @@
     wrap.appendChild(agencyTile);
 
     var hoursTile = el("div", "vcl-bud-tile");
-    hoursTile.appendChild(el("p", "vcl-bud-tile__label", "Annual RA hours"));
+    // Same "· year" suffix as the fees tile: all three tiles report the same plan year, and
+    // saying so on only one of them left the other two looking like portfolio-wide constants.
+    hoursTile.appendChild(el("p", "vcl-bud-tile__label", "Annual RA hours · " + escapeHtml(planYearLabel())));
     hoursTile.appendChild(el("p", "vcl-bud-tile__value", Math.round(rollup.totals.hoursExpected) + " h"));
     hoursTile.appendChild(el("p", "vcl-bud-tile__sub",
       "Range " + Math.round(rollup.totals.hoursMin) + " – " + Math.round(rollup.totals.hoursMax) + " h (min–max)"));
@@ -502,7 +504,7 @@
 
     var fte = BUD.computeFte(rollup.totals.hoursExpected, state.hoursPerHead);
     var fteTile = el("div", "vcl-bud-tile vcl-bud-tile--fte");
-    fteTile.appendChild(el("p", "vcl-bud-tile__label", "FTE required"));
+    fteTile.appendChild(el("p", "vcl-bud-tile__label", "FTE required · " + escapeHtml(planYearLabel())));
     fteTile.appendChild(el("p", "vcl-bud-tile__value", fte.toFixed(2) + " FTE"));
     var sub = el("p", "vcl-bud-tile__sub");
     sub.appendChild(document.createTextNode("at "));
@@ -885,10 +887,15 @@
       }).join("");
       var sel = '<select class="vcl-bud-select vcl-bud-select--tariff" data-line-id="' + escapeHtml(row.id) +
         '" data-cc="' + escapeHtml(c.cc) + '">' + opts + "</select>";
-      lines.push('<div class="vcl-bud-annual__scpick">' + escapeHtml(ccShort(c.cc)) + sel + "</div>");
+      lines.push(
+        '<div class="vcl-bud-annual__scpick"><span class="vcl-bud-annual__scpick-cc">' +
+        escapeHtml(ccShort(c.cc)) + "</span>" + sel + "</div>"
+      );
     });
     if (!lines.length) return '<span class="vcl-bud-annual__track">—</span>';
-    return '<span class="vcl-bud-proc-cell">' + lines.join("") + "</span>";
+    // Its own class on top of the shared one: this list has to span the full cell width so every
+    // select ends on the same right edge (.vcl-bud-proc-cell alone shrinks to its content).
+    return '<span class="vcl-bud-proc-cell vcl-bud-annual__scpicks">' + lines.join("") + "</span>";
   }
 
   function renderAnnualTable() {
@@ -911,10 +918,13 @@
     var tableWrap = el("div", "vcl-bud-table-wrap vcl-bud-table-wrap--annual");
     var table = el("table", "vcl-bud-table");
     table.innerHTML =
-      '<colgroup><col style="width:5%"><col style="width:24%"><col style="width:16%">' +
-      '<col style="width:6%"><col style="width:25%"><col style="width:15%"><col style="width:9%"></colgroup>' +
+      '<colgroup><col style="width:5%"><col style="width:20%"><col style="width:13%">' +
+      '<col style="width:11%"><col style="width:28%"><col style="width:14%"><col style="width:9%"></colgroup>' +
       "<thead><tr>" +
-      "<th></th><th>Product</th><th>Markets</th><th>Str.</th>" +
+      // "Str." spelled out, and the column centred with room on both sides: the top navigation
+      // freed the width, and the abbreviation was only ever there because the header collided
+      // with "Special cases" next to it.
+      '<th></th><th>Product</th><th>Markets</th><th class="vcl-bud-annual__str">Strengths</th>' +
       '<th>Special cases</th><th style="text-align:right">Annual fee</th><th></th>' +
       "</tr></thead>";
 
@@ -930,7 +940,7 @@
         "<td>" + annualOriginCell(row) + "</td>" +
         "<td>" + annualProductCell(row) + "</td>" +
         "<td>" + annualMarketsCell(row) + "</td>" +
-        '<td class="vcl-bud-num">' + (row.strengths || 1) + "</td>" +
+        '<td class="vcl-bud-annual__str">' + (row.strengths || 1) + "</td>" +
         "<td>" + annualTariffCell(row, res) + "</td>" +
         '<td class="vcl-bud-num">' + feeHtml + "</td>" +
         '<td class="vcl-bud-row-actions">' +

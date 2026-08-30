@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Toolbox harness — UI batch "Navigation oben 2"</title>
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css?v=dev">
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workload-style.css?v=dev">
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workflow-style.css?v=dev">
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-guide-style.css?v=dev">
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css?v=dev">
-<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-budget-style.css?v=dev">
+<title>Toolbox harness</title>
 <style>body { margin:0; padding:20px; background:#EFEFEC; }</style>
-<script>window.VCL_CONFIG = { excelUrl:"", calcExcelUrl:"", workloadExcelUrl:"", contact:[], countUrl:"" };</script>
+<script>
+// Every asset is loaded with a fresh cache-busting stamp, so an edit on disk is always the
+// version under test -- a stale script silently invalidated more than one measurement.
+window.VCL_CONFIG = { excelUrl:"", calcExcelUrl:"", workloadExcelUrl:"", contact:[], countUrl:"" };
+var VCL_BUST = Date.now();
+var VCL_STYLES = ["vcl-style.css", "vcl-workload-style.css", "vcl-workflow-style.css", "vcl-guide-style.css", "vcl-calc-style.css", "vcl-budget-style.css"];
+VCL_STYLES.forEach(function (f) {
+  document.write('<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/' + f + '?v=' + VCL_BUST + '">');
+});
+</script>
 </head><body>
 	<div class="vcl-app" id="vcl-app">
 
@@ -152,22 +155,10 @@
 
 	</div>
 
-<script src="../../variation-fee-calculator/assets/js/vcl-usage.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-art5-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-qa-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-workload-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-workload-hours-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-workload-hours.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-calc-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-sg-logic.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-timeline.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-submission.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-app.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-workflow.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-guide.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-calc-app.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-annual-data.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js?v=dev"></script>
-<script src="../../variation-fee-calculator/assets/js/vcl-budget.js?v=dev"></script>
+<script>
+var VCL_SCRIPTS = ["vcl-usage.js", "vcl-data.js", "vcl-art5-data.js", "vcl-qa-data.js", "vcl-workload-data.js", "vcl-workload-hours-data.js", "vcl-workload-hours.js", "vcl-calc-data.js", "vcl-sg-logic.js", "vcl-timeline.js", "vcl-submission.js", "vcl-app.js", "vcl-workflow.js", "vcl-guide.js", "vcl-calc-app.js", "vcl-annual-data.js", "vcl-budget-engine.js", "vcl-budget.js"];
+VCL_SCRIPTS.forEach(function (f) {
+  document.write('<scr' + 'ipt src="../../variation-fee-calculator/assets/js/' + f + '?v=' + VCL_BUST + '"></scr' + 'ipt>');
+});
+</script>
 </body></html>
