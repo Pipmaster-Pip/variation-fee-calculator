@@ -135,6 +135,15 @@ VCL_STYLES.forEach(function (f) {
 	  </div>
 	</div>
 
+
+	  <!-- Colophon: shown under every tool, since the whole app is one page. The version comes
+	       from VFC_VERSION, so it is never maintained by hand; the copyright year opens at 2026
+	       (the year the toolbox was written) and becomes a span once the current year moves on. -->
+	  <p class="app-colophon">
+	    &copy; 2026 Dr. Tom Deutschle
+	    <span class="app-colophon__sep">&middot;</span>
+	    Variation Toolbox <span class="app-colophon__ver">v1.5.5</span>
+	  </p>
 	</div>
 
 	<div class="selection-bar hidden" id="vcl-selectionBar">

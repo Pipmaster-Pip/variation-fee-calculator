@@ -500,6 +500,21 @@ function vcl_shortcode( $atts ) {
 	  </div>
 	</div>
 
+
+	  <!-- Colophon: shown under every tool, since the whole app is one page. The version comes
+	       from VFC_VERSION, so it is never maintained by hand; the copyright year opens at 2026
+	       (the year the toolbox was written) and becomes a span once the current year moves on. -->
+	  <p class="app-colophon">
+	    <?php
+	    $vcl_year_now = (int) date_i18n( 'Y' );
+	    // En dash, not a hyphen: it is a range. Built from an int, so esc_html has nothing to
+	    // strip -- it is here because every echo in this file goes through an escaper.
+	    $vcl_years    = $vcl_year_now > 2026 ? '2026–' . $vcl_year_now : '2026';
+	    echo '&copy; ' . esc_html( $vcl_years ) . ' Dr. Tom Deutschle';
+	    ?>
+	    <span class="app-colophon__sep">&middot;</span>
+	    Variation Toolbox <span class="app-colophon__ver">v<?php echo esc_html( VFC_VERSION ); ?></span>
+	  </p>
 	</div>
 
 	<div class="selection-bar hidden" id="vcl-selectionBar">

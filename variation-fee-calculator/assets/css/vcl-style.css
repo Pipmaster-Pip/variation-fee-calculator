@@ -2736,6 +2736,21 @@
    the width a property of the layout instead of the content. */
 .vcl-app .layout[data-tree="off"] > * { grid-column: 1; }
 
+/* Colophon at the foot of the app card -- one quiet centred line under every tool (the toolbox
+   is a single page, so there is only ever one of them). Deliberately the faintest text on the
+   page: it is a signature, not content. */
+.vcl-app .app-colophon {
+  margin: 0;
+  padding: 18px 0 4px;
+  border-top: 1px solid var(--border-soft);
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+.vcl-app .app-colophon__sep { opacity: 0.55; margin: 0 3px; }
+.vcl-app .app-colophon__ver { font-family: "IBM Plex Mono", monospace; }
+
 /* Collapse/expand control for the left Classification/Guidance tree. The button sits in the
    list column's own header row, its collapsed counterpart in a narrow rail in the grid's first
    track -- both purely horizontal, so toggling the list never shifts the content vertically.
