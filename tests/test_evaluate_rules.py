@@ -16,6 +16,38 @@ def test_italy_matches_the_hand_checked_value():
                      {"IA": 1, "IB": 2, "II": 1})
     total = sum(i["total"] for i in items if i["total"] is not None)
     assert round(total, 2) == 35304.00
+    # A normally computed item carries a numeric total and is never marked
+    # uncomputable -- the marker must not leak onto ordinary rows. IA/IB are
+    # subsumed here (II leads), so check the leading type's item.
+    ii = [i for i in items if i["type"] == "II"][0]
+    assert ii["uncomputable"] is False
+    assert isinstance(ii["total"], float)
+
+
+# --- Defect (c): "unknown" rows must not invent a euro amount ------------
+#
+# 17 Denmark rows (rows 98 and 109 among them) carry rule == "unknown": the
+# extractor could not classify their Excel formula. That is a deliberate,
+# reported gap in the study, not a defect to compute around -- evaluate()
+# must surface it as "uncomputable" rather than silently emitting 0.0.
+def test_unknown_rule_row_98_is_uncomputable_not_zero():
+    items = evaluate(RULES, "DK", "CMS", 1,
+                     {"IA": "standard", "IB": "standard", "II": "standard"},
+                     {"IA": 1, "IB": 0, "II": 0})
+    ia = [i for i in items if i["type"] == "IA"][0]
+    assert ia["row"] == 98
+    assert ia["total"] is None
+    assert ia["uncomputable"] is True
+
+
+def test_unknown_rule_row_109_is_uncomputable_not_zero():
+    items = evaluate(RULES, "DK", "national", 1,
+                     {"IA": "standard", "IB": "standard", "II": "standard"},
+                     {"IA": 1, "IB": 0, "II": 0})
+    ia = [i for i in items if i["type"] == "IA"][0]
+    assert ia["row"] == 109
+    assert ia["total"] is None
+    assert ia["uncomputable"] is True
 
 
 def test_lower_types_are_subsumed_by_the_highest():

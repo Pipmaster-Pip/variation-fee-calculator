@@ -86,7 +86,10 @@ def _part(rule, type_, n, strengths):
         # decides whether an explicit field for it is needed.
         per = lead if strengths == 1 else lead * 2 + (strengths - 2) * lead
         return per * n
-    return 0.0
+    # evaluate() handles "unknown" before calling _part(); any other
+    # unrecognised rule name reaching here is a bug in the rule model, not a
+    # legitimate case to paper over with a silent 0.0.
+    raise ValueError(f"unrecognised rule {rule['rule']!r} for row {rule['row']!r}")
 
 
 def _scope_sum(scope, parts):
@@ -155,6 +158,23 @@ def evaluate(rules, cc, role, strengths, special, counts):
         rule = _pick(rules, cc, role, t, (special or {}).get(t))
         if not rule:
             continue
+        if rule["rule"] == "unknown":
+            # The rule extractor could not classify this row's Excel formula
+            # (17 Denmark rows, a deliberate, reported gap in the study --
+            # not a defect). Emit a marker instead of inventing a euro
+            # amount, so the Task 8 comparison can tell "uncomputable" apart
+            # from an ordinary numeric mismatch.
+            items.append({
+                "row": rule["row"], "type": t,
+                "total": None,
+                "rawSumSingle": None,
+                "subsumed": None,
+                "count": counts.get(t, 0),
+                "capValue": None,
+                "groupingFee": None,
+                "uncomputable": True,
+            })
+            continue
         act = _active_counts(rule, t, counts)
         parts = {x: _part(rule, x, act.get(x, 0), strengths) for x in TYPES}
         raw = parts["IA"] + parts["IB"] + parts["II"]
@@ -169,5 +189,6 @@ def evaluate(rules, cc, role, strengths, special, counts):
             "capValue": None if cap_value is None else round(cap_value, 2),
             "groupingFee": rule["amounts"].get("flat")
                            if rule["rule"] == "flat_from_second" and sum(act.values()) > 1 else None,
+            "uncomputable": False,
         })
     return items
