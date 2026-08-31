@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Classification codes — preview (v1.6.7)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@300..700&amp;family=Source+Serif+4:opsz,wght@8..60,400..700&amp;family=IBM+Plex+Mono:wght@400;600;700&amp;display=swap" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css?v=167" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workload-style.css?v=167" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workflow-style.css?v=167" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-guide-style.css?v=167" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css?v=167" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-budget-style.css?v=167" />
+<style>body { margin: 0; background: #FFFFFF; }</style>
+</head>
+<body>
+<script>
+  /* Stand-in for wp_localize_script( 'vcl-app', 'VCL_CONFIG', ... ). Only the fields the app
+     reads; countUrl is empty on purpose so the usage counter no-ops without a REST endpoint. */
+  window.VCL_CONFIG = { calculatorUrl: "", workloadExcelUrl: "", contact: [], countUrl: "" };
+</script>
+	<div class="vcl-app" id="vcl-app">
+
+	<div class="page-shell">
+
+	<header class="app-header">
+	  <div class="app-header__actions">
+	    <button type="button" class="app-header__summary hidden" id="vcl-summaryHeaderBtn" aria-label="Show the summary of selected variations" title="Summary of selected variations">
+	      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h11"/><path d="M8 12h11"/><path d="M8 18h11"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>
+	      <span>Summary</span>
+	      <span class="app-header__summary-count" id="vcl-summaryHeaderCount">0</span>
+	    </button>
+	    <button type="button" class="app-header__guide" id="vcl-guideBtn" aria-label="How to use this toolbox" title="How to use this toolbox">
+	      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 1.7-2.4 3.4"/><path d="M12 17h.01"/></svg>
+	      <span>How to use</span>
+	    </button>
+	    <button type="button" class="app-header__home" id="vcl-homeBtn" aria-label="Back to start" title="Back to start">
+	      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+	      <span>Start</span>
+	    </button>
+	  </div>
+	  <h1>Variation Toolbox</h1>
+	  <p class="app-header__copyright">
+	    &copy; Dr. Tom Deutschle
+	    <!-- Filled by vcl-app.js (fillContactSlots): the address is assembled in the browser
+	         so it never appears literally in the served HTML. Stays empty if none is set. -->
+	    <span id="vcl-contactSlot"></span>
+	  </p>
+	  <p>
+	    One toolbox for the full variation lifecycle &mdash; classification, grouping, timetables, RA
+	    workload and official fees across EU-27, EMA, CH, IS, NO, UK and RS, plus portfolio-level
+	    budget planning.
+	  </p>
+	</header>
+
+	<nav class="tool-bar" id="vcl-toolBar" aria-label="Tools"></nav>
+
+	<div class="layout">
+	  <!-- Collapsed-tree rail: holds the "Show list" control while the browse column is hidden,
+	       so re-opening the list never costs vertical space above the content. -->
+	  <div class="tree-rail" id="vcl-treeRail"></div>
+
+	  <div class="browse-col" id="vcl-browseCol">
+	    <!-- Header row of the list: section label + the Hide-list toggle. Lives inside the column
+	         (not in a row of its own above the grid) so collapsing the list never moves the
+	         content up or down. Filled by renderTreeToggle() in vcl-app.js. -->
+	    <div class="browse-col__head" id="vcl-browseColHead"></div>
+	    <div class="search-box">
+	      <input type="text" id="vcl-searchInput" placeholder="Search by code or keyword (i. e. shape, shelf, leaflet) ..." autocomplete="off" />
+	    </div>
+	    <div class="browse-tree" id="vcl-browseTree"></div>
+	  </div>
+
+	  <div class="detail-col" id="vcl-detailCol">
+	    <!-- Populated by vcl-app.js (needs CLASSIFICATION_META for the reference text).
+	         vcl-detailHead stays visible in both states (nothing selected / entry selected) so
+	         the Reference/Last-updated note doesn't disappear once an entry is opened. -->
+	    <div class="classification-head" id="vcl-detailHead"></div>
+	    <div class="detail-empty" id="vcl-detailEmpty"></div>
+	    <div class="hidden" id="vcl-detailPanel"></div>
+	  </div>
+
+	  <div class="summary-col hidden" id="vcl-summaryCol">
+	    <div class="summary-header">
+	      <div class="summary-header__top">
+	        <div class="summary-header__info">
+	          <h2 class="summary-header__title">Summary of Variations</h2>
+	          <p class="summary-header__count" id="vcl-summaryCount"></p>
+	        </div>
+	        <div class="summary-header__actions">
+	          <button type="button" id="vcl-summaryExpandAll">Expand all</button>
+	          <button type="button" id="vcl-summaryCollapseAll">Collapse all</button>
+	          <button type="button" id="vcl-summaryClearAll" class="summary-header__clear">Clear all</button>
+	          <button type="button" id="vcl-summaryExportDocx">Export to .docx</button>
+	          <button type="button" id="vcl-summaryPrint">Print</button>
+	        </div>
+	      </div>
+	      <p class="summary-header__hint">Expand an item to review its conditions, documentation and &mdash; where available &mdash; an example wording for the application form's 'Precise scope' field.</p>
+	    </div>
+	    <div class="summary-list" id="vcl-summaryList"></div>
+	    <div class="summary-footer">
+	      <button type="button" id="vcl-summaryExportWorkflow" class="summary-footer__button summary-footer__button--workflow">Export to Guided Workflow &rarr;</button>
+	      <button type="button" id="vcl-summaryExportBudget" class="summary-footer__button summary-footer__button--budget">Export to Budget Planning Tool &rarr;</button>
+	      <button type="button" id="vcl-summaryExportCalculator" class="summary-footer__button">Export to Variation Fee Calculator &rarr;</button>
+	    </div>
+	  </div>
+
+	  <div class="grouping-col hidden" id="vcl-groupingCol"></div>
+
+	  <div class="grouping-col hidden" id="vcl-preciseScopeCol"></div>
+
+	  <!-- Q&A on Variations: reuses .grouping-col (same grid cell, same one-of-many
+	       visibility rule) -- only its inner qa-* markup is its own. -->
+	  <div class="grouping-col hidden" id="vcl-qaCol"></div>
+
+	  <!-- Art. 5 recommendations: the fifth Classification chapter, same shared grid cell. -->
+	  <div class="grouping-col hidden" id="vcl-art5Col"></div>
+
+	  <div class="timetables-col hidden" id="vcl-timetablesCol"></div>
+
+	  <div class="workload-col hidden" id="vcl-workflowCol"></div>
+
+	  <div class="budget-col hidden" id="vcl-budgetCol"></div>
+
+	  <!-- Fee Calculator (embedded copy). The guide-style heading is rendered into
+	       vcl-calcHead by vcl-app.js; the .vclcalc-app block below is the copied
+	       calculator scaffold with its own header intentionally omitted. -->
+	  <div class="calculator-col hidden" id="vcl-calculatorCol">
+	    <!-- Shares the shared reference-header shape, but carries the Calculator's own gold
+	         identity instead of the Classification blue (see .classification-head--calc). -->
+	    <div class="classification-head classification-head--calc" id="vcl-calcHead"></div>
+	    <div class="vclcalc-app" id="vclcalc-app">
+	      <div class="rail" id="vclcalc-rail"></div>
+	      <div id="vclcalc-stepContent"></div>
+	      <div class="src">
+	        <div class="fx-status-row">
+	          <span id="vclcalc-fxStatus" style="font-family:var(--mono); font-size:11px; color:var(--ink-faint);"></span>
+	        </div>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+
+	  <!-- Colophon: shown under every tool, since the whole app is one page. The version comes
+	       from VFC_VERSION, so it is never maintained by hand; the copyright year opens at 2026
+	       (the year the toolbox was written) and becomes a span once the current year moves on. -->
+	  <p class="app-colophon">
+	    &copy; 2026 Dr. Tom Deutschle
+	    <span class="app-colophon__sep">&middot;</span>
+	    Variation Toolbox <span class="app-colophon__ver">v1.6.7</span>
+	  </p>
+	</div>
+
+	<div class="selection-bar hidden" id="vcl-selectionBar">
+	  <div class="selection-bar__summary">
+	    <button class="selection-bar__toggle" id="vcl-selectionToggle" aria-expanded="false">
+	      <span class="selection-bar__chevron" id="vcl-selectionChevron">&#9656;</span>
+	      <span id="vcl-selectionCount"></span>
+	    </button>
+	    <div class="selection-bar__buttons">
+	      <button class="selection-bar__link" id="vcl-selectionViewSummary">Open summary →</button>
+	      <button class="selection-bar__clear" id="vcl-selectionClear">Clear all</button>
+	    </div>
+	  </div>
+	  <div class="selection-bar__list hidden" id="vcl-selectionList"></div>
+	</div>
+
+	<div class="hidden" id="vcl-guideModal"></div>
+
+	</div>
+<script src="../../variation-fee-calculator/assets/js/vcl-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-qa-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-art5-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-usage.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-app.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-workload-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-workload-hours-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-workload-hours.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-sg-logic.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-timeline.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-submission.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-workflow.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-guide.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-annual-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-budget.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-calc-data.js?v=167"></script>
+<script src="../../variation-fee-calculator/assets/js/vcl-calc-app.js?v=167"></script>
+</body>
+</html>

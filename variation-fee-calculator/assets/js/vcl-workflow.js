@@ -1502,7 +1502,9 @@
     if (!code) return null;
     const g = DATA.PRECISE_SCOPE_GUIDANCE;
     if (!g || !g.sections) return null;
-    const target = variantId ? code + "." + variantId : code;
+    // Keyed by the Guideline's own notation ("Q.II.a.3.a.1"), which is not how the variant id
+    // is stored ("a1") -- see variantCodeSuffix() in vcl-data.js.
+    const target = DATA.variantFullCode(code, variantId);
     for (const section of g.sections) {
       for (const item of section.items) {
         if (item.code.split(",").map((c) => c.trim()).indexOf(target) !== -1) return item;
@@ -1788,7 +1790,7 @@
       children.push(new Paragraph({ children: [new TextRun({ text: (psg.subtitle || "Example wordings for the ‘precise scope’ section of the variation application form") + " (eAF). Only variations for which the guidance provides an example are listed.", italics: true, color: "5B6572" })], spacing: sp({ after: 160 }) }));
       scoped.forEach((x) => {
         const v = x.v;
-        const codeLabel = (v.code || ("Type " + v.type)) + (v.variantId ? "." + v.variantId : "");
+        const codeLabel = v.code ? DATA.variantFullCode(v.code, v.variantId) : "Type " + v.type;
         children.push(new Paragraph({
           children: [
             new TextRun({ text: codeLabel, bold: true, font: MONO }),

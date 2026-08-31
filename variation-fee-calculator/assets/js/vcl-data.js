@@ -6934,9 +6934,38 @@ const PRECISE_SCOPE_GUIDANCE = {
   ],
 };
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY };
+// --- Variant ids vs. the Guideline's own code notation -------------------------------------
+// The Guideline nests a two-level variant: a lettered group "(a)" whose rows are numbered
+// "1., 2., ...", written out as the code Q.II.a.3.a.1. This dataset stores that same variant
+// as one flat id ("a1") -- and, for M.5 alone, the other way round ("2b") -- because the id
+// doubles as the persistence key for saved selections and ticked conditions in localStorage.
+// Re-keying the data would silently drop every selection users already have, so instead
+// normalise the id wherever the Guideline's own notation is needed.
+//
+// The "z-ib"/"z-ii" pair is this tool's own Art. 3 "unforeseen variation" fallback -- the two
+// procedure types the same z row can take. Both carry the single suffix "z", the form used in
+// practice (Q.II.a.3.z), not the internal id.
+function variantCodeSuffix(variantId) {
+  if (!variantId) return null;
+  const id = String(variantId);
+  if (id === "z" || id.indexOf("z-") === 0) return "z";
+  return id.replace(/^([a-z])(\d+)$/, "$1.$2").replace(/^(\d+)([a-z])$/, "$1.$2");
 }
 
-  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE: PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY };
+// Full Guideline code for an entry + variant: "Q.II.a.3" + "a1" -> "Q.II.a.3.a.1".
+// A variant with no code of its own (the single unnamed variant of an entry) resolves to the
+// entry code itself, as does a z variant of an entry whose code already ends in ".z" -- those
+// entries (M.z, Q.II.a.z, ...) ARE the other-variation row, so "Q.II.a.z.z" would repeat it.
+function variantFullCode(entryCode, variantId) {
+  const suffix = variantCodeSuffix(variantId);
+  if (!suffix) return entryCode;
+  if (suffix === "z" && entryCode.slice(-2) === ".z") return entryCode;
+  return entryCode + "." + suffix;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, variantCodeSuffix, variantFullCode };
+}
+
+  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE: PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY, variantCodeSuffix: variantCodeSuffix, variantFullCode: variantFullCode };
 })();

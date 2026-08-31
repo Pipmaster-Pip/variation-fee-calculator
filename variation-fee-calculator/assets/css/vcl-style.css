@@ -1003,14 +1003,49 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  /* Matches .variant-block__section's own top margin, so the code chip inside the head sits the
+     same distance from the conditions heading below it as from the title above it. */
+  margin-bottom: 0;
 }
 
+/* Column, not a bare block: the title and the variant's full code stack inside ONE flex item,
+   so the space between them is set by this gap alone. As siblings of the badge group instead,
+   the code sat 19px below the title -- the badge group is taller than the title's line box, and
+   its height, not any margin, was doing the spacing. */
 .vcl-app .variant-block__label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* Same 8px the first section keeps below the chip, so the code sits centred between the
+     title above it and the conditions heading below it. */
+  gap: 8px;
   font-size: 14px;
   font-weight: 500;
-  display: block;
   flex: 1 1 260px;
+  /* Centred rather than top-aligned, for the entries whose single variant has no title at all
+     (E.2 and its kind): there the column is just the chip and is shorter than the badge row
+     beside it, and top-aligning left all the slack underneath. */
+  align-self: center;
+}
+
+/* 8px, mirroring .variant-block__label's own gap above the chip. The later sections keep the
+   wider 12px below, which separates whole sections rather than two lines of one heading. */
+.vcl-app .variant-block__head + .variant-block__section { margin-top: 8px; }
+
+/* The variant's full Guideline code (e.g. "Q.II.a.3.a.1"), on its own line under the title so
+   it can be read off directly rather than assembled from the entry code plus the bracketed
+   number. Same chip look as .code-chip, but in Classification's own identity color (like
+   .entry-summary__code above it) rather than the chapter accent. */
+.vcl-app .variant-block__code {
+  display: inline-block;
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--classify);
+  background: var(--classify-bg);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 .vcl-app .variant-block__section { margin-top: 12px; }
@@ -1074,13 +1109,16 @@
 /* Muted state for whichever of the two IA/IB-by-default badges does NOT currently apply. */
 .vcl-app .badge--dim { opacity: 0.38; filter: saturate(0.6); }
 
+/* The Guideline's lettered group ("(a) Change in components of the flavouring or colouring
+   system"). It is a heading, not an annotation, and the bracketed letter is part of the code --
+   so it is set in normal mixed case: uppercasing it turned the "(a)" into "(A)", which is not
+   how the Guideline writes it. Bold in the body colour carries the heading weight that the
+   former italic-uppercase-grey treatment was doing. */
 .vcl-app .variant-group-heading {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
   margin: 18px 2px 6px;
-  font-style: italic;
 }
 
 .vcl-app .note-block--variant {
@@ -1135,10 +1173,13 @@
 /* --- Quantity stepper (per variant type) --- */
 .vcl-app .qty-stepper {
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   border: 1px solid var(--border);
-  /* Full pill, matching the type badges right next to it in .variant-block__head-right. */
-  border-radius: 999px;
+  /* Rounded rectangle, not the pill the type badges next to it wear: the badges are labels,
+     this is a control, and as a pill without internal division it was being read as a third
+     badge rather than as something to click. The two dividers on .qty-stepper__value below
+     spell out the three fields. */
+  border-radius: 7px;
   overflow: hidden;
   background: var(--panel);
   flex-shrink: 0;
@@ -1150,8 +1191,8 @@
   justify-content: center;
   border: none;
   background: none;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  min-height: 24px;
   padding: 0;
   font-size: 14px;
   line-height: 1;
@@ -1164,12 +1205,21 @@
 .vcl-app .qty-stepper button:disabled { opacity: 0.3; cursor: default; }
 
 .vcl-app .qty-stepper__value {
-  min-width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
   text-align: center;
-  font-family: "IBM Plex Mono", monospace;
+  /* Body face with tabular figures, exactly as the Fee Calculator's own stepper sets it
+     (.num-stepper input in vcl-calc-style.css). IBM Plex Mono's zero carries a centre dot,
+     which reads as a typo on a count that is normally 0. */
+  font-family: "Libre Franklin", -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 
 .vcl-app .variant-block__head-right {
@@ -1180,6 +1230,11 @@
   justify-content: flex-end;
   gap: 8px;
   flex-shrink: 0;
+  /* margin-left:auto, not just the head's space-between: an entry whose single variant carries
+     no label (E.2 and its kind) renders no .variant-block__label at all, and space-between then
+     parks this group on the LEFT because it is the only child. The auto margin keeps the badges
+     and the stepper hard right either way. */
+  margin-left: auto;
 }
 
 .vcl-app.has-selection { padding-bottom: 56px; }

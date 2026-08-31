@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const { CLASSIFICATION_META, SECTIONS, CHAPTERS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY } = window.VCL_DATA;
+  const { CLASSIFICATION_META, SECTIONS, CHAPTERS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, variantCodeSuffix, variantFullCode } = window.VCL_DATA;
 
   // Its own generated file (see vcl-qa-data.js). Optional on purpose: the Q&A nav row and view
   // are simply left out when the script isn't enqueued, rather than the whole guide failing.
@@ -352,7 +352,7 @@
       const redundant = entry.code.endsWith(`.${shortId}`);
       return { code: redundant ? entry.code : `${entry.code}(${shortId})`, subtitle: null };
     }
-    return { code: `${entry.code}(${variant.id})`, subtitle: variant.label || null };
+    return { code: variantFullCode(entry.code, variant.id), subtitle: variant.label || null };
   }
 
   // The type actually applicable right now, given which conditions are ticked. For Type IA
@@ -780,7 +780,9 @@
   // codes have a matching example in the source guideline, so this returns null for the rest --
   // callers hide the whole section in that case rather than showing an empty placeholder.
   function findPreciseScopeWording(entry, variant) {
-    const target = variant.id ? `${entry.code}.${variant.id}` : entry.code;
+    // The guidance keys its examples by the Guideline's own notation ("Q.II.a.3.a.1"), which is
+    // not how the variant id is stored ("a1") -- see variantCodeSuffix() in vcl-data.js.
+    const target = variantFullCode(entry.code, variant.id);
     for (const section of PRECISE_SCOPE_GUIDANCE.sections) {
       for (const item of section.items) {
         if (
@@ -868,18 +870,22 @@
   const QA_CODE_RE = /\b(?!E\.g\b)([EQCM](?:\.(?:[IVX]+|[a-z]|\d+|z))+)\b/g;
 
   // Splits "Q.II.b.4" into the entry it belongs to and, where the last part names one, that
-  // entry's variant -- the same entry-code + "." + variant-id key findPreciseScopeWording()
+  // entry's variant -- the same Guideline-notation key findPreciseScopeWording()
   // builds. Returns null for a code this dataset has no entry for (the source cites a handful,
   // e.g. Q.I.z, that the Classification Guideline transcription doesn't carry), so those render
   // as plain text rather than as a link that would go nowhere.
   function qaResolveCode(code) {
     if (ENTRIES.some((e) => e.code === code)) return { code: code, variantId: null };
-    const cut = code.lastIndexOf(".");
-    if (cut > 0) {
-      const parent = code.slice(0, cut);
-      const vid = code.slice(cut + 1);
-      const entry = ENTRIES.find((e) => e.code === parent);
-      if (entry && entry.variants.some((v) => v.id === vid)) return { code: parent, variantId: vid };
+    // A variant suffix can be one part ("Q.II.a.4.a") or two ("Q.II.a.3.a.1"), so try every
+    // split point from the right instead of only the last dot, and compare against the
+    // normalised suffix -- the dataset stores the two-part form flat, as "a1".
+    const parts = code.split(".");
+    for (let cut = parts.length - 1; cut >= 1; cut--) {
+      const entry = ENTRIES.find((e) => e.code === parts.slice(0, cut).join("."));
+      if (!entry) continue;
+      const suffix = parts.slice(cut).join(".");
+      const hit = entry.variants.find((v) => variantCodeSuffix(v.id) === suffix);
+      if (hit) return { code: entry.code, variantId: hit.id };
     }
     return null;
   }
@@ -3079,9 +3085,16 @@
 
   // Label shown for one variant: "(id) Label text" if labelled, "" otherwise -- shared between
   // the compact variant row (collapsed entry) and the full variant-block head (expanded entry).
+  // A variant that sits under a group heading shows only its own level: the Guideline writes
+  // the group as "(a) ..." and its rows as "1., 2., ...", so repeating the letter here ("(a1)")
+  // both duplicated the heading above and invented a notation the Guideline doesn't use.
   function variantLabelText(variant) {
     if (!variant.label) return "";
-    return `${variant.id && !variant.label.trim().startsWith("(") ? `(${variant.id}) ` : ""}${variant.label}`;
+    if (!variant.id || variant.label.trim().startsWith("(")) return variant.label;
+    const short = variant.group
+      ? String(variant.id).replace(/^[a-z](\d+)$/, "$1").replace(/^\d+([a-z])$/, "$1")
+      : variant.id;
+    return `(${short}) ${variant.label}`;
   }
 
   // Full expanded content for ONE variant -- conditions to tick, documentation, precise scope
@@ -3157,7 +3170,10 @@
     return `
       <div class="variant-block">
         <div class="variant-block__head">
-          ${variant.label ? `<span class="variant-block__label">${variantLabelText(variant)}</span>` : ""}
+          <span class="variant-block__label">
+            ${variant.label ? `<span class="variant-block__title">${variantLabelText(variant)}</span>` : ""}
+            <span class="variant-block__code">${variantFullCode(entry.code, variant.id)}</span>
+          </span>
           <div class="variant-block__head-right">
             <span class="${iaBadgeClass}">${variant.type}</span>
             ${ibFallbackBadge}
@@ -3459,6 +3475,15 @@
   function goToDestination(dest) {
     state.query = ""; el.search.value = "";
     state.guidanceReturn = null; // explicit nav supersedes any pending "back to guidance" context
+    // Clicking a tool in the bar means "take me to that tool's own starting screen", including
+    // when it is the tool already showing: without this, Classification kept whatever chapter,
+    // section and variant were open, so its overview of the five chapters was unreachable once
+    // any subsection had been opened. Same reasoning for every other destination -- none of
+    // them should inherit a selection made inside a previous one.
+    state.activeChapter = null;
+    state.activeSection = null;
+    state.activeVariant = null;
+    state.focusCode = null;
     state.classifyOpen = false;
     state.guidanceOpen = false;
     state.treeCollapsed = false;
