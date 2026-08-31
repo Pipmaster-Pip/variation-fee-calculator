@@ -243,3 +243,146 @@ the remaining ~28,700 are on non-EUR rows and are dominated by the deliberate
 currency-conversion scope gap (cause 4), not by additional logic errors on top of
 it. The headline match rate (64.5%) should be read with that split in mind rather
 than as one undifferentiated number.
+
+# Closing causes B and C (Task 9)
+
+Task 8 diagnosed two of the four root causes above precisely enough to fix
+outright: cause 4 (the currency gap) and cause 1 (the subsumption-folding
+multiplier, driven by every row's TOTAL being treated as a blanket
+`P+Q+R` sum). Both are now closed in the rule model and the evaluator.
+Causes 2 and 3 (subsumption granularity, and `capValue`/`groupingFee`'s
+different operational definition) were **not** in scope for this task and
+remain open -- see the "Root causes identified" section above, still
+accurate for what's left.
+
+## Cause B: `amountsEur`
+
+`extract_amounts()` keeps `amounts` exactly as before -- the authoritative
+local-currency (`*_lc`) source values, for a later editor to present. A new
+sibling block, `amountsEur`, now records what `applyLiveRatesToRows()` in
+`vcl-calc-app.js` actually computes with under the network-blocked
+conditions the golden master was recorded under: `F_lc / rate` for the
+three countries with a `STATIC_FX_RATES` entry (HU, NO, SI -- though SI has
+no `_lc` columns at all and is untouched either way), and the plain,
+already-euro `F..K` columns for the other seven local-currency countries
+(CH, CZ, DK, IS, PL, RS, SE, UK), which never got a rate under those
+conditions. `evaluate_rules.py` now reads every amount (`_part`,
+`_cap_limit`, the `groupingFee` field) from `amountsEur`.
+
+**Operational note worth keeping on record:** the shipped calculator only
+has a static fallback rate for **three** of its ten local-currency
+countries (`STATIC_FX_RATES = {"HU": 395.12, "NO": 11.31, "SI": 5.8}`,
+`vcl-calc-data.js` line 8). Whenever the ECB (Frankfurter) API is
+unreachable in production -- not just in the golden-master recording, any
+time a real user's browser can't reach it -- the other seven countries
+(CH, CZ, DK, IS, PL, RS, SE, UK) silently fall back to whatever euro
+figure was baked into `vcl-calc-data.js` at the last `convert.py` export,
+rather than a current conversion. That is a live-product behaviour, not
+just a test-harness artifact, and is unchanged by this task -- flagged
+here because it fell out of diagnosing cause B, not because it was fixed.
+
+## Cause C: `totalScope`
+
+`extract_total_scope()` reads which of a row's own P/Q/R its `Sf` formula
+actually references, canonically ordered. Across all 421 rows:
+
+```
+174  P+Q+R
+102  P
+ 97  P+Q
+  8  Q+R
+  4  Q
+ 30  direct   (Sf computes the total some other way entirely)
+  6  unparsed (does not reduce to a known "direct" shape)
+```
+
+The 30 "direct" rows reduce to three shapes, all reproduced faithfully in
+`evaluate_rules.py`'s `_direct_value()`:
+
+- **`gatedFlat`** (26 rows, all Belgium 13-38): `IF(<gate>=0,"",IF(<gate>>1,K,F))`
+  -- one flat fee for the whole row, gated on its own type's count, no
+  reference to the other two types at all. This is the Belgium row 35
+  case from the brief: one Type IB + one Type II now totals **10774.33**,
+  not 21548.66 -- confirmed by `tests/test_evaluate_rules.py::test_belgium_row_35_is_not_double_counted`.
+- **`const`** (2 rows, UK 400/405): `IF(<gate>=0,"",0)` -- the TOTAL is
+  always exactly 0 whenever the row applies, even though its own P
+  subtotal (computed on the same row, via `Pf`) is a real, non-zero fee.
+- **`leadPlusStrengths`** (2 rows, Spain 154/163): `F+((L-1)*G)` --
+  unconditional on any count at all, driven only by the number of
+  strengths.
+
+The 6 "unparsed" rows are all Denmark, and split into two distinct blank
+branches -- neither is a number the four `_direct_total` shapes above can
+represent, so both are reported, not guessed at:
+
+- rows 98, 109: `IF(<gate>=0,"",IF(<gate>>1,"",F))` -- blank once *more*
+  than one variation applies. Both already carried `rule: "unknown"` from
+  Task 5 (their `Pf` doesn't match `flat_from_second` either, since its
+  `>1` branch returns `0`/blank, not `K`) and an `unparsed` cap from Task 6
+  -- this is the same underlying shape surfacing a third time, not a new,
+  independent problem.
+- rows 99, 100, 110, 111: `IF(<gate>=0,"",IF(<gate><2,"",K))` -- blank at
+  count 0 **or 1**, a number only from 2 upward. These four are **newly
+  surfaced by this task**: their `Pf` formula (`IF(M=0,0,IF(M>1,K,0))`)
+  happens to match the `flat_from_second` regex (it does contain a
+  `>1,K[%@]`), so `classify_rule()` calls them `"flat_from_second"` rather
+  than `"unknown"` -- but that rule's `_part()` returns `lead` (`F`) at
+  count 1, while these rows' real `Sf` returns blank there instead. That
+  is a real, separate defect in the `Pf`-shape classification (not
+  something totalScope can paper over), distinct from cause C and out of
+  scope for this task; `evaluate()`'s `_row_total()` falls back to the old
+  full-sum behaviour for `"unparsed"` totalScope so these four rows are
+  not regressed by this change, but they are not fixed either. Flagged
+  here for whoever picks up `classify_rule()`'s shape coverage next.
+
+For everything else, `evaluate_rules.py`'s `_row_total()` now sums exactly
+the subtotal(s) a row's `totalScope` names, instead of always
+`parts["IA"] + parts["IB"] + parts["II"]`.
+
+## Headline movement
+
+Using the same "total field, all 347,040 result rows, uncomputable counted
+as non-match" metric the 66.5% baseline in the task brief was measured
+with:
+
+```
+before:  230,646 / 347,040  =  66.46%
+after:   260,057 / 347,040  =  74.94%   (+29,411 rows, +8.5 points)
+```
+
+Using `compare.py`'s own four-field "matching" bucket (`total`,
+`subsumed`, `capValue`, `groupingFee` all agree):
+
+```
+before:  223,721 / 347,040  =  64.47%   (71,479 differing, 51,840 uncomputable)
+after:   253,132 / 347,040  =  72.94%   (42,068 differing, 51,840 uncomputable)
+```
+
+The uncomputable bucket (51,840, all from the pre-existing 17 `rule:
+"unknown"` DK rows) is untouched -- neither cause B nor cause C changes
+which rows the extractor can classify at all, only how correctly the
+classified ones are evaluated.
+
+Splitting what's still differing on `total` (not the four-field bucket)
+by currency, and by the "mine == golden x N" ratio that previously
+fingerprinted the subsumption-folding multiplier:
+
+```
+                          before      after
+EUR-row diffs:            42,740     17,136
+non-EUR-row diffs:        28,739     18,007
+"mine == 2x golden":       9,173      2,796
+"mine == 3x golden":       8,946        696
+```
+
+The 2x/3x fold count dropped by roughly 90%, confirming cause C's fix
+addresses the mechanism identified in Task 8 -- but a residual ~3,500 rows
+still show that exact ratio pattern. Spot-checking a handful, they are
+rows with `totalScope: "P+Q+R"` where the *per-type* `Pf`/`Qf`/`Rf`
+classification itself (not the TOTAL's scope) still applies one row's
+amounts across multiple types incorrectly -- i.e. cause 2 from the Task 8
+diagnosis ("subsumption is coarser than the real per-row Excel gate"),
+which this task was not scoped to fix. The remaining EUR and non-EUR
+diffs are consistent with causes 2 and 3 continuing to apply on top of
+the (now-closed) cause 1 and cause 4 -- not with a currency or
+totalScope regression introduced by this task's changes.

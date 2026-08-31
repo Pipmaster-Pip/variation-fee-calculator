@@ -7,6 +7,13 @@ current engine's *fee* output -- `total`, `subsumed`, `capValue` and
 `groupingPerAdditional` are display-only figures derived from two extra
 calculator runs (single type, strength 1); they are recorded so a later
 Baustein can check them once the UI is rebuilt, but are out of scope here.
+
+Currency note: evaluate() computes from `amountsEur` -- what the shipped
+engine actually computed with under the network-blocked conditions the
+golden master was recorded under (F_lc / rate where a static fallback rate
+exists, the plain F..K columns otherwise; see out/findings.md). This closed
+what used to be a systematic currency-scale mismatch on every non-EUR row;
+it is not a remaining scope boundary of this comparison.
 """
 
 import csv
@@ -102,13 +109,15 @@ def main():
         "sind im Golden Master vorhanden, damit ein spaeterer Baustein sie pruefen kann, "
         "wenn die Oberflaeche umgebaut wird, aber hier **nicht** Teil der Kennzahl unten.",
         "",
-        "**Fremdwaehrungs-Hinweis:** `evaluate()` nutzt bewusst die lokalen `*_lc`-Betraege "
-        "unkonvertiert (Spec B2 -- die Umrechnung ist Aufgabe einer spaeteren PHP-Laufzeit, "
-        "nicht dieses Referenz-Evaluators). Der Golden Master haelt dagegen den vom echten "
-        "Rechner in EUR umgerechneten Betrag fest. Fuer jede Zeile mit `currency != EUR` "
-        "weichen `total`/`capValue` daher systematisch um den Wechselkurs-Faktor ab -- das "
-        "ist eine bewusste Bereichsgrenze des Referenz-Evaluators, kein Zaehlfehler dieses "
-        "Abgleichs. Siehe `out/findings.md` fuer Details.",
+        "**Fremdwaehrungs-Hinweis:** `evaluate()` rechnet mit `amountsEur` -- den Betraegen, "
+        "die der echte Rechner unter den Netzwerk-blockierten Bedingungen der "
+        "Golden-Master-Aufnahme tatsaechlich verwendet hat (F_lc / Kurs, wo ein "
+        "STATIC_FX_RATES-Fallback existiert, sonst die unveraenderten F..K-Spalten). Das war "
+        "vormals ein systematischer Wechselkurs-Fehler auf jeder Nicht-EUR-Zeile (Cause B); "
+        "er ist jetzt geschlossen, keine verbleibende Bereichsgrenze mehr. Siehe "
+        "`out/findings.md` fuer Details, u.a. dass der ausgelieferte Rechner selbst bei "
+        "unerreichbarer ECB-API nur fuer HU/NO/SI konvertiert, nicht fuer die anderen sieben "
+        "Laender mit lokaler Waehrung.",
         "",
         f"- verglichene Ergebniszeilen: **{stats['compared']}**",
         f"- übereinstimmend: **{stats['matching']}**",

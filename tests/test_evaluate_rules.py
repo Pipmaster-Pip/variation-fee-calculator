@@ -97,13 +97,14 @@ def test_unrecognised_cap_scope_raises_instead_of_silently_using_the_full_total(
     # scope_sum.get(cap["scope"], total) whenever the scope string wasn't one
     # of its three hard-coded keys. That silently hides an unhandled scope.
     fake_rule = {
-        "amounts": {},
+        "amountsEur": {},
         "cap": {"scope": "P+Q+X", "value": {"const": 100.0}},
         "surcharge": None,
     }
     parts = {"IA": 10.0, "IB": 20.0, "II": 30.0}
+    raw_total = parts["IA"] + parts["IB"] + parts["II"]
     with pytest.raises(ValueError):
-        _apply_cap(fake_rule, parts, strengths=1)
+        _apply_cap(fake_rule, raw_total, parts, strengths=1)
 
 
 # --- Defect (b): the IE cap-plus-surcharge shape -------------------------
@@ -126,6 +127,67 @@ def test_ie_surcharge_is_dropped_when_the_ceiling_binds():
     assert ib["row"] == 220
     assert ib["total"] == 4150.00
     assert ib["capValue"] == 4150.00
+
+
+# --- Cause C: totalScope, not a blanket P+Q+R sum -------------------------
+#
+# Excel row 35 (BE, national, II, "analytical"): Sf =
+#   IF(O35=0,"",IF(O35>1,K35,F35))
+# references neither P, Q nor R of its own row -- the total is one flat fee
+# for the whole submission, not a sum of per-type subtotals. The old
+# evaluator summed parts["IA"]+parts["IB"]+parts["II"] unconditionally, and
+# because _active_counts hands the full counts dict to whichever row leads,
+# row 35's own F/K got applied to BOTH the IB and the II slot, doubling the
+# fee for one Type IB + one Type II filing (21548.66 instead of 10774.33).
+def test_belgium_row_35_is_not_double_counted():
+    items = evaluate(RULES, "BE", "national", 1,
+                      {"IA": None, "IB": "analytical", "II": "analytical"},
+                      {"IA": 0, "IB": 1, "II": 1})
+    # The IB row (33) has no "analytical" variant and is subsumed by II
+    # anyway (highest type wins) -- its own total must not be counted.
+    ib = [i for i in items if i["type"] == "IB"][0]
+    assert ib["subsumed"] is True
+    assert ib["total"] is None
+    ii = [i for i in items if i["type"] == "II"][0]
+    assert ii["row"] == 35
+    assert ii["total"] == 10774.33
+    total = sum(i["total"] for i in items if i["total"] is not None)
+    assert total == 10774.33  # not 21548.66
+
+
+# --- Cause B: amountsEur, not the authoritative local-currency amounts ----
+#
+# The golden master was recorded with network access blocked, so the
+# shipped calculator's applyLiveRatesToRows() only ever found a rate for
+# HU/NO/SI (STATIC_FX_RATES); every other local-currency country kept the
+# plain euro value already baked into vcl-calc-data.js at export time.
+def test_norway_total_uses_the_static_rate_conversion():
+    # NO row 322 (RMS, IB, "SmPC, PL and labelling"), rule "scaling": a
+    # single item at strength 1 is just the lead amount, converted at the
+    # frozen static rate 11.31: 14079 / 11.31 = 1244.8275862068965.
+    items = evaluate(RULES, "NO", "RMS", 1,
+                      {"IA": None, "IB": "SmPC, PL and labelling", "II": None},
+                      {"IA": 0, "IB": 1, "II": 0})
+    ib = [i for i in items if i["type"] == "IB"][0]
+    assert ib["row"] == 322
+    assert ib["total"] == round(14079.0 / 11.31, 2)
+    assert ib["total"] == 1244.83
+
+
+def test_czech_total_keeps_the_export_time_euro_value():
+    # CZ row 57 (RMS, IA, "standard"), rule "scaling": CZ has no
+    # STATIC_FX_RATES entry, so under frozen conditions F..K were never
+    # rewritten -- the total is the plain (already-euro) F column
+    # (542.8708880681648), not F_lc (13135.0) divided by anything. Row 57's
+    # own Sf is "P57+77" -- a flat 77 surcharge on top -- so the expected
+    # total is the plain euro lead amount plus that surcharge.
+    items = evaluate(RULES, "CZ", "RMS", 1,
+                      {"IA": "standard", "IB": None, "II": None},
+                      {"IA": 1, "IB": 0, "II": 0})
+    ia = [i for i in items if i["type"] == "IA"][0]
+    assert ia["row"] == 57
+    assert ia["total"] == round(542.8708880681648 + 77, 2)
+    assert ia["total"] == 619.87
 
 
 def test_ie_surcharge_is_added_when_the_ceiling_does_not_bind():

@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Re-exported so the extractor's tests and callers have one import site.
 # The reader itself lives in feedata.py (Task 2) -- one loader, one truth.
-from feedata import load_fee_rows  # noqa: F401
+from feedata import load_fee_rows, load_static_fx_rates  # noqa: F401
 
 HERE = Path(__file__).resolve().parent
 
@@ -61,6 +61,36 @@ def extract_amounts(row):
     for name, col in _AMOUNT_KEYS.items():
         src = f"{col}_lc" if local else col
         out[name] = row.get(src)
+    return out
+
+
+def extract_amounts_eur(row, static_rates=None):
+    """What the shipped engine actually computes with (cause B).
+
+    applyLiveRatesToRows() in vcl-calc-app.js rewrites F..K as F_lc / rate,
+    but only when a rate is available. The golden master was recorded with
+    network access blocked, so LIVE_FX was always empty and the only rates
+    available were STATIC_FX_RATES's three entries (HU, NO, SI). For every
+    other local-currency country (CH, CZ, DK, IS, PL, RS, SE, UK) no rate
+    existed, so F..K were never rewritten and kept the euro values already
+    baked into vcl-calc-data.js at export time.
+
+    This reproduces that runtime behaviour: F_lc / rate where a static rate
+    exists for this row's country, otherwise the plain F..K columns as-is.
+    `amounts` above is left untouched -- it stays the authoritative
+    local-currency source value for a later editor to present.
+    """
+    if static_rates is None:
+        static_rates = load_static_fx_rates()
+    local = row.get("currency")
+    rate = static_rates.get(row["cc"]) if local else None
+    out = {"currency": local or "EUR"}
+    for name, col in _AMOUNT_KEYS.items():
+        if rate:
+            lc = row.get(f"{col}_lc")
+            out[name] = (lc / rate) if lc is not None else None
+        else:
+            out[name] = row.get(col)
     return out
 
 
@@ -187,8 +217,69 @@ def extract_surcharge(row):
     return float(m.group(1)) if m else None
 
 
+def _direct_total(sf, own):
+    """When Sf names none of this row's own P/Q/R, it computes the total some
+    other way entirely. Only the shapes actually found in the data are
+    accepted; anything else is reported as "unparsed" rather than guessed
+    at (the same faithfulness rule as extract_cap's four shapes, spec C).
+
+    Three shapes occur:
+      - gatedFlat: IF(<gate>=0,"",IF(<gate>>1,K,F)) -- one flat fee for the
+        whole row, gated on the row's own IA/IB/II count (26 Belgium rows).
+      - const: IF(<gate>=0,"",<n>) -- a fixed number, not an amount column
+        at all (2 UK rows, whose Total is always 0 even though their own P
+        subtotal is a real fee).
+      - leadPlusStrengths: F+((L-1)*G), unconditional on any count (2 Spain
+        rows).
+    """
+    body = sf.replace(" ", "")
+
+    m = re.search(
+        rf'IF\((?P<gate>[MNO]){own}=0,"",IF\((?P=gate){own}>1,K{own},F{own}\)\)', body)
+    if m:
+        gate = {"M": "IA", "N": "IB", "O": "II"}[m.group("gate")]
+        return {"kind": "gatedFlat", "gate": gate}
+
+    m = re.search(rf'IF\((?P<gate>[MNO]){own}=0,"",(\d+(?:\.\d+)?)\)', body)
+    if m:
+        gate = {"M": "IA", "N": "IB", "O": "II"}[m.group("gate")]
+        return {"kind": "const", "gate": gate, "value": float(m.group(2))}
+
+    if re.search(rf"F{own}\+\(\(L{own}-1\)\*G{own}\)", body):
+        return {"kind": "leadPlusStrengths"}
+
+    return {"kind": "unparsed", "formula": sf}
+
+
+def extract_total_scope(row):
+    """Which subtotal(s) the TOTAL (Sf) actually sums (spec C).
+
+    Read directly off Sf's own-row P/Q/R references, canonically ordered --
+    the same evidence-from-operand approach _cap_scope uses for ceilings,
+    so the two never drift apart. 385 of 421 rows reference at least one of
+    their own P/Q/R and get a combination scope. The other 36 reference
+    none: Sf computes the total some other way entirely (one flat fee for
+    the row, a constant, or a strength-only formula) -- those get
+    "direct" (or "unparsed" if the formula doesn't reduce to one of the
+    three known direct shapes, spec C's faithfulness rule).
+    """
+    sf = row.get("Sf")
+    own = row["row"]
+    letters = [c for c, r in re.findall(r"([A-Z]{1,2})(\d+)", sf)
+               if c in "PQR" and int(r) == own]
+    if letters:
+        uniq = sorted(set(letters), key=_SCOPE_ORDER.index)
+        return {"scope": "+".join(uniq)}
+
+    direct = _direct_total(sf, own)
+    if direct["kind"] == "unparsed":
+        return {"scope": "unparsed", "formula": direct["formula"]}
+    return {"scope": "direct", "direct": direct}
+
+
 def build_rules():
     rules = []
+    static_rates = load_static_fx_rates()
     for row in load_fee_rows():
         cls = classify_rule(row)
         rules.append({
@@ -196,10 +287,12 @@ def build_rules():
             "type": row["type"], "special": row["special"],
             "fee_code": row.get("fee_code"),
             "amounts": extract_amounts(row),
+            "amountsEur": extract_amounts_eur(row, static_rates),
             "select": extract_select(row),
             "rule": cls["rule"], "evidence": cls["evidence"],
             "cap": extract_cap(row),
             "surcharge": extract_surcharge(row),
+            "totalScope": extract_total_scope(row),
         })
     return rules
 
@@ -214,10 +307,12 @@ def main():
     unknown = [r for r in rules if r["rule"] == "unknown"]
     unparsed = [r for r in rules if r["cap"] and "unparsed" in r["cap"]]
     anomalies = [r for r in rules if r["select"]["anomaly"]]
+    scope_unparsed = [r for r in rules if r["totalScope"]["scope"] == "unparsed"]
     print(f"{len(rules)} Zeilen -> fee-rules.json")
-    print(f"  unknown rule : {len(unknown)}")
-    print(f"  unparsed cap : {len(unparsed)}")
-    print(f"  anomalies    : {len(anomalies)}")
+    print(f"  unknown rule       : {len(unknown)}")
+    print(f"  unparsed cap       : {len(unparsed)}")
+    print(f"  unparsed totalScope: {len(scope_unparsed)}")
+    print(f"  anomalies          : {len(anomalies)}")
 
 
 if __name__ == "__main__":
