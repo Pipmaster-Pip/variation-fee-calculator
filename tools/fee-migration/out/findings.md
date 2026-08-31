@@ -75,3 +75,36 @@ combined with `M+N`, not on `L` (lead-variation count) the way the other
 `flat_from_second` rows are. Whether Denmark needs a sixth rule family, or whether
 these 17 rows should be modeled as data-driven exceptions instead, is a decision for
 a later Baustein-A task -- flagged here, not decided here.
+
+# Findings: unparsed ceilings surfaced after the K-guard fix (Task 6)
+
+`extract_cap()`'s safety net used to test for the bare letter `"K"` in the S formula
+before reporting an un-typeable ceiling. Every one of the 421 `Sf` formulas is wrapped
+in `IF(ISBLANK(L<row>),...)`, and the literal `ISBLANK` itself contains a `K` -- so
+that check was always true and the "unparsed" branch was unreachable dead code. It now
+tests for a reference to the row's own flat-fee column, `K<row>`, instead. With the
+guard actually able to fire, `unparsed cap` went from 0 to 2.
+
+Both newly-surfaced rows are Denmark:
+
+```
+row  98  cc=DK  role=CMS       fee_code=3103
+  Sf: =IF(ISBLANK(L98),"",IF(M98=0,"",IF(M98>1,"",F98)))
+
+row 109  cc=DK  role=national  fee_code=3101
+  Sf: =IF(ISBLANK(L109),"",IF(M109=0,"",IF(M109>1,"",F109)))
+```
+
+Both compare `M<row>>1`, not any P/Q/R subtotal -- the branch returns `""` (blank) once
+more than one variation applies, rather than capping a sum at a ceiling value. None of
+the four enterable cap shapes (const, byStrength, points x pointValue, multipleOfLead)
+apply, so `extract_cap` now correctly reports them as `{"unparsed": ...}` instead of
+silently returning `None` (no cap) as it did before the fix.
+
+This is not a new, independent problem: rows 98 and 109 are two of the same 17 DK rows
+already listed above as `unknown` under `classify_rule()` (Shape 1: "single Type IA
+fee, blocked once more than one applies"). The S formula on these rows is simply
+mirroring the same `M>1` gate that already made the P/Q/R formula unclassifiable --
+so it being unparsed as a *cap* too is consistent, not a second bug. Whether Denmark's
+"blocked past one variation" shape needs its own rule family (covering both
+`classify_rule` and `extract_cap`) is, again, a decision for a later Baustein-A task.

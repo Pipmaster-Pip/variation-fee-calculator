@@ -31,13 +31,40 @@ def test_poland_is_not_a_cap():
 
 
 def test_every_cap_is_enterable():
+    # A cap must land in one of the four form shapes, OR be explicitly
+    # flagged "unparsed" -- the safety net that reports shapes nobody could
+    # type into a form (spec B6). It must never silently masquerade as one
+    # of the four under a value shape that doesn't actually match.
     allowed = ({"const"}, {"byStrength"}, {"points", "pointValue"}, {"multipleOfLead"})
     offenders = []
     for r in load_fee_rows():
         cap = extract_cap(r)
-        if cap and set(cap.get("value", {})) not in allowed:
+        if not cap or "unparsed" in cap:
+            continue
+        if set(cap.get("value", {})) not in allowed:
             offenders.append((r["row"], cap))
     assert offenders == [], f"caps not expressible as form fields: {offenders}"
+
+
+def test_ie_row_224_caps_q_only():
+    # Finding 1: IF(L=1, IF(Q>4150,4150,Q), IF(Q>6425,6425,Q)) caps Q alone --
+    # the P subtotal is zero on this row, so scope "P" would be a silent no-op.
+    cap = extract_cap(ROWS[224])
+    assert cap["scope"] == "Q"
+
+
+def test_ie_row_226_caps_q_plus_r():
+    # Finding 1: IF(L=1, IF((Q+R)>4150,4150,Q+R), ...) caps Q+R, not P.
+    cap = extract_cap(ROWS[226])
+    assert cap["scope"] == "Q+R"
+
+
+def test_ie_row_221_still_caps_all_three():
+    # A row that genuinely caps P+Q+R must keep reporting that scope after
+    # _cap_scope stopped substring-matching a fixed list of two combinations.
+    cap = extract_cap(ROWS[221])
+    assert cap["scope"] == "P+Q+R"
+    assert cap["value"]["byStrength"] == {"1": 4150.0, "else": 6425.0}
 
 
 def test_a_strength_dependent_cap_keeps_both_levels():

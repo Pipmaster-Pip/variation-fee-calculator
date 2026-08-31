@@ -2568,7 +2568,10 @@
   },
   "rule": "unknown",
   "evidence": "unmatched shape: =IF(ISBLANK(L%),\"\",IF(M%=0,0,IF(M%>1,0,F%)))",
-  "cap": null,
+  "cap": {
+   "scope": "P",
+   "unparsed": "=IF(ISBLANK(L98),\"\",IF(M98=0,\"\",IF(M98>1,\"\",F98)))"
+  },
   "surcharge": null
  },
  {
@@ -2863,7 +2866,10 @@
   },
   "rule": "unknown",
   "evidence": "unmatched shape: =IF(ISBLANK(L%),\"\",IF(M%=0,0,IF(M%>1,0,F%)))",
-  "cap": null,
+  "cap": {
+   "scope": "P",
+   "unparsed": "=IF(ISBLANK(L109),\"\",IF(M109=0,\"\",IF(M109>1,\"\",F109)))"
+  },
   "surcharge": null
  },
  {
@@ -5985,7 +5991,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6019,7 +6025,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6053,7 +6059,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6087,7 +6093,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6121,7 +6127,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6155,7 +6161,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6223,7 +6229,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6257,7 +6263,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6291,7 +6297,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6325,7 +6331,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6359,7 +6365,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,
@@ -6393,7 +6399,7 @@
   "rule": "per_strength_tiered",
   "evidence": "IF(L=1, F*count, tiered by strength)",
   "cap": {
-   "scope": "P",
+   "scope": "Q+R",
    "value": {
     "byStrength": {
      "1": 4150.0,

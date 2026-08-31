@@ -100,13 +100,25 @@ def classify_rule(row):
     return {"rule": "unknown", "evidence": f"unmatched shape: {body[:160]}"}
 
 
+_SCOPE_ORDER = "PQR"
+
+
 def _cap_scope(sf, own):
+    """Which subtotal(s) the ceiling's own comparison operand names.
+
+    Read off the actual operand being compared (e.g. the "Q226+R226" in
+    "IF((Q226+R226)>4150,...") instead of substring-matching a fixed list of
+    two combinations -- that used to silently default every scope that wasn't
+    exactly "P+Q+R" or "P+Q" to "P", including plain-Q and Q+R rows (IE
+    224-236). Letters are returned P, Q, R in that order regardless of how
+    they appeared in the formula, so scopes compare predictably downstream.
+    """
     body = _norm(sf, own)
-    if "P%+Q%+R%" in body:
-        return "P+Q+R"
-    if "P%+Q%" in body:
-        return "P+Q"
-    return "P"
+    m = re.search(r"\(?([PQR][%@§](?:\+[PQR][%@§])*)\)?>", body)
+    if not m:
+        return "P"
+    letters = sorted(set(re.findall(r"[PQR]", m.group(1))), key=_SCOPE_ORDER.index)
+    return "+".join(letters)
 
 
 def extract_cap(row):
@@ -156,9 +168,12 @@ def extract_cap(row):
     if const:
         return {"scope": _cap_scope(sf, own), "value": {"const": float(const[0])}}
 
-    # A ">" that gates something other than K, but matches none of the four
-    # enterable shapes -- report it rather than invent a fifth form.
-    if re.search(r"IF\([^)]*>[^,]+,", body) and "K" not in body:
+    # A ">" that gates something other than this row's own flat fee (K<row>),
+    # but matches none of the four enterable shapes -- report it rather than
+    # invent a fifth form. Was `"K" not in body`, which never fired: every
+    # Sf formula is wrapped in IF(ISBLANK(L<row>),...) and ISBLANK itself
+    # contains a "K", so the bare-letter check was permanently false.
+    if re.search(r"IF\([^)]*>[^,]+,", body) and f"K{own}" not in body:
         return {"scope": _cap_scope(sf, own), "unparsed": body[:200]}
     return None
 
