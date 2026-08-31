@@ -4,8 +4,12 @@ The output is the acceptance test for Bausteine B and C: whatever replaces the
 engine has to reproduce this file.
 """
 
+import csv
 import gzip
+import math
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 from feedata import load_fee_rows
@@ -23,18 +27,21 @@ BATCH = 500
 
 
 def _num(v):
-    return f"{v:.2f}" if isinstance(v, (int, float)) and not isinstance(v, bool) else ""
+    ok = isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    return f"{v:.2f}" if ok else ""
 
 
 def _str(v):
-    return "" if v is None else str(v).replace(",", " ").replace('"', " ").replace("\n", " ")
+    return "" if v is None else str(v)
 
 
 def format_run(run_id, entry, res):
-    lines = []
+    """One field-list per result item. Callers write each list through a csv
+    writer so quoting -- not string-mangling -- handles embedded commas."""
+    rows = []
     for cr in res["countries"]:
         for it in cr["items"]:
-            lines.append(",".join(str(x) for x in [
+            rows.append([
                 run_id, entry["cc"], entry["role"], entry["strengths"],
                 entry["counts"]["IA"], entry["counts"]["IB"], entry["counts"]["II"],
                 _str(entry["special"].get("IA")), _str(entry["special"].get("IB")),
@@ -46,8 +53,8 @@ def format_run(run_id, entry, res):
                 "" if it.get("count") is None else it["count"],
                 _num(it.get("capValue")), _num(it.get("groupingFee")),
                 _num(it.get("groupingBase")), _num(it.get("groupingPerAdditional")),
-            ]))
-    return lines
+            ])
+    return rows
 
 
 # One page context for the whole run; batching keeps the number of evaluate()
@@ -61,19 +68,51 @@ _EVAL = """(entries) => entries.map((e) => window.VCLCALC.computeFees({
 def main():
     entries = build_matrix(load_fee_rows())
     OUT.mkdir(exist_ok=True)
-    with open_calculator() as (page, errors):
-        with gzip.open(OUT / "golden.csv.gz", "wt", encoding="utf-8", newline="") as fh:
-            fh.write(HEADER + "\n")
-            for i in range(0, len(entries), BATCH):
-                batch = entries[i:i + BATCH]
-                results = page.evaluate(_EVAL, batch)
-                for j, (entry, res) in enumerate(zip(batch, results)):
-                    for line in format_run(i + j, entry, res):
-                        fh.write(line + "\n")
-                print(f"  {i + len(batch)}/{len(entries)}", end="\r", flush=True)
-        if errors:
-            print("\nSeitenfehler beim Laden:", sorted(set(errors))[:5], file=sys.stderr)
-            sys.exit(1)
+    final_path = OUT / "golden.csv.gz"
+
+    # Write to a temp file first; only move it into place once we know the
+    # whole run succeeded. Otherwise a page error midway would still leave a
+    # complete-looking (but truncated/corrupt) file at the final path.
+    fd, tmp_name = tempfile.mkstemp(dir=OUT, suffix=".tmp")
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+
+    run_ids_seen = set()
+    try:
+        with open_calculator() as (page, errors):
+            with gzip.open(tmp_path, "wt", encoding="utf-8", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(HEADER.split(","))
+                for i in range(0, len(entries), BATCH):
+                    batch = entries[i:i + BATCH]
+                    results = page.evaluate(_EVAL, batch)
+                    if len(results) != len(batch):
+                        raise RuntimeError(
+                            f"batch/result size mismatch at offset {i}: "
+                            f"sent {len(batch)}, got back {len(results)}")
+                    for j, (entry, res) in enumerate(zip(batch, results)):
+                        run_id = i + j
+                        run_ids_seen.add(run_id)
+                        for row in format_run(run_id, entry, res):
+                            writer.writerow(row)
+                    print(f"  {i + len(batch)}/{len(entries)}", end="\r", flush=True)
+            if errors:
+                print("\nSeitenfehler beim Laden:", sorted(set(errors))[:5],
+                      file=sys.stderr)
+                sys.exit(1)
+
+        if len(run_ids_seen) != len(entries):
+            raise RuntimeError(
+                f"distinct run ids written ({len(run_ids_seen)}) != "
+                f"matrix entries ({len(entries)}) -- a batch was silently lost")
+
+        os.replace(tmp_path, final_path)
+    finally:
+        # If we exited via sys.exit(1) or an exception, drop the partial file
+        # rather than leaving stray temp litter or a half-written artifact.
+        if tmp_path.exists():
+            tmp_path.unlink()
+
     print(f"\nGolden Master geschrieben: {len(entries)} Läufe")
 
 
