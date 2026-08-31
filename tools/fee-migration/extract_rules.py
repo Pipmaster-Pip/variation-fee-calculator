@@ -13,8 +13,6 @@ from feedata import load_fee_rows  # noqa: F401
 
 HERE = Path(__file__).resolve().parent
 
-_TYPE_COL = {"IA": "M", "IB": "N", "II": "O"}
-
 
 def _global_refs(formula, own_row):
     """Row numbers this formula reads that are neither row 2 nor its own row."""
@@ -37,13 +35,14 @@ def extract_select(row):
         # it only starts at two.
         active = {"type": "IA", "max": n} if op == ">" else {"type": "IA", "min": n}
 
-    anomaly = None
+    anomalies = []
     for key in ("Mf", "Nf", "Of"):
         f = row.get(key)
         if not f:
             continue
-        foreign = [r for r in _global_refs(f, own) if r != own]
+        foreign = _global_refs(f, own)
         if foreign:
-            anomaly = f"{key} reads foreign row(s) {foreign} instead of row 2"
+            anomalies.append(f"{key} reads foreign row(s) {foreign} instead of row 2")
 
+    anomaly = "; ".join(anomalies) if anomalies else None
     return {"subsumption": "highest-type-wins", "activeWhen": active, "anomaly": anomaly}
