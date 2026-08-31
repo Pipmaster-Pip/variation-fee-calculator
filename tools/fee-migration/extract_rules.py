@@ -98,3 +98,112 @@ def classify_rule(row):
         return {"rule": "scaling", "evidence": "(rate + (L-1)*G) * (count-1) shape"}
 
     return {"rule": "unknown", "evidence": f"unmatched shape: {body[:160]}"}
+
+
+def _cap_scope(sf, own):
+    body = _norm(sf, own)
+    if "P%+Q%+R%" in body:
+        return "P+Q+R"
+    if "P%+Q%" in body:
+        return "P+Q"
+    return "P"
+
+
+def extract_cap(row):
+    """Reads the ceiling out of the S formula.
+
+    Only the four shapes a form field can hold are accepted (spec B6). Anything
+    else comes back as {"unparsed": ...} and lands in the report -- a ceiling
+    nobody can type in does not meet the requirement, so it must not be hidden
+    behind a special case in code.
+
+    Searched generically across all rows: countries with a cap may be added and
+    amounts change, so there is deliberately no country list here.
+    """
+    sf = row.get("Sf")
+    if not sf:
+        return None
+    body = sf.replace(" ", "")
+    own = row["row"]
+
+    # Poland first: 2*F + (L-1)*F*0.8 is a grouping rule with a strength factor.
+    # It only looks like a cap because of the ">" comparison (spec B6).
+    if re.search(rf"F{own}\*0\.8", body):
+        return None
+
+    # Points x point value: IF(P>1500*5.8, 1500*5.8, P)  -- Slovenia.
+    # The 5.8 is the point value from the 'Exchange rates' sheet, resolved by
+    # convert.py at export time.
+    pts = re.search(r">(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?),", body)
+    if pts:
+        return {"scope": _cap_scope(sf, own),
+                "value": {"points": float(pts.group(1)), "pointValue": float(pts.group(2))}}
+
+    # Strength-dependent: IF(L=1, IF(x>a,a,x), IF(x>b,b,x))
+    two = re.findall(r">\(?(\d+(?:\.\d+)?)\)?,\1,", body)
+    if f"L{own}=1" in body and len(two) >= 2:
+        return {"scope": _cap_scope(sf, own),
+                "value": {"byStrength": {"1": float(two[0]), "else": float(two[1])}}}
+
+    # Multiple of the lead fee: IF(x>(2*F), 2*F, x)
+    mult = re.search(rf">\((\d+)\*F{own}\)", body)
+    if mult:
+        return {"scope": _cap_scope(sf, own),
+                "value": {"multipleOfLead": int(mult.group(1))}}
+
+    # Plain amount: IF(x>19900, 19900, x)  -- Germany
+    const = re.findall(r">(\d+(?:\.\d+)?),\1,", body)
+    if const:
+        return {"scope": _cap_scope(sf, own), "value": {"const": float(const[0])}}
+
+    # A ">" that gates something other than K, but matches none of the four
+    # enterable shapes -- report it rather than invent a fifth form.
+    if re.search(r"IF\([^)]*>[^,]+,", body) and "K" not in body:
+        return {"scope": _cap_scope(sf, own), "unparsed": body[:200]}
+    return None
+
+
+def extract_surcharge(row):
+    """A flat amount added on top of the sum, e.g. P+Q+77."""
+    sf = row.get("Sf")
+    if not sf:
+        return None
+    m = re.search(r"[PQR]\d+\+(\d+(?:\.\d+)?)\)", sf.replace(" ", ""))
+    return float(m.group(1)) if m else None
+
+
+def build_rules():
+    rules = []
+    for row in load_fee_rows():
+        cls = classify_rule(row)
+        rules.append({
+            "row": row["row"], "cc": row["cc"], "role": row["role"],
+            "type": row["type"], "special": row["special"],
+            "fee_code": row.get("fee_code"),
+            "amounts": extract_amounts(row),
+            "select": extract_select(row),
+            "rule": cls["rule"], "evidence": cls["evidence"],
+            "cap": extract_cap(row),
+            "surcharge": extract_surcharge(row),
+        })
+    return rules
+
+
+def main():
+    import json as _json
+    out = HERE / "out"
+    out.mkdir(exist_ok=True)
+    rules = build_rules()
+    (out / "fee-rules.json").write_text(
+        _json.dumps(rules, indent=1, ensure_ascii=False), encoding="utf-8")
+    unknown = [r for r in rules if r["rule"] == "unknown"]
+    unparsed = [r for r in rules if r["cap"] and "unparsed" in r["cap"]]
+    anomalies = [r for r in rules if r["select"]["anomaly"]]
+    print(f"{len(rules)} Zeilen -> fee-rules.json")
+    print(f"  unknown rule : {len(unknown)}")
+    print(f"  unparsed cap : {len(unparsed)}")
+    print(f"  anomalies    : {len(anomalies)}")
+
+
+if __name__ == "__main__":
+    main()
