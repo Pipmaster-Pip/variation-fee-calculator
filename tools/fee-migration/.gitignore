@@ -1,0 +1,7 @@
+# Generated artefacts. golden.csv.gz is committed deliberately (see plan Task 3);
+# everything else here is reproducible output.
+out/*
+!out/golden.csv.gz
+!out/fee-rules.json
+!out/report.md
+!out/findings.md
