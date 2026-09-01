@@ -172,6 +172,19 @@ function vcl_count_fee_overrides( $overrides ) {
 	foreach ( $overrides['rows'] as $fields ) {
 		$n += count( $fields );
 	}
+	// The per-country provenance counts too: on an installation where only
+	// checked dates and sources were maintained there is still something to
+	// export, to clear and to report. The 'updated' stamp is written by the
+	// save rather than typed, so it is not a maintained value.
+	if ( ! empty( $overrides['countries'] ) && is_array( $overrides['countries'] ) ) {
+		foreach ( $overrides['countries'] as $fields ) {
+			foreach ( array( 'checked', 'source' ) as $key ) {
+				if ( ! empty( $fields[ $key ] ) ) {
+					$n++;
+				}
+			}
+		}
+	}
 	return $n;
 }
 

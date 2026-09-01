@@ -62,9 +62,13 @@
   // Per-country provenance (checked date + source): keyed by country code,
   // independent of the amount edits above so a country switch shows the
   // right values without touching edits/pointEdits.
-  var countryOverrides = (window.VCLCALC_OVERRIDES && window.VCLCALC_OVERRIDES.countries)
-    ? JSON.parse(JSON.stringify(window.VCLCALC_OVERRIDES.countries))
-    : {};
+  // savedCountries is the pristine state as it came from the database: the
+  // baseline "Verwerfen" restores, and the reference that decides whose "last
+  // edited" date a save is allowed to move.
+  var savedCountries = deepCopy(
+    (window.VCLCALC_OVERRIDES && window.VCLCALC_OVERRIDES.countries) || saved.countries || {}
+  );
+  var countryOverrides = deepCopy(savedCountries);
   var activeCc = null;
   var openRow = null;
   var example = { strengths: 1, IA: 0, IB: 0, II: 1 };
@@ -206,6 +210,23 @@
     return n;
   }
 
+  /** Maintained provenance fields, counted the same way vcl_count_fee_overrides()
+   *  counts them in PHP: the typed checked date and source, never the stamped
+   *  'updated'. */
+  function provCount() {
+    var n = 0;
+    Object.keys(countryOverrides).forEach(function (cc) {
+      var e = countryOverrides[cc] || {};
+      if (e.checked) { n++; }
+      if (e.source) { n++; }
+    });
+    return n;
+  }
+
+  /** Everything this page maintains. An installation on which only dates and
+   *  sources were entered is not "unchanged". */
+  function overrideCount() { return editCount() + provCount(); }
+
   function setEdit(row, col, mode, value) {
     var f = fieldName(col, mode);
     // What "unchanged" means differs: a free cell is unchanged when it matches
@@ -257,9 +278,9 @@
     if (window.VCLCALC && typeof window.VCLCALC.applyOverrides === 'function') {
       window.VCLCALC.applyOverrides();
     }
-    root.classList.toggle('is-dirty', editCount() > 0);
+    root.classList.toggle('is-dirty', overrideCount() > 0);
     var badge = document.getElementById('vclfe-editcount');
-    if (badge) badge.textContent = editCount() ? editCount() + ' geändert' : '';
+    if (badge) badge.textContent = overrideCount() ? overrideCount() + ' geändert' : '';
   }
 
   // ========================================================================
@@ -1394,13 +1415,21 @@
         points: pointEdits,
         countries: (function () {
           var out = {};
+          var today = new Date().toISOString().slice(0, 10);
           Object.keys(countryOverrides).forEach(function (cc) {
             var e = countryOverrides[cc];
             if (!e || (!e.checked && !e.source)) { return; }
+            // Only a country actually touched in this session gets a new "last
+            // edited" date. The others were merely loaded from the saved overlay
+            // and keep the date they were saved with -- otherwise maintaining
+            // Denmark in November would date every other country to November.
+            var was = savedCountries[cc] || {};
+            var touched = (e.checked || '') !== (was.checked || '')
+                       || (e.source || '') !== (was.source || '');
             out[cc] = {
               checked: e.checked || '',
               source: e.source || '',
-              updated: new Date().toISOString().slice(0, 10)
+              updated: touched ? today : (was.updated || today)
             };
           });
           return out;
@@ -1409,10 +1438,14 @@
   });
 
   document.getElementById('vclfe-reset').addEventListener('click', function () {
-    if (!editCount()) return;
+    if (!overrideCount()) return;
     if (!window.confirm('Alle ungespeicherten Änderungen verwerfen?')) return;
     edits = deepCopy(saved.rows || {});
     pointEdits = deepCopy(saved.points || {});
+    // Provenance is part of what this page maintains, so it is part of what
+    // "Verwerfen" throws away -- otherwise the next save would write the very
+    // dates and sources the user just discarded.
+    countryOverrides = deepCopy(savedCountries);
     applyToEngine();
     render();
   });
