@@ -2271,7 +2271,13 @@ function renderStepFeeData() {
         ${meta.source ? `<p class="fd-src">Source: <b>${escapeHtml(meta.source)}</b></p>` : ''}
         ${(meta.currency && rate) ? `<p class="fd-src fd-fx">Published in <b>${escapeHtml(meta.currency)}</b> by the authority &mdash; euro amounts are converted at <b>1 EUR = ${rate.toLocaleString('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 })} ${escapeHtml(meta.currency)}</b>.</p>` : ''}
       </div>
-      <div class="fd-headright" id="vclcalc-fdHeadRight"></div>
+      <div class="fd-headright" id="vclcalc-fdHeadRight">
+        ${(meta.currency && rate) ? `
+        <div class="fd-curtoggle" role="group" aria-label="Currency">
+          <button type="button" class="fd-curbtn${local ? ' on' : ''}" data-fdcur="local">${escapeHtml(meta.currency)}</button>
+          <button type="button" class="fd-curbtn${local ? '' : ' on'}" data-fdcur="eur">EUR</button>
+        </div>` : ''}
+      </div>
     </header>
 
     <div id="vclcalc-fdBody">${tables}</div>
@@ -2281,6 +2287,12 @@ function renderStepFeeData() {
     b.addEventListener('click', () => {
       appState.feeDataCc = b.getAttribute('data-fdcc');
       appState.feeDataCur = 'local';
+      render();
+    });
+  });
+  contentEl.querySelectorAll('[data-fdcur]').forEach((b) => {
+    b.addEventListener('click', () => {
+      appState.feeDataCur = b.getAttribute('data-fdcur');
       render();
     });
   });

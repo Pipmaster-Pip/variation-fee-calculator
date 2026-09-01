@@ -1320,3 +1320,13 @@
   display:block; margin-top:2px; font-size:9.5px; letter-spacing:.06em;
   color:var(--accent); text-transform:none;
 }
+
+/* Currency pill for one country's own fee-data tables -- the same segmented
+   toggle the calculator result view uses (.vres-curtoggle), reused here.
+   Local currency leads: it is what the authority publishes, the euro value
+   is derived from it. */
+.vclcalc-app .fd-curtoggle{ display:inline-flex; border:1.5px solid var(--accent); border-radius:999px; overflow:hidden; }
+.vclcalc-app .fd-curbtn{ font-family:var(--sans); font-size:11.5px; font-weight:600; padding:5px 14px; border:none; background:#fff; color:var(--accent-deep); cursor:pointer; }
+.vclcalc-app .fd-curbtn:hover{ background:var(--accent-soft); }
+.vclcalc-app .fd-curbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+.vclcalc-app .fd-curbtn.on{ background:var(--accent); color:#fff; }
