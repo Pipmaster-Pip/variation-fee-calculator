@@ -1345,6 +1345,18 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+// escapeHtml() is safe for element text content but does not escape quotes,
+// so it must not be used for values placed inside an HTML attribute (e.g.
+// value="...", href="...", data-...="..."). Use this instead for those.
+function escapeAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // ---- Compute results across all selected countries ----
 // Each country is evaluated independently (its own role, strengths, and
 // special-case choices), since fee tables and grouping rules in the source
@@ -2241,12 +2253,12 @@ function renderStepFeeData() {
     <div class="fd-picker">
       <div class="fd-pillbar">
         <input type="search" class="fd-search" id="vclcalc-fdSearch" placeholder="Find a country"
-               aria-label="Find a country" value="${escapeHtml(appState.feeDataSearch)}">
+               aria-label="Find a country" value="${escapeAttr(appState.feeDataSearch)}">
         <span class="fd-pillcount">${q ? `${shown.length} of ${chips.length}` : `${chips.length} countries`}</span>
       </div>
       <div class="fd-pills">
         ${shown.length ? shown.map(c => `
-          <button type="button" class="fd-pill${c.cc === cc ? ' is-active' : ''}" data-fdcc="${escapeHtml(c.cc)}">
+          <button type="button" class="fd-pill${c.cc === cc ? ' is-active' : ''}" data-fdcc="${escapeAttr(c.cc)}">
             ${escapeHtml(c.name)}<span class="n">${c.n}</span>
           </button>`).join('') : '<p class="fd-pillnone">No country with that name.</p>'}
       </div>
@@ -2263,7 +2275,7 @@ function renderStepFeeData() {
           ${meta.edited ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Last edited</span> <b>${escapeHtml(formatImprintDate(meta.edited))}</b></span>` : ''}
           ${meta.linkText ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Authority</span> ${
             meta.linkUrl
-              ? `<a href="${escapeHtml(meta.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(meta.linkText)}</a>`
+              ? `<a href="${escapeAttr(meta.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(meta.linkText)}</a>`
               : escapeHtml(meta.linkText)
           }</span>` : ''}
           ${meta.payment ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Payment</span> ${escapeHtml(meta.payment)}</span>` : ''}

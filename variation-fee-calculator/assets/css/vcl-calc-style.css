@@ -89,6 +89,14 @@
   overflow:hidden;
   background:var(--panel);
 }
+/* On the public fee-data page renderRail() leaves .rail empty (no active
+   numbered step to show); collapse it fully instead of leaving a bordered
+   sliver with its margin. */
+.vclcalc-app .rail:empty{
+  display:none;
+  margin-bottom:0;
+  border:none;
+}
 .vclcalc-app .rail-step{
   flex:1;
   padding:10px 12px;
@@ -732,6 +740,7 @@
 
 /* ---- Step rail -> Guided-Workflow dots (Countries · Details · Variations · Result) ---- */
 .vclcalc-app .rail{ display:flex; gap:6px; margin-bottom:20px; border:none; background:none; border-radius:0; overflow:visible; }
+.vclcalc-app .rail:empty{ display:none; margin-bottom:0; }
 .vclcalc-app .rail-step{ flex:1; flex-direction:column; align-items:center; gap:5px; border-right:none; padding:0; text-align:center; }
 .vclcalc-app button.rail-step{ background:none; padding:0; width:100%; }
 .vclcalc-app .rail-step .n{ width:30px; height:30px; border:1.5px solid var(--line-strong); font-size:13px; color:var(--ink-faint); background:var(--panel); }
