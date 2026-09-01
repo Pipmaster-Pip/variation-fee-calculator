@@ -10,10 +10,33 @@
 // ============================================================================
 (function(){
 
-const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES } = window.VCLCALC_DATA;
+const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES, POINT_VALUES } = window.VCLCALC_DATA;
 
 const ROWS_BY_ROW = {};
 FEE_ROWS.forEach(r => { ROWS_BY_ROW[r.row] = r; });
+
+// ============================================================================
+// Point-based fee schedules
+// Some authorities publish their fees as point counts multiplied by a point
+// value that is revised on its own schedule (Slovenia: Article 18). Those rows
+// carry F_pt..V_pt; the euro amounts are derived here so that maintaining the
+// points and the point value is enough. Runs before anything reads a row.
+// ============================================================================
+const POINT_COLUMNS = ['F','G','H','I','J','K','T','U','V'];
+
+function applyPointValues() {
+  if (!POINT_VALUES) return;
+  FEE_ROWS.forEach(r => {
+    const pv = POINT_VALUES[r.cc];
+    if (!pv) return;
+    POINT_COLUMNS.forEach(c => {
+      const pts = r[c + '_pt'];
+      if (pts === undefined || pts === null) return;
+      r[c] = Math.round(pts * pv * 100) / 100;
+    });
+  });
+}
+applyPointValues();
 
 // ============================================================================
 // Live exchange-rate support
@@ -115,7 +138,7 @@ function cellRef(letter, row, state) {
   if (row === 2) return state.global[letter];
   const r = ROWS_BY_ROW[row];
   if (!r) return 0;
-  if (['F','G','H','I','J','K'].includes(letter)) {
+  if (['F','G','H','I','J','K','T','U','V'].includes(letter)) {
     const v = r[letter];
     return (v === null || v === undefined) ? 0 : v;
   }
