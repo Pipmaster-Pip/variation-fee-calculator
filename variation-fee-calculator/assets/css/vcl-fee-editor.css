@@ -14,7 +14,12 @@
   --ok:#2f6b4f; --ok-soft:#e6f0ea;
   --sans:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
   --serif:"Source Serif 4",Georgia,serif;
-  --mono:"IBM Plex Mono","SF Mono",Consolas,monospace;
+  /* The face for amounts, codes and formulas. Libre Franklin rather than a
+     monospace: every monospace on Google Fonts that pairs with this design puts
+     a dot or a slash inside the zero, and this screen is nothing but figures.
+     Columns still line up -- tabular-nums below does that without a fixed
+     advance width for letters. */
+  --figure:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
   --radius:3px;
   --shadow:0 1px 2px rgba(20,30,48,.05), 0 6px 20px rgba(20,30,48,.06);
 
@@ -41,7 +46,8 @@
   display:flex; gap:8px; flex-wrap:wrap; align-items:center;
 }
 .vclfe-dot{color:var(--line-strong)}
-.vclfe-code{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
+.vclfe-code{font-family:var(--figure); font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
+#vclfe-root td.vclfe-code{white-space:normal; max-width:112px; line-height:1.35}
 .vclfe-actions{display:flex; gap:8px; align-items:center}
 
 .vclfe-btn{
@@ -91,7 +97,7 @@
   background:var(--paper); color:var(--ink); box-shadow:none;
 }
 #vclfe-root input.vclfe-search:hover{border-color:var(--accent)}
-.vclfe-pillcount{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.vclfe-pillcount{font-family:var(--figure); font-size:11px; color:var(--ink-faint)}
 .vclfe-pills{display:flex; flex-wrap:wrap; gap:6px}
 .vclfe-pill{
   display:inline-flex; align-items:center; gap:7px; cursor:pointer;
@@ -100,7 +106,7 @@
   border:1px solid var(--line); background:var(--paper); color:var(--ink-soft);
 }
 .vclfe-pill:hover{border-color:var(--line-strong); color:var(--ink)}
-.vclfe-pill .n{font-family:var(--mono); font-size:10.5px; color:var(--ink-faint)}
+.vclfe-pill .n{font-family:var(--figure); font-size:10.5px; color:var(--ink-faint)}
 .vclfe-pill.is-active{
   background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;
 }
@@ -133,10 +139,10 @@
 }
 /* The label wraps over at most two lines and the unit sits under it, so a long
    column name no longer dictates how wide the column has to be. */
-.vclfe-th__label{display:block; max-width:104px; margin-left:auto; line-height:1.3}
+.vclfe-th__label{display:block; max-width:96px; margin-left:auto; line-height:1.3}
 #vclfe-root th:not(.num) .vclfe-th__label{margin-left:0}
 .vclfe-th__unit{
-  display:block; margin-top:3px; font-family:var(--mono); font-size:9.5px;
+  display:block; margin-top:3px; font-family:var(--figure); font-size:9.5px;
   letter-spacing:.06em; color:var(--accent); text-transform:none;
 }
 #vclfe-root th.num, #vclfe-root td.num{text-align:right}
@@ -148,14 +154,14 @@
 
 .vclfe-type{font-weight:600; white-space:nowrap}
 .vclfe-special{
-  font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+  font-family:var(--figure); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
   color:var(--ink-soft); border:1px solid var(--line-strong); border-radius:2px;
   padding:2px 5px; margin-left:7px; vertical-align:1px; white-space:nowrap;
 }
 
 #vclfe-root input.vclfe-amount{
-  font-family:var(--mono); font-size:12.5px; font-variant-numeric:tabular-nums;
-  width:84px; min-height:0; text-align:right; padding:5px 7px;
+  font-family:var(--figure); font-size:12.5px; font-variant-numeric:tabular-nums;
+  width:82px; min-height:0; text-align:right; padding:5px 6px;
   border:1px solid var(--line-strong); border-radius:2px;
   background:var(--paper); color:var(--ink); box-shadow:none;
 }
@@ -195,9 +201,9 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
   border-radius:2px; font-size:13.5px; line-height:1.65;
 }
-.vclfe-sentence b{font-family:var(--mono); font-weight:600; font-size:12.5px; color:var(--accent-deep)}
+.vclfe-sentence b{font-family:var(--figure); font-weight:600; font-size:12.5px; color:var(--accent-deep)}
 .vclfe-formula{
-  margin:12px 0 0; font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+  margin:12px 0 0; font-family:var(--figure); font-size:11px; color:var(--ink-faint);
   line-height:1.6; word-break:break-all;
 }
 
@@ -205,11 +211,11 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
   padding:15px 16px; align-self:start;
 }
-.vclfe-ex__ctx{margin:-4px 0 12px; font-size:11.5px; color:var(--ink-faint); font-family:var(--mono)}
+.vclfe-ex__ctx{margin:-4px 0 12px; font-size:11.5px; color:var(--ink-faint); font-family:var(--figure)}
 .vclfe-ex__grid{display:grid; grid-template-columns:1fr auto; gap:8px 10px; align-items:center; font-size:13px}
 #vclfe-root .vclfe-ex__grid input{
   width:62px; text-align:right; padding:4px 7px; min-height:0;
-  font-family:var(--mono); font-size:12.5px;
+  font-family:var(--figure); font-size:12.5px;
   border:1px solid var(--line-strong); border-radius:2px; background:var(--paper); color:var(--ink);
 }
 .vclfe-ex__out{margin-top:14px; padding-top:12px; border-top:1px solid var(--line)}
@@ -217,7 +223,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   display:flex; justify-content:space-between; gap:10px; font-size:12.5px;
   color:var(--ink-soft); padding:3px 0; font-variant-numeric:tabular-nums;
 }
-.vclfe-ex__line span:last-child{font-family:var(--mono)}
+.vclfe-ex__line span:last-child{font-family:var(--figure)}
 .vclfe-ex__total{
   display:flex; justify-content:space-between; align-items:baseline; gap:10px;
   margin-top:9px; padding-top:9px; border-top:1px solid var(--line-strong);
@@ -239,7 +245,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 .vclfe-points label{font-size:13.5px; font-weight:600}
 #vclfe-root .vclfe-points input{
   width:110px; text-align:right; padding:5px 8px; min-height:0;
-  font-family:var(--mono); font-size:12.5px;
+  font-family:var(--figure); font-size:12.5px;
   border:1px solid var(--accent); border-radius:2px; background:var(--panel); color:var(--ink);
 }
 .vclfe-points p{margin:0; font-size:12.5px; color:var(--ink-soft); flex:1 1 320px}
@@ -252,7 +258,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   border-radius:var(--radius); font-size:13.5px;
 }
 .vclfe-note__tag{
-  flex:none; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+  flex:none; font-family:var(--figure); font-size:10.5px; letter-spacing:.08em;
   text-transform:uppercase; color:var(--amber); border:1px solid currentColor;
   border-radius:2px; padding:2px 6px; margin-top:1px;
 }
@@ -267,7 +273,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 }
 .vclfe-maintain > p{margin:0 0 16px; font-size:13.5px; color:var(--ink-soft); max-width:70ch}
 .vclfe-maintain code{
-  font-family:var(--mono); font-size:12px; color:var(--accent-deep);
+  font-family:var(--figure); font-size:12px; color:var(--accent-deep);
   background:var(--accent-soft); padding:1px 4px; border-radius:2px;
 }
 .vclfe-maintain__row{
@@ -292,7 +298,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 }
 .vclfe-rule__head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
 .vclfe-rule__n{
-  flex:none; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint);
+  flex:none; font-family:var(--figure); font-size:10.5px; color:var(--ink-faint);
   letter-spacing:.04em;
 }
 .vclfe-rule__rows{display:flex; gap:6px; flex-wrap:wrap}
@@ -323,6 +329,17 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   font-weight:600; color:var(--ink-faint); white-space:nowrap;
 }
 .vclfe-rule__formulas dd{
-  margin:0; font-family:var(--mono); font-size:11.5px; line-height:1.65;
+  margin:0; font-family:var(--figure); font-size:11.5px; line-height:1.65;
   color:var(--ink-soft); overflow-wrap:anywhere;
 }
+
+/* Figures that sit under one another -- amounts, counts, the example's lines --
+   get fixed-width digits so the columns still read as columns. */
+#vclfe-root input.vclfe-amount,
+#vclfe-root .vclfe-points input,
+#vclfe-root .vclfe-ex__grid input,
+.vclfe-code,
+.vclfe-pill .n,
+.vclfe-pillcount,
+.vclfe-rule__n,
+.vclfe-th__unit{font-variant-numeric:tabular-nums}

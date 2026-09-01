@@ -166,7 +166,7 @@ function vcl_fee_editor_assets( $hook ) {
 	};
 
 	wp_enqueue_style( 'vcl-fee-editor-fonts',
-		'https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap',
+		'https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap',
 		array(), null );
 	wp_enqueue_style( 'vcl-fee-editor', $url . 'css/vcl-fee-editor.css',
 		array( 'vcl-fee-editor-fonts' ), $ver( 'css/vcl-fee-editor.css' ) );
