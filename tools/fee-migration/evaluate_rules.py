@@ -117,7 +117,13 @@ def _scope_sum(scope, parts):
 
 
 def _cap_limit(value, strengths, rule):
-    """The numeric ceiling for one cap "value" shape, or None if unrecognised."""
+    """The numeric ceiling for one cap "value" shape.
+
+    Every other handler in this module raises on a shape it doesn't
+    recognise (spec: faithful, never guess); this used to be the one silent
+    exception, falling through to the caller's "uncapped" default -- raise
+    instead, consistent with the rest.
+    """
     if "const" in value:
         return value["const"]
     if "byStrength" in value:
@@ -126,7 +132,7 @@ def _cap_limit(value, strengths, rule):
         return value["multipleOfLead"] * (rule["amountsEur"].get("lead") or 0.0)
     if "points" in value:
         return value["points"] * value["pointValue"]
-    return None
+    raise ValueError(f"unrecognised cap value shape {value!r} for row {rule['row']!r}")
 
 
 def _direct_value(rule, direct, counts, strengths):
@@ -208,8 +214,6 @@ def _apply_cap(rule, raw_total, parts, strengths):
     if not cap or "unparsed" in cap:
         return raw_total + surcharge, None
     limit = _cap_limit(cap["value"], strengths, rule)
-    if limit is None:
-        return raw_total + surcharge, None
     subject = _scope_sum(cap["scope"], parts)
     if subject > limit:
         return limit, limit

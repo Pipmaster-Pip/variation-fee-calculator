@@ -1,36 +1,39 @@
 # Abgleich: Regelmodell gegen Golden Master
 
-**Vergleichsumfang:** Der Golden Master erfasst neun Felder je Ergebniszeile. Dieser Abgleich prueft nur die vier, die die Frage "traegt das Regelmodell" beantworten: `total`, `subsumed`, `capValue`, `groupingFee`. `singleTotal`, `rawSumSingle`, `groupingBase` und `groupingPerAdditional` entstehen aus den beiden Zusatzlaeufen (Einzeltyp, Staerke 1) und dienen nur der Anzeige -- sie sind im Golden Master vorhanden, damit ein spaeterer Baustein sie pruefen kann, wenn die Oberflaeche umgebaut wird, aber hier **nicht** Teil der Kennzahl unten.
+**Kernaussage:** Von den verglichenen **347040** Ergebniszeilen tragen **193470** (55.7%) auf beiden Seiten ueberhaupt keinen Betrag (subsumiert durch eine hoehere Variationsart) und sagen nichts darueber aus, ob das Regelmodell funktioniert. Von den verbleibenden **153570** Zeilen mit Betrag sind **34080** mit dem Regelmodell nicht berechenbar (rule: unknown, DK). Trefferquote **ueber alle Zeilen mit Betrag**: 84347/153570 = **54.9%**. Trefferquote **ueber Zeilen mit Betrag, die zusaetzlich berechenbar sind**: 84347/119490 = **70.6%** -- das ist die eigentliche Antwort dieser Studie; die beiden Zahlen oben duerfen nicht mit einer Kennzahl ueber alle 347040 Zeilen verwechselt werden.
+
+**Vergleichsumfang:** Der Golden Master erfasst neun Felder je Ergebniszeile. Dieser Abgleich prueft nur die vier, die die Frage "traegt das Regelmodell" beantworten: `total`, `subsumed`, `capValue`, `groupingFee`. `singleTotal`, `rawSumSingle`, `groupingBase` und `groupingPerAdditional` entstehen aus den beiden Zusatzlaeufen (Einzeltyp, Staerke 1) und dienen nur der Anzeige -- sie sind im Golden Master vorhanden, damit ein spaeterer Baustein sie pruefen kann, wenn die Oberflaeche umgebaut wird, aber hier **nicht** Teil der Kennzahl oben.
 
 **Fremdwaehrungs-Hinweis:** `evaluate()` rechnet mit `amountsEur` -- den Betraegen, die der echte Rechner unter den Netzwerk-blockierten Bedingungen der Golden-Master-Aufnahme tatsaechlich verwendet hat (F_lc / Kurs, wo ein STATIC_FX_RATES-Fallback existiert, sonst die unveraenderten F..K-Spalten). Das war vormals ein systematischer Wechselkurs-Fehler auf jeder Nicht-EUR-Zeile (Cause B); er ist jetzt geschlossen, keine verbleibende Bereichsgrenze mehr. Siehe `out/findings.md` fuer Details, u.a. dass der ausgelieferte Rechner selbst bei unerreichbarer ECB-API nur fuer HU/NO/SI konvertiert, nicht fuer die anderen sieben Laender mit lokaler Waehrung.
 
-- verglichene Ergebniszeilen: **347040**
-- übereinstimmend: **253132**
-- abweichend: **42068**
-- nicht berechenbar (rule: unknown, 17 DK-Zeilen): **51840**
-- fehlend: **0**
+## Ergebnis-Buckets
 
-Die "nicht berechenbar"-Zeilen sind weder als Treffer noch als Abweichung gezaehlt: das Regelmodell liefert dort bewusst keine Zahl (siehe `out/findings.md`), statt eine zu erraten.
+| Bucket | Anzahl | Anteil an allen Zeilen |
+|---|---|---|
+| kein Betrag auf beiden Seiten (subsumiert) | 193470 | 55.7% |
+| Betrag vorhanden, uebereinstimmend | 84347 | 24.3% |
+| Betrag vorhanden, abweichend | 35143 | 10.1% |
+| Betrag vorhanden, nicht berechenbar (rule: unknown, DK) | 34080 | 9.8% |
+| fehlend | 0 | 0.0% |
 
-## Abweichungen je Excel-Zeile
+Die "kein Betrag"- und "nicht berechenbar"-Zeilen sind weder als Treffer noch als Abweichung gezaehlt: in beiden Faellen liefert das Regelmodell bewusst keine Zahl (siehe `out/findings.md`), statt eine zu erraten oder zu unterstellen.
 
-| Zeile | Anzahl |
+**Was "uebereinstimmend" hier bedeutet:** Massgeblich ist `total` -- der Gebuehrenbetrag, die eigentliche Frage der Studie. Stimmt `total` ueberein, zaehlt die Zeile als Treffer, auch wenn `capValue`/`groupingFee` abweichen: der Golden Master leitet beide aus einem separaten Einzeltyp-Lauf ab, einer anderen operationalen Definition als dieser Auswerter verwendet (Root Cause 3 in `out/findings.md`) -- ein dokumentierter Vergleichsgrenzfall, kein Regelmodell-Fehler. **6925** der 84347 Treffer haben trotzdem eine Abweichung auf `capValue`, `subsumed` oder `groupingFee`; sie tauchen deshalb nicht in den Abweichungs-Tabellen unten auf (die zeigen nur Zeilen, bei denen `total` selbst abweicht).
+
+## Abweichende Ergebniszeilen je Excel-Zeile
+
+(Zeilen mit mindestens einer abweichenden Ergebniszeile, nicht Feld-Abweichungen -- eine Ergebniszeile kann auf mehreren der vier Felder gleichzeitig abweichen, zaehlt hier aber nur einmal.)
+
+| Zeile | Anzahl abweichender Ergebniszeilen |
 |---|---|
 | 116 | 2820 |
-| 163 | 2160 |
-| 156 | 2052 |
 | 154 | 1620 |
-| 343 | 1460 |
-| 158 | 1308 |
-| 164 | 1026 |
-| 157 | 816 |
-| 338 | 732 |
-| 347 | 730 |
+| 163 | 1080 |
+| 156 | 948 |
+| 343 | 884 |
 | 246 | 720 |
 | 247 | 720 |
 | 248 | 720 |
-| 147 | 714 |
-| 166 | 654 |
 | 91 | 540 |
 | 92 | 540 |
 | 93 | 540 |
@@ -41,55 +44,64 @@ Die "nicht berechenbar"-Zeilen sind weder als Treffer noch als Abweichung gezaeh
 | 114 | 540 |
 | 115 | 540 |
 | 360 | 540 |
-| 148 | 516 |
-| 165 | 402 |
-| 83 | 368 |
-| 84 | 368 |
-| 233 | 368 |
-| 152 | 360 |
+| 164 | 474 |
+| 338 | 444 |
+| 347 | 442 |
 | 185 | 360 |
 | 190 | 360 |
 | 195 | 360 |
 | 351 | 360 |
 | 355 | 360 |
-| 76 | 358 |
-| 77 | 358 |
-| 226 | 336 |
-| 227 | 336 |
-| 234 | 312 |
-| 68 | 304 |
-| 82 | 304 |
-| 409 | 297 |
-| 75 | 296 |
-| 221 | 296 |
+| 152 | 297 |
+| 75 | 288 |
 | 186 | 288 |
 | 191 | 288 |
 | 196 | 288 |
-| 153 | 270 |
+| 227 | 288 |
+| 82 | 280 |
+| 147 | 258 |
+| 83 | 252 |
+| 84 | 252 |
+| 68 | 240 |
+| 234 | 240 |
+| 403 | 237 |
+| 404 | 237 |
+| 408 | 237 |
+| 409 | 237 |
+| 423 | 225 |
+| 424 | 225 |
+| 402 | 221 |
+| 407 | 221 |
+| 244 | 216 |
+| 245 | 216 |
+| 414 | 216 |
+| 233 | 208 |
 
 ## Nicht berechenbare Zeilen (rule: unknown) je Excel-Zeile
 
 | Zeile | Land | Anzahl Läufe |
 |---|---|---|
-| 87 | DK | 3840 |
-| 98 | DK | 3840 |
-| 109 | DK | 3840 |
 | 94 | DK | 2880 |
-| 90 | DK | 2880 |
 | 95 | DK | 2880 |
 | 96 | DK | 2880 |
 | 97 | DK | 2880 |
 | 105 | DK | 2880 |
-| 101 | DK | 2880 |
 | 106 | DK | 2880 |
 | 107 | DK | 2880 |
 | 108 | DK | 2880 |
-| 112 | DK | 2880 |
 | 117 | DK | 2880 |
 | 118 | DK | 2880 |
 | 119 | DK | 2880 |
+| 90 | DK | 720 |
+| 101 | DK | 720 |
+| 112 | DK | 720 |
+| 87 | DK | 80 |
+| 98 | DK | 80 |
+| 109 | DK | 80 |
 
-## Erste 100 Abweichungen im Einzelnen
+## Erste 100 Feld-Abweichungen im Einzelnen
+
+(Eine Zeile je abweichendem Feld, nicht je Ergebniszeile -- siehe Bucket-Tabelle oben fuer die Anzahl der Ergebniszeilen.)
 
 | Lauf | Zeile | Feld | Golden Master | Regelmodell |
 |---|---|---|---|---|

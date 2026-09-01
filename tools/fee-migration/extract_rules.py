@@ -84,7 +84,12 @@ def extract_amounts_eur(row, static_rates=None):
         static_rates = load_static_fx_rates()
     local = row.get("currency")
     rate = static_rates.get(row["cc"]) if local else None
-    out = {"currency": local or "EUR"}
+    # Every value this block writes is a euro figure (F..K as-is, or F_lc/rate
+    # converted to EUR) -- unlike extract_amounts()'s `amounts` block, which
+    # legitimately carries the row's own local currency. Tagging this block
+    # with `local` here would mislabel a euro amount as e.g. "NOK" and invite
+    # a later reader to convert it a second time.
+    out = {"currency": "EUR"}
     for name, col in _AMOUNT_KEYS.items():
         if rate:
             lc = row.get(f"{col}_lc")
@@ -184,6 +189,11 @@ def extract_cap(row):
     # Strength-dependent: IF(L=1, IF(x>a,a,x), IF(x>b,b,x))
     two = re.findall(r">\(?(\d+(?:\.\d+)?)\)?,\1,", body)
     if f"L{own}=1" in body and len(two) >= 2:
+        if len(two) > 2:
+            # A third threshold doesn't fit the two-level {"1", "else"} shape
+            # this branch models -- report it rather than silently keeping
+            # only the first two and dropping the rest (spec B6).
+            return {"scope": _cap_scope(sf, own), "unparsed": body[:200]}
         return {"scope": _cap_scope(sf, own),
                 "value": {"byStrength": {"1": float(two[0]), "else": float(two[1])}}}
 

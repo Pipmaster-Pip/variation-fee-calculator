@@ -143,11 +143,29 @@ faithfulness rule, not fixed -- fixing it would silently change row 422's behavi
 relative to the golden master with no way to tell the difference apart from a real
 migration error.
 
+> **Superseded by the whole-branch review (2026-09-01) -- read before trusting any
+> percentage below.** Everything from here through the end of "Headline movement"
+> was written against a `compare.py` that counted **un-priced rows as agreement**:
+> when several variation types are filed together, the highest type absorbs the
+> lower ones, and those absorbed rows carry no amount at all on *either* side
+> (golden `total` is `""`, the evaluator returns `total=None`). `diff_row` called
+> that a match on all four fields. Those un-priced rows are 55.7% of all 347,040
+> result-rows, so every "X / 347,040 match" and every percentage below that was
+> computed over all 347,040 rows is inflated and **must not be used**. The
+> corrected, current numbers -- the priced/unpriced split, and the match rate
+> over priced rows (54.9%) and over priced-and-computable rows (**70.6%**, the
+> study's actual answer) -- are in the current `out/report.md` and `compare.py`.
+> This section is kept, not deleted, because its root-cause diagnosis (the
+> subsumption-folding multiplier, the cap/grouping-flag definition mismatch,
+> etc.) is still the real analysis behind those numbers; only the headline
+> percentages and a couple of specific claims (struck through below) are wrong.
+
 ## Comparison hot spots (Task 8, `compare.py` against `out/golden.csv.gz`)
 
-Headline: **223,721 / 347,040 rows match** (four fields: `total`, `subsumed`,
+~~Headline: **223,721 / 347,040 rows match** (four fields: `total`, `subsumed`,
 `capValue`, `groupingFee`); 71,479 differ; 51,840 are uncomputable (see below); 0
-missing. Full counts and tables in `out/report.md`.
+missing.~~ **Superseded -- see note above: this counted the 55.7% un-priced
+(subsumed) rows as matches.** Full counts and tables in `out/report.md`.
 
 **Rows that could not be evaluated at all** -- the 17 `rule: unknown` DK rows listed
 above produce **51,840** result-rows across the full input matrix (all counted in
@@ -224,8 +242,12 @@ biggest cluster; see `out/report.md` for the full top-50):
    `convert.py` export time from the source workbook, and overwritten with a
    live/static rate at runtime when one is available -- `harness.py` freezes this
    to the static fallback only, which itself only covers HU/NO/SI). Consequently
-   **every** row whose `currency != EUR` (129 rows, per spec B2) is essentially
-   guaranteed to disagree on `total`/`capValue` by a currency-conversion factor.
+   ~~**every** row whose `currency != EUR` (129 rows, per spec B2) is essentially
+   guaranteed to disagree on `total`/`capValue` by a currency-conversion factor.~~
+   **This was fixed by Task 9's Cause B below: `evaluate()` now reads `amountsEur`
+   instead of `amounts`, so it computes with the same euro figures the golden
+   master was recorded under. The systematic per-row currency-scale mismatch this
+   paragraph describes no longer happens; do not read it as a still-open gap.**
    Splitting the 71,479 differences by the matched rule row's currency: 42,740 of
    them are on EUR rows (genuine rule-model gaps, points 1-3 above); the remaining
    28,739 are on non-EUR rows, where this scope gap is expected to dominate (sample
@@ -241,8 +263,11 @@ and represent genuine rule-model gaps (overwhelmingly cause 1, the subsumption-
 folding multiplier, plus caps/grouping-flag definition mismatches from cause 3);
 the remaining ~28,700 are on non-EUR rows and are dominated by the deliberate
 currency-conversion scope gap (cause 4), not by additional logic errors on top of
-it. The headline match rate (64.5%) should be read with that split in mind rather
-than as one undifferentiated number.
+it. ~~The headline match rate (64.5%) should be read with that split in mind
+rather than as one undifferentiated number.~~ **Superseded: that 64.5% itself
+counted un-priced (subsumed) rows as matches (see the note at the top of this
+section) and cause 4 is now closed (previous paragraph). The current, corrected
+match rate is 70.6% over priced-and-computable rows -- see `out/report.md`.**
 
 # Closing causes B and C (Task 9)
 
@@ -252,8 +277,12 @@ multiplier, driven by every row's TOTAL being treated as a blanket
 `P+Q+R` sum). Both are now closed in the rule model and the evaluator.
 Causes 2 and 3 (subsumption granularity, and `capValue`/`groupingFee`'s
 different operational definition) were **not** in scope for this task and
-remain open -- see the "Root causes identified" section above, still
-accurate for what's left.
+remain open -- see the "Root causes identified" section above, ~~still
+accurate for what's left~~ **which is false as stated: the section above
+also carries a now-superseded headline percentage and a currency claim that
+Cause B below fixes (see the strikethroughs and the note at its top). The
+underlying diagnosis of causes 2 and 3 themselves is still open and still
+correct; only the numbers presented alongside it were wrong.**
 
 ## Cause B: `amountsEur`
 
@@ -340,6 +369,14 @@ the subtotal(s) a row's `totalScope` names, instead of always
 `parts["IA"] + parts["IB"] + parts["II"]`.
 
 ## Headline movement
+
+**Superseded (see the note at the top of "Comparison hot spots" above):**
+every percentage in this section is "X / 347,040", i.e. computed over ALL
+result-rows including the 55.7% that are un-priced (subsumed, no amount on
+either side) and were wrongly counted as matches. The before/after *shapes*
+below (cause 1's fix moving rows, the 2x/3x fold count dropping) are still
+real and still happened; the absolute percentages are not usable as the
+study's answer. See `out/report.md` for the corrected, current buckets.
 
 Using the same "total field, all 347,040 result rows, uncomputable counted
 as non-match" metric the 66.5% baseline in the task brief was measured

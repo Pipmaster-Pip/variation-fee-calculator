@@ -2134,7 +2134,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 542.8708880681648,
    "perStrength": 271.4354440340824,
    "rateIA": 542.8708880681648,
@@ -2172,7 +2172,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 1130.9982376844562,
    "perStrength": 565.4991188422281,
    "rateIA": 542.8708880681648,
@@ -2210,7 +2210,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 5202.219922431665,
    "perStrength": 2601.1099612158323,
    "rateIA": 542.8708880681648,
@@ -2248,7 +2248,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 181.0258461925057,
    "perStrength": 90.51292309625285,
    "rateIA": 181.0258461925057,
@@ -2286,7 +2286,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 452.35796497191205,
    "perStrength": 226.17898248595603,
    "rateIA": 181.0258461925057,
@@ -2324,7 +2324,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 2488.072132600192,
    "perStrength": 1244.036066300096,
    "rateIA": 181.0258461925057,
@@ -2362,7 +2362,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 271.53876928875854,
    "perStrength": 135.76938464437927,
    "rateIA": 271.53876928875854,
@@ -2400,7 +2400,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 678.6402727125442,
    "perStrength": 339.3201363562721,
    "rateIA": 271.53876928875854,
@@ -2438,7 +2438,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CZK",
+   "currency": "EUR",
    "lead": 3618.8637197752964,
    "perStrength": 1809.4318598876482,
    "rateIA": 271.53876928875854,
@@ -3364,7 +3364,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1054.1116911542383,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3405,7 +3405,7 @@
    "flat": 10032.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": null,
    "perStrength": null,
    "rateIA": null,
@@ -3446,7 +3446,7 @@
    "flat": 13258.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": null,
    "perStrength": null,
    "rateIA": null,
@@ -3487,7 +3487,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1054.1116911542383,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3525,7 +3525,7 @@
    "flat": 32561.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 2562.8332981026256,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3563,7 +3563,7 @@
    "flat": 60478.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 6975.011171256024,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3601,7 +3601,7 @@
    "flat": 16341.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1389.2493718677001,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3639,7 +3639,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1054.1116911542383,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3677,7 +3677,7 @@
    "flat": 32561.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 2562.8332981026256,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3715,7 +3715,7 @@
    "flat": 60478.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 6975.011171256024,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3753,7 +3753,7 @@
    "flat": 28328.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 2457.6763252320543,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3791,7 +3791,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3836,7 +3836,7 @@
    "flat": 2316.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": null,
    "perStrength": null,
    "rateIA": null,
@@ -3878,7 +3878,7 @@
    "flat": 3120.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": null,
    "perStrength": null,
    "rateIA": null,
@@ -3920,7 +3920,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3958,7 +3958,7 @@
    "flat": 3120.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -3996,7 +3996,7 @@
    "flat": 6316.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4034,7 +4034,7 @@
    "flat": 8760.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 743.1895474504116,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4072,7 +4072,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4110,7 +4110,7 @@
    "flat": 3120.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4148,7 +4148,7 @@
    "flat": 6316.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 238.40932017221127,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4186,7 +4186,7 @@
    "flat": 8760.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 743.1895474504116,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4224,7 +4224,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 325.2374059139425,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4269,7 +4269,7 @@
    "flat": 2966.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": null,
    "perStrength": null,
    "rateIA": null,
@@ -4311,7 +4311,7 @@
    "flat": 3767.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": null,
    "perStrength": null,
    "rateIA": null,
@@ -4353,7 +4353,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 325.2374059139425,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4391,7 +4391,7 @@
    "flat": 25576.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1643.0442542283538,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4429,7 +4429,7 @@
    "flat": 51546.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 6154.626237868819,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4467,7 +4467,7 @@
    "flat": 16287.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1276.7340866461348,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4505,7 +4505,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 325.2374059139425,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4543,7 +4543,7 @@
    "flat": 25576.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 1643.0442542283538,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4581,7 +4581,7 @@
    "flat": 51546.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 6154.626237868819,
    "perStrength": 0.0,
    "rateIA": null,
@@ -4619,7 +4619,7 @@
    "flat": 29285.0
   },
   "amountsEur": {
-   "currency": "DKK",
+   "currency": "EUR",
    "lead": 3179.8612356078097,
    "perStrength": 0.0,
    "rateIA": null,
@@ -8168,7 +8168,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 1110.4221502328407,
    "perStrength": 1110.4221502328407,
    "rateIA": 1110.4221502328407,
@@ -8206,7 +8206,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 1110.4221502328407,
    "perStrength": 1110.4221502328407,
    "rateIA": 1110.4221502328407,
@@ -8244,7 +8244,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 1554.5910103259769,
    "perStrength": 1554.5910103259769,
    "rateIA": 1110.4221502328407,
@@ -8282,7 +8282,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 799.5039481676453,
    "perStrength": 799.5039481676453,
    "rateIA": 799.5039481676453,
@@ -8320,7 +8320,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 799.5039481676453,
    "perStrength": 799.5039481676453,
    "rateIA": 799.5039481676453,
@@ -8358,7 +8358,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 1199.2559222514678,
    "perStrength": 1199.2559222514678,
    "rateIA": 799.5039481676453,
@@ -8396,7 +8396,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 799.5039481676453,
    "perStrength": 799.5039481676453,
    "rateIA": 799.5039481676453,
@@ -8434,7 +8434,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 799.5039481676453,
    "perStrength": 799.5039481676453,
    "rateIA": 799.5039481676453,
@@ -8472,7 +8472,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "HUF",
+   "currency": "EUR",
    "lead": 1199.2559222514678,
    "perStrength": 1199.2559222514678,
    "rateIA": 799.5039481676453,
@@ -9338,7 +9338,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 425.1513716029311,
    "perStrength": 425.1513716029311,
    "rateIA": 425.1513716029311,
@@ -9376,7 +9376,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 637.7270574043966,
    "perStrength": 637.7270574043966,
    "rateIA": 425.1513716029311,
@@ -9414,7 +9414,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 3082.34744412125,
    "perStrength": 3082.34744412125,
    "rateIA": 425.1513716029311,
@@ -9452,7 +9452,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 5580.111752288471,
    "perStrength": 5580.111752288471,
    "rateIA": 425.1513716029311,
@@ -9490,7 +9490,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 3082.34744412125,
    "perStrength": 3082.34744412125,
    "rateIA": 425.1513716029311,
@@ -9528,7 +9528,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 127.54541148087932,
    "perStrength": 127.54541148087932,
    "rateIA": 127.54541148087932,
@@ -9566,7 +9566,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -9604,7 +9604,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 249.776430816722,
    "perStrength": 249.776430816722,
    "rateIA": 127.54541148087932,
@@ -9642,7 +9642,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -9680,7 +9680,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 403.89380302278454,
    "perStrength": 403.89380302278454,
    "rateIA": 127.54541148087932,
@@ -9718,7 +9718,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 467.6665087632242,
    "perStrength": 467.6665087632242,
    "rateIA": 127.54541148087932,
@@ -9756,7 +9756,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 467.6665087632242,
    "perStrength": 467.6665087632242,
    "rateIA": 127.54541148087932,
@@ -9794,7 +9794,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 286.9771758319785,
    "perStrength": 286.9771758319785,
    "rateIA": 286.9771758319785,
@@ -9832,7 +9832,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 372.00745015256473,
    "perStrength": 372.00745015256473,
    "rateIA": 286.9771758319785,
@@ -9870,7 +9870,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 1275.4541148087933,
    "perStrength": 1275.4541148087933,
    "rateIA": 286.9771758319785,
@@ -9908,7 +9908,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 3401.2109728234486,
    "perStrength": 3401.2109728234486,
    "rateIA": 286.9771758319785,
@@ -9946,7 +9946,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "ISK",
+   "currency": "EUR",
    "lead": 1966.3250936635563,
    "perStrength": 1966.3250936635563,
    "rateIA": 286.9771758319785,
@@ -12492,7 +12492,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12530,7 +12530,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12568,7 +12568,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 1244.8275862068965,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12606,7 +12606,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 1358.2670203359858,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12644,7 +12644,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 8488.859416445623,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12682,7 +12682,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12720,7 +12720,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12758,7 +12758,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 735.7206012378426,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12796,7 +12796,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 1131.918656056587,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12834,7 +12834,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 3961.4500442086646,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12872,7 +12872,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12910,7 +12910,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12948,7 +12948,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 962.0689655172413,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -12986,7 +12986,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 1414.8541114058355,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -13024,7 +13024,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "NOK",
+   "currency": "EUR",
    "lead": 8488.859416445623,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -13062,7 +13062,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 817.2223778836276,
    "perStrength": 653.7779023069021,
    "rateIA": 817.2223778836276,
@@ -13100,7 +13100,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 98.0666853460353,
    "perStrength": 78.45334827682825,
    "rateIA": 817.2223778836276,
@@ -13138,7 +13138,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 1176.8002241524237,
    "perStrength": 941.440179321939,
    "rateIA": 817.2223778836276,
@@ -13176,7 +13176,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 4707.200896609695,
    "perStrength": 3765.760717287756,
    "rateIA": 817.2223778836276,
@@ -13214,7 +13214,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 583.7302699168769,
    "perStrength": 466.9842159335015,
    "rateIA": 583.7302699168769,
@@ -13252,7 +13252,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 98.0666853460353,
    "perStrength": 78.45334827682825,
    "rateIA": 583.7302699168769,
@@ -13290,7 +13290,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 980.6668534603531,
    "perStrength": 784.5334827682825,
    "rateIA": 583.7302699168769,
@@ -13328,7 +13328,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 98.0666853460353,
    "perStrength": 78.45334827682825,
    "rateIA": 583.7302699168769,
@@ -13366,7 +13366,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 3922.6674138414123,
    "perStrength": 3138.13393107313,
    "rateIA": 583.7302699168769,
@@ -13404,7 +13404,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 583.7302699168769,
    "perStrength": 466.9842159335015,
    "rateIA": 583.7302699168769,
@@ -13442,7 +13442,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 98.0666853460353,
    "perStrength": 78.45334827682825,
    "rateIA": 583.7302699168769,
@@ -13480,7 +13480,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 980.6668534603531,
    "perStrength": 784.5334827682825,
    "rateIA": 583.7302699168769,
@@ -13518,7 +13518,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "PLN",
+   "currency": "EUR",
    "lead": 3922.6674138414123,
    "perStrength": 3138.13393107313,
    "rateIA": 583.7302699168769,
@@ -14392,7 +14392,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14430,7 +14430,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14468,7 +14468,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 4979.750523552862,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14506,7 +14506,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 13128.433198457546,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14544,7 +14544,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14582,7 +14582,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14620,7 +14620,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 724.3273488804163,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14658,7 +14658,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 3440.5549071819773,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14696,7 +14696,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14734,7 +14734,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14772,7 +14772,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 3531.0958257920297,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -14810,7 +14810,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "SEK",
+   "currency": "EUR",
    "lead": 11679.778500696713,
    "perStrength": 0.0,
    "rateIA": 0.0,
@@ -15586,7 +15586,7 @@
    "flat": 0.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": null,
@@ -15629,7 +15629,7 @@
    "flat": 419.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 489.1374137588868,
    "perStrength": 244.5687068794434,
    "rateIA": null,
@@ -15667,7 +15667,7 @@
    "flat": 1528.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 489.1374137588868,
    "perStrength": 244.5687068794434,
    "rateIA": null,
@@ -15705,7 +15705,7 @@
    "flat": 3619.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 3896.7558165326113,
    "perStrength": 489.1374137588868,
    "rateIA": null,
@@ -15743,7 +15743,7 @@
    "flat": 10555.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 12025.309067136737,
    "perStrength": 489.1374137588868,
    "rateIA": null,
@@ -15781,7 +15781,7 @@
    "flat": 0.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 0.0,
    "perStrength": 0.0,
    "rateIA": null,
@@ -15824,7 +15824,7 @@
    "flat": 833.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 489.1374137588868,
    "perStrength": 244.5687068794434,
    "rateIA": null,
@@ -15862,7 +15862,7 @@
    "flat": 2212.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 1859.6560862002545,
    "perStrength": 929.8280431001273,
    "rateIA": null,
@@ -15900,7 +15900,7 @@
    "flat": 12065.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 12988.407793511633,
    "perStrength": 1859.6560862002545,
    "rateIA": null,
@@ -15938,7 +15938,7 @@
    "flat": 35184.0
   },
   "amountsEur": {
-   "currency": "GBP",
+   "currency": "EUR",
    "lead": 46897.654708677226,
    "perStrength": 1859.6560862002545,
    "rateIA": null,
@@ -15976,7 +15976,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "RSD",
+   "currency": "EUR",
    "lead": 170.425631196889,
    "perStrength": 170.425631196889,
    "rateIA": 170.425631196889,
@@ -16014,7 +16014,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "RSD",
+   "currency": "EUR",
    "lead": 170.425631196889,
    "perStrength": 170.425631196889,
    "rateIA": 170.425631196889,
@@ -16052,7 +16052,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "RSD",
+   "currency": "EUR",
    "lead": 400.5002333126891,
    "perStrength": 400.5002333126891,
    "rateIA": 170.425631196889,
@@ -16090,7 +16090,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 217.80323655609524,
    "perStrength": 43.56064731121904,
    "rateIA": 217.80323655609524,
@@ -16133,7 +16133,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 816.7621370853572,
    "perStrength": 163.35242741707142,
    "rateIA": 217.80323655609524,
@@ -16176,7 +16176,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 27225.404569511906,
    "perStrength": 5445.08091390238,
    "rateIA": 217.80323655609524,
@@ -16219,7 +16219,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 10890.16182780476,
    "perStrength": 2178.0323655609523,
    "rateIA": 217.80323655609524,
@@ -16262,7 +16262,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 4356.0647311219045,
    "perStrength": 871.212946224381,
    "rateIA": 217.80323655609524,
@@ -16305,7 +16305,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 3811.5566397316666,
    "perStrength": 762.3113279463333,
    "rateIA": 217.80323655609524,
@@ -16348,7 +16348,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 5445.08091390238,
    "perStrength": 1089.0161827804761,
    "rateIA": 217.80323655609524,
@@ -16391,7 +16391,7 @@
    "flat": null
   },
   "amountsEur": {
-   "currency": "CHF",
+   "currency": "EUR",
    "lead": 5445.08091390238,
    "perStrength": 1089.0161827804761,
    "rateIA": 217.80323655609524,
