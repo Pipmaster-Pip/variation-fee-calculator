@@ -218,15 +218,9 @@
   // surcharge runs to ten columns, and a side rail took exactly the width those
   // columns need -- which is what put a scrollbar under every table.
   //
-  // Three shapes, chosen with VCLFE_CONFIG.picker:
-  //   tabs   -- every country code in one register row, nothing hidden
-  //   pills  -- a search box and one chip per country, wrapping
-  //   select -- a dropdown between two step arrows, the most compact
-  // Read on every render rather than captured once, so the shape can be swapped
-  // at runtime -- which is how the harness and the design preview compare them.
-  function currentPicker() {
-    return ({ pills: 1, select: 1, tabs: 1 })[CFG.picker] ? CFG.picker : 'tabs';
-  }
+  // A search box and one named chip per country: the names are what the fee
+  // schedules are discussed in, and typing two letters is faster than finding a
+  // country in a list of thirty-three.
 
   function selectCountry(cc) {
     if (cc === activeCc) return;
@@ -238,12 +232,9 @@
   function renderPicker() {
     var host = document.getElementById('vclfe-picker');
     if (!host) return;
-    var shape = currentPicker();
     host.textContent = '';
-    host.className = 'vclfe-picker vclfe-picker--' + shape;
-    if (shape === 'pills') pickerPills(host);
-    else if (shape === 'select') pickerSelect(host);
-    else pickerTabs(host);
+    host.className = 'vclfe-picker';
+    pickerPills(host);
   }
 
   var pillFilter = '';
@@ -302,84 +293,6 @@
     host.appendChild(wrap);
   }
 
-  function pickerSelect(host) {
-    var i = -1;
-    COUNTRIES.forEach(function (c, n) { if (c.cc === activeCc) i = n; });
-
-    function step(delta) {
-      var next = COUNTRIES[i + delta];
-      if (next) selectCountry(next.cc);
-    }
-
-    var prev = document.createElement('button');
-    prev.type = 'button';
-    prev.className = 'vclfe-step';
-    prev.textContent = '‹';
-    prev.title = 'Vorheriges Land';
-    prev.setAttribute('aria-label', 'Vorheriges Land');
-    prev.disabled = i <= 0;
-    prev.addEventListener('click', function () { step(-1); });
-    host.appendChild(prev);
-
-    var sel = document.createElement('select');
-    sel.className = 'vclfe-select';
-    sel.setAttribute('aria-label', 'Land wählen');
-    COUNTRIES.forEach(function (c) {
-      var o = document.createElement('option');
-      o.value = c.cc;
-      o.textContent = c.name + '  ·  ' + c.n + ' Zeilen' + (countryEdited(c.cc) ? '  ●' : '');
-      if (c.cc === activeCc) o.selected = true;
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', function () { selectCountry(sel.value); });
-    host.appendChild(sel);
-
-    var next = document.createElement('button');
-    next.type = 'button';
-    next.className = 'vclfe-step';
-    next.textContent = '›';
-    next.title = 'Nächstes Land';
-    next.setAttribute('aria-label', 'Nächstes Land');
-    next.disabled = i < 0 || i >= COUNTRIES.length - 1;
-    next.addEventListener('click', function () { step(1); });
-    host.appendChild(next);
-
-    var pos = document.createElement('span');
-    pos.className = 'vclfe-pos';
-    pos.textContent = (i + 1) + ' / ' + COUNTRIES.length;
-    host.appendChild(pos);
-
-    var edited = COUNTRIES.filter(function (c) { return countryEdited(c.cc); });
-    if (edited.length) {
-      var badge = document.createElement('span');
-      badge.className = 'vclfe-editedlist';
-      badge.textContent = 'geändert: ' + edited.map(function (c) { return c.cc; }).join(', ');
-      host.appendChild(badge);
-    }
-  }
-
-  function pickerTabs(host) {
-    // Sorted by code, not by name: a register of codes is scanned as codes, and
-    // "AT BE BG CH ..." reads as ordered where the by-name order does not.
-    // "DE - BfArM" is the one code carrying an authority suffix -- shown short so
-    // it does not break the rhythm of the row; the full name is in the tooltip
-    // and in the heading below.
-    COUNTRIES.slice()
-      .sort(function (a, b) { return tabLabel(a.cc) < tabLabel(b.cc) ? -1 : 1; })
-      .forEach(function (c) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'vclfe-tab'
-          + (c.cc === activeCc ? ' is-active' : '')
-          + (countryEdited(c.cc) ? ' is-edited' : '');
-        b.textContent = tabLabel(c.cc);
-        b.title = c.name + ' — ' + c.n + ' Gebührenzeilen';
-        b.addEventListener('click', function () { selectCountry(c.cc); });
-        host.appendChild(b);
-      });
-  }
-
-  function tabLabel(cc) { return cc.split(' ')[0]; }
 
   function renderCountry() {
     var main = document.getElementById('vclfe-main');
@@ -407,6 +320,8 @@
       if (!roleRows.length) return;
       main.appendChild(roleSection(role, roleRows, mode, unit));
     });
+
+    main.appendChild(rulesSection(rows));
   }
 
   function metaBit(parent, text, cls) {
@@ -526,6 +441,184 @@
     // scroll sideways out of view together with it.
     if (opened) sec.appendChild(panelBlock(opened, mode, unit));
     return sec;
+  }
+
+  // ========================================================================
+  // Rechenwege — what the amounts above are put together with
+  //
+  // The rules are not stored anywhere separately: each row carries its own
+  // Excel formulas (Mf/Nf/Of/Pf/Qf/Rf/Sf) exactly as they stand in the
+  // workbook, and vcl-calc-app.js evaluates them. This section reads them back
+  // out and shows them, grouped by the rows that share a formula.
+  //
+  // Deliberately a TRANSLITERATION, not an interpretation: cell references are
+  // swapped for the column's plain name and the Excel keywords for German ones,
+  // and nothing else is touched. An earlier attempt to derive named rules
+  // ("Staffelung", "Pauschale ab der zweiten") from these formulas reproduced
+  // only about 70 % of the amounts, so a summary in that style would look
+  // authoritative while being wrong for one row in three. What is stated in
+  // plain words below is limited to what can be read off the formula text with
+  // certainty -- that it references the cap column, the surcharge column, and
+  // so on.
+  // ========================================================================
+
+  var CELL_LABELS = {
+    F: 'Führende Variation', G: 'Je weitere Stärke',
+    H: 'Je weitere IA', I: 'Je weitere IB', J: 'Je weitere II',
+    K: 'Gruppenpauschale', T: 'Deckel', U: 'Deckel ab 2 Stärken', V: 'Zuschlag',
+    L: 'Stärken',
+    M: 'wirksame Anzahl IA', N: 'wirksame Anzahl IB', O: 'wirksame Anzahl II',
+    P: 'Summe IA', Q: 'Summe IB', R: 'Summe II', S: 'Gesamt'
+  };
+  // Row 2 is the input header of the sheet: the counts the user typed in.
+  var INPUT_LABELS = { M: 'Anzahl IA', N: 'Anzahl IB', O: 'Anzahl II' };
+
+  var FORMULA_FIELDS = [
+    ['Sf', 'Gesamt'], ['Pf', 'Summe IA'], ['Qf', 'Summe IB'], ['Rf', 'Summe II'],
+    ['Mf', 'wirksame Anzahl IA'], ['Nf', 'wirksame Anzahl IB'], ['Of', 'wirksame Anzahl II']
+  ];
+
+  var ROW_BY_NUMBER = {};
+  FEE_ROWS.forEach(function (r) { ROW_BY_NUMBER[r.row] = r; });
+
+  function rowShortName(row) {
+    var r = ROW_BY_NUMBER[row];
+    if (!r) return 'Zeile ' + row;
+    return (TYPE_LABELS[r.type] || r.type) + (r.special ? ' ' + r.special : '') + ' · ' + r.role;
+  }
+
+  // A row's formulas with every row number stripped, so two rows doing the same
+  // thing land in the same group.
+  function formulaSignature(row) {
+    return FORMULA_FIELDS.map(function (f) {
+      var v = row[f[0]];
+      return v ? v.replace(/([A-Z]{1,2})\d+/g, '$1') : '';
+    }).join('||');
+  }
+
+  function humanFormula(text, ownRow) {
+    var out = text.replace(/^=/, '');
+    out = out.replace(/ISBLANK\(L\d+\)/g, 'Zeile nicht ausgewählt');
+    out = out.replace(/\b([A-Z])(\d+)\b/g, function (m, col, row) {
+      var n = parseInt(row, 10);
+      if (n === 2) return INPUT_LABELS[col] || (CELL_LABELS[col] || col);
+      var label = CELL_LABELS[col] || col;
+      return (n === ownRow) ? label : label + ' [' + rowShortName(n) + ']';
+    });
+    out = out.replace(/\bIF\(/g, 'WENN(')
+             .replace(/\bAND\(/g, 'UND(')
+             .replace(/\bOR\(/g, 'ODER(');
+    out = out.replace(/""/g, '\u2014');
+    out = out.replace(/<>/g, '\u2260').replace(/<=/g, '\u2264').replace(/>=/g, '\u2265');
+    out = out.replace(/,/g, '; ');
+    return out;
+  }
+
+  // Statements that can be read straight off the formula text. Each is a
+  // reference to a specific column, never a guess about the shape of the rule.
+  function formulaFacts(row) {
+    var text = FORMULA_FIELDS.map(function (f) { return row[f[0]] || ''; }).join(' ');
+    var bare = text.replace(/ISBLANK\([^)]*\)/g, '');
+    var facts = [];
+    function uses(col) { return new RegExp('\\b' + col + '\\d+\\b').test(bare); }
+    if (uses('G')) facts.push('Jede zusätzliche Stärke erhöht die Sätze');
+    if (uses('K')) {
+      facts.push(/>\s*1/.test(bare)
+        ? 'Ab der zweiten Variation gilt die Gruppenpauschale'
+        : 'Rechnet mit der Gruppenpauschale');
+    }
+    if (uses('T')) facts.push('Die Summe ist gedeckelt');
+    if (uses('U')) facts.push('Ab zwei Stärken gilt ein anderer Deckel');
+    if (uses('V')) facts.push('Auf die Summe kommt ein fester Zuschlag');
+    return facts;
+  }
+
+  function rulesSection(rows) {
+    var sec = document.createElement('section');
+    sec.className = 'vclfe-group vclfe-rules';
+
+    var head = document.createElement('div');
+    head.className = 'vclfe-group__head';
+    var h = document.createElement('h3');
+    h.textContent = 'Rechenwege';
+    head.appendChild(h);
+    var p = document.createElement('p');
+    p.appendChild(document.createTextNode('wie aus den Beträgen oben eine Gebühr wird'));
+    head.appendChild(p);
+    sec.appendChild(head);
+
+    var intro = document.createElement('p');
+    intro.className = 'vclfe-rules__intro';
+    intro.textContent = 'Jede Gebührenzeile trägt ihre eigene Formel — dieselbe, die in der '
+      + 'Excel-Arbeitsmappe steht. Hier stehen sie im Klartext, gruppiert nach Zeilen, die '
+      + 'dieselbe Formel benutzen. Zellbezüge sind durch die Spaltennamen ersetzt, sonst ist '
+      + 'nichts verändert. Geändert werden die Rechenwege hier nicht — nur die Beträge oben.';
+    sec.appendChild(intro);
+
+    // group the country's rows by formula signature, in the order they appear
+    var groups = [];
+    var bySig = {};
+    rows.forEach(function (r) {
+      var sig = formulaSignature(r);
+      if (!bySig[sig]) {
+        bySig[sig] = { rows: [], first: r };
+        groups.push(bySig[sig]);
+      }
+      bySig[sig].rows.push(r);
+    });
+
+    groups.forEach(function (g, i) { sec.appendChild(ruleCard(g, i + 1, groups.length)); });
+    return sec;
+  }
+
+  function ruleCard(group, index, total) {
+    var card = document.createElement('div');
+    card.className = 'vclfe-rule';
+
+    var head = document.createElement('div');
+    head.className = 'vclfe-rule__head';
+    var n = document.createElement('span');
+    n.className = 'vclfe-rule__n';
+    n.textContent = index + ' / ' + total;
+    head.appendChild(n);
+
+    var who = document.createElement('div');
+    who.className = 'vclfe-rule__rows';
+    group.rows.forEach(function (r) {
+      var chip = document.createElement('span');
+      chip.className = 'vclfe-rule__row';
+      chip.textContent = rowShortName(r.row);
+      who.appendChild(chip);
+    });
+    head.appendChild(who);
+    card.appendChild(head);
+
+    var facts = formulaFacts(group.first);
+    if (facts.length) {
+      var ul = document.createElement('ul');
+      ul.className = 'vclfe-rule__facts';
+      facts.forEach(function (f) {
+        var li = document.createElement('li');
+        li.textContent = f;
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    }
+
+    var list = document.createElement('dl');
+    list.className = 'vclfe-rule__formulas';
+    FORMULA_FIELDS.forEach(function (f) {
+      var text = group.first[f[0]];
+      if (!text) return;
+      var dt = document.createElement('dt');
+      dt.textContent = f[1];
+      var dd = document.createElement('dd');
+      dd.textContent = humanFormula(text, group.first.row);
+      list.appendChild(dt);
+      list.appendChild(dd);
+    });
+    card.appendChild(list);
+    return card;
   }
 
   function th(text, cls) {

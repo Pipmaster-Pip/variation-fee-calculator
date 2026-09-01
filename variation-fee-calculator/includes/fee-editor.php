@@ -191,8 +191,6 @@ function vcl_fee_editor_assets( $hook ) {
 			'rows'   => (object) $overrides['rows'],
 			'points' => (object) $overrides['points'],
 		),
-		// Which shape the country picker takes: tabs | pills | select.
-		'picker'       => 'tabs',
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
 }

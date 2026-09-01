@@ -75,34 +75,10 @@
 .vclfe-card{min-width:0}
 
 /* ---- country picker ---------------------------------------------------- */
-.vclfe-picker{margin:18px 0 4px}
+.vclfe-picker{margin:18px 0 20px}
 
-/* Variant "tabs": every country code on one register row. Nothing is hidden,
-   nothing has to be searched for, and it costs a single line of height. */
-.vclfe-picker--tabs{
-  display:flex; flex-wrap:wrap; gap:2px;
-  padding-bottom:9px; border-bottom:1px solid var(--line-strong);
-}
-.vclfe-tab{
-  font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.03em;
-  padding:6px 9px; min-width:38px; cursor:pointer;
-  border:1px solid transparent; border-radius:2px 2px 0 0;
-  background:none; color:var(--ink-soft);
-  position:relative; margin-bottom:-10px; padding-bottom:11px;
-}
-.vclfe-tab:hover{background:var(--sunk); color:var(--ink)}
-.vclfe-tab.is-active{
-  background:var(--panel); color:var(--accent-deep); font-weight:600;
-  border-color:var(--line-strong); border-bottom-color:var(--panel);
-}
-.vclfe-tab.is-edited::after{
-  content:""; position:absolute; left:9px; right:9px; top:2px;
-  height:2px; background:var(--amber); border-radius:1px;
-}
-
-/* Variant "pills": search plus one chip per country. Reads as a list of names
-   rather than codes, at the cost of two or three lines of height. */
-.vclfe-picker--pills{
+/* A search box and one chip per country, in the panel's own card. */
+.vclfe-picker{
   padding:14px 15px 15px;
   background:var(--panel); border:1px solid var(--line);
   border-radius:var(--radius); box-shadow:var(--shadow);
@@ -132,33 +108,6 @@
 .vclfe-pill.is-edited{border-color:var(--amber); background:var(--amber-soft)}
 .vclfe-pill.is-active.is-edited{background:var(--accent); border-color:var(--amber)}
 .vclfe-pillnone{margin:2px 0; font-size:13px; color:var(--ink-faint)}
-
-/* Variant "select": a dropdown between two step arrows. The least height of
-   the three, and the only one that walks the list country by country. */
-.vclfe-picker--select{
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-  padding-bottom:14px; border-bottom:1px solid var(--line-strong);
-}
-.vclfe-step{
-  font-family:var(--sans); font-size:15px; line-height:1; font-weight:600;
-  width:32px; height:32px; cursor:pointer;
-  border:1px solid var(--line-strong); border-radius:2px;
-  background:var(--panel); color:var(--ink-soft);
-}
-.vclfe-step:hover:not([disabled]){border-color:var(--accent); color:var(--accent-deep)}
-.vclfe-step[disabled]{opacity:.35; cursor:default}
-#vclfe-root select.vclfe-select{
-  min-width:290px; height:32px; padding:0 10px;
-  font-family:var(--sans); font-size:13.5px; font-weight:600;
-  border:1px solid var(--line-strong); border-radius:2px;
-  background:var(--panel); color:var(--ink); box-shadow:none;
-}
-#vclfe-root select.vclfe-select:hover{border-color:var(--accent)}
-.vclfe-pos{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
-.vclfe-editedlist{
-  font-family:var(--mono); font-size:11px; color:var(--amber);
-  margin-left:auto; text-align:right;
-}
 
 /* ---- role groups ------------------------------------------------------- */
 .vclfe-group{margin-bottom:26px}
@@ -331,3 +280,49 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 }
 .vclfe-btn--danger{color:#a02724; border-color:var(--line-strong)}
 .vclfe-btn--danger:hover{border-color:#a02724; background:#fbeaea}
+
+/* ---- Rechenwege -------------------------------------------------------- */
+.vclfe-rules{margin-top:34px}
+.vclfe-rules__intro{
+  margin:0 0 14px; max-width:72ch; font-size:13px; color:var(--ink-soft);
+}
+.vclfe-rule{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:14px 16px 15px; margin-bottom:10px;
+}
+.vclfe-rule__head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.vclfe-rule__n{
+  flex:none; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint);
+  letter-spacing:.04em;
+}
+.vclfe-rule__rows{display:flex; gap:6px; flex-wrap:wrap}
+.vclfe-rule__row{
+  font-size:12px; font-weight:600; color:var(--accent-deep);
+  background:var(--accent-soft); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));
+  border-radius:2px; padding:2px 7px;
+}
+.vclfe-rule__facts{
+  list-style:none; margin:11px 0 0; padding:0;
+  display:flex; gap:7px; flex-wrap:wrap;
+}
+.vclfe-rule__facts li{
+  font-size:12.5px; color:var(--ink); background:var(--sunk);
+  border:1px solid var(--line); border-radius:999px; padding:3px 11px;
+}
+.vclfe-rule__formulas{
+  display:grid; grid-template-columns:auto 1fr; gap:5px 14px;
+  margin:13px 0 0; padding-top:12px; border-top:1px solid var(--line);
+  align-items:baseline;
+}
+@media (max-width:760px){
+  .vclfe-rule__formulas{grid-template-columns:1fr; gap:2px}
+  .vclfe-rule__formulas dd{margin-bottom:9px}
+}
+.vclfe-rule__formulas dt{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  font-weight:600; color:var(--ink-faint); white-space:nowrap;
+}
+.vclfe-rule__formulas dd{
+  margin:0; font-family:var(--mono); font-size:11.5px; line-height:1.65;
+  color:var(--ink-soft); overflow-wrap:anywhere;
+}
