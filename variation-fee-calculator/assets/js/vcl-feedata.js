@@ -12,13 +12,32 @@
 
   var ROLE_ORDER = ['RMS', 'CMS', 'national'];
 
+  function findHaEntry(haEntries, cc) {
+    for (var i = 0; i < (haEntries || []).length; i++) {
+      if (haEntries[i].cc === cc) { return haEntries[i]; }
+    }
+    return null;
+  }
+
+  /** "DE - BfArM" -> "DE"; a plain code is returned unchanged. */
+  function baseCc(cc) {
+    var s = String(cc == null ? '' : cc);
+    var i = s.indexOf(' - ');
+    return i === -1 ? s : s.slice(0, i).trim();
+  }
+
   /** The metadata strip above a country's tables: dates, source, authority,
    *  payment method. Overrides win over the shipped HA_WEBSITES entry, but only
    *  for the two fields the editor actually maintains. */
   function countryMeta(cc, haEntries, ccToCurrency, overrides) {
-    var entry = null;
-    for (var i = 0; i < (haEntries || []).length; i++) {
-      if (haEntries[i].cc === cc) { entry = haEntries[i]; break; }
+    // The fee table carries one composite code, "DE - BfArM", while the HA
+    // sheet lists Germany plainly as "DE"; every other country matches exactly.
+    // Exact match first, so nothing changes for the other 32; the part before a
+    // " - " separator is only tried when the exact match found nothing.
+    var entry = findHaEntry(haEntries, cc);
+    if (!entry) {
+      var base = baseCc(cc);
+      if (base && base !== cc) { entry = findHaEntry(haEntries, base); }
     }
     var ov = (overrides && overrides.countries && overrides.countries[cc]) || {};
     return {

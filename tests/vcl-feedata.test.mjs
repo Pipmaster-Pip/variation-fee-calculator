@@ -10,7 +10,10 @@ const HA = [
     comments: "Elenco Tariffe aggiornato ad Luglio 2025",
     updated_calc: "2026-05-11", checked_ha: "2026-05-11", payment: "proof of payment" },
   { cc: "DK", link_text: "DKMA", link_url: "https://x/dk", comments: "Takstbekendtgorelse 2026",
-    updated_calc: "2026-01-09", checked_ha: "2026-05-11", payment: "invoice" }
+    updated_calc: "2026-01-09", checked_ha: "2026-05-11", payment: "invoice" },
+  { cc: "DE", link_text: "BfArM", link_url: "https://www.bfarm.de/kosten",
+    comments: "AMG-Kostenverordnung", updated_calc: "2026-03-02", checked_ha: "2026-05-11",
+    payment: "invoice" }
 ];
 const CUR = { DK: "DKK", NO: "NOK" };
 
@@ -75,4 +78,41 @@ test("chipList: alphabetical, counts rows, skips countries without rows", () => 
     { cc: "AT", name: "Austria", n: 1 },
     { cc: "IT", name: "Italy", n: 2 }
   ]);
+});
+
+// The fee table calls Germany "DE - BfArM" (its only composite code) while the
+// HA sheet calls it "DE" -- without the fallback the whole metadata strip stays
+// empty for the one country whose HA entry is fully filled in.
+test("countryMeta: the composite German code finds the plain \"DE\" HA entry", () => {
+  const m = F.countryMeta("DE - BfArM", HA, CUR, null);
+  assert.equal(m.cc, "DE - BfArM", "the reported code stays the one that was asked for");
+  assert.equal(m.checked, "2026-05-11");
+  assert.equal(m.edited, "2026-03-02");
+  assert.equal(m.source, "AMG-Kostenverordnung");
+  assert.equal(m.linkText, "BfArM");
+  assert.equal(m.linkUrl, "https://www.bfarm.de/kosten");
+  assert.equal(m.payment, "invoice");
+  assert.equal(m.currency, null, "Germany is a euro country");
+});
+
+test("countryMeta: overrides for the composite code still win", () => {
+  const ov = { countries: { "DE - BfArM": { checked: "2026-09-01", source: "Neue KostV" } } };
+  const m = F.countryMeta("DE - BfArM", HA, CUR, ov);
+  assert.equal(m.checked, "2026-09-01");
+  assert.equal(m.source, "Neue KostV");
+  assert.equal(m.linkText, "BfArM", "an override must not disturb the shipped link");
+});
+
+test("countryMeta: the exact match wins over the base-code fallback", () => {
+  const ha = [
+    { cc: "DE - BfArM", link_text: "composite", comments: "composite entry" },
+    { cc: "DE", link_text: "plain", comments: "plain entry" }
+  ];
+  assert.equal(F.countryMeta("DE - BfArM", ha, CUR, null).linkText, "composite");
+});
+
+test("countryMeta: a plain code never falls back to another country", () => {
+  const m = F.countryMeta("DK", HA, CUR, null);
+  assert.equal(m.linkText, "DKMA");
+  assert.equal(F.countryMeta("D", HA, CUR, null).linkText, "", "no prefix matching");
 });
