@@ -20,7 +20,8 @@
   document.write('<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-fee-editor.css?v=' + VCLFE_BUST + '">');
   // Stands in for wp_localize_script(). Set overrides here to test the
   // "already saved" state.
-  window.VCLFE_CONFIG = { overrides: { rows: {}, points: {} }, startCountry: 'IT' };
+  var picker = (location.search.match(/picker=(\w+)/) || [])[1] || 'tabs';
+  window.VCLFE_CONFIG = { overrides: { rows: {}, points: {} }, startCountry: 'DE - BfArM', picker: picker };
 </script>
 </head><body>
 
@@ -41,6 +42,8 @@
     <form onsubmit="event.preventDefault(); console.log('payload', document.getElementById('vclfe-payload').value);">
       <input type="hidden" name="vclfe_payload" id="vclfe-payload" value="">
 
+      <nav id="vclfe-picker" class="vclfe-picker" aria-label="Land wählen"></nav>
+
       <header class="vclfe-masthead">
         <div>
           <h2 id="vclfe-title">—</h2>
@@ -54,10 +57,6 @@
       </header>
 
       <div class="vclfe-layout">
-        <nav class="vclfe-rail" aria-label="Länder">
-          <h3>Länder</h3>
-          <ul id="vclfe-rail-list"></ul>
-        </nav>
         <main id="vclfe-main"></main>
       </div>
     </form>

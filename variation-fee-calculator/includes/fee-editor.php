@@ -180,6 +180,8 @@ function vcl_fee_editor_assets( $hook ) {
 			'rows'   => (object) $overrides['rows'],
 			'points' => (object) $overrides['points'],
 		),
+		// Which shape the country picker takes: tabs | pills | select.
+		'picker'       => 'tabs',
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
 }
@@ -230,6 +232,8 @@ function vcl_render_fee_editor() {
 				<input type="hidden" name="action" value="vclfe_save">
 				<input type="hidden" name="vclfe_payload" id="vclfe-payload" value="">
 
+				<nav id="vclfe-picker" class="vclfe-picker" aria-label="Land wählen"></nav>
+
 				<header class="vclfe-masthead">
 					<div>
 						<h2 id="vclfe-title">—</h2>
@@ -243,10 +247,6 @@ function vcl_render_fee_editor() {
 				</header>
 
 				<div class="vclfe-layout">
-					<nav class="vclfe-rail" aria-label="Länder">
-						<h3>Länder</h3>
-						<ul id="vclfe-rail-list"></ul>
-					</nav>
 					<main id="vclfe-main"></main>
 				</div>
 			</form>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Classification browser — preview (nav jump-to-top fix)</title>
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workflow-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workload-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-budget-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-guide-style.css?v=137" />
+<style>
+  /* Simulate the site's fixed top nav (jumpToTop offsets by SITE_FIXED_NAV_HEIGHT=100). This lets
+     us see the page actually scroll to the masthead on a nav click, as on the live site. */
+  body { margin: 0; padding-top: 60px; background: #EFEFEC; }
+  #fake-site-nav { position: fixed; top: 0; left: 0; right: 0; height: 60px; background:#1f2d24; color:#cfe3d6;
+    display:flex; align-items:center; padding:0 20px; font:600 14px/1 -apple-system,sans-serif; z-index: 10000; }
+  /* extra tall scroll space above so "jump to top" is visibly demonstrable */
+  #spacer-top { height: 900px; display:flex; align-items:center; justify-content:center;
+    color:#999; font:14px/1.4 -apple-system,sans-serif; text-align:center; }
+</style>
+</head>
+<body>
+  <div id="fake-site-nav">Fake site nav (fixed) — scroll down, open a Q.II.x subsection, watch it jump up here</div>
+  <div id="spacer-top">↓ Scroll down to the toolbox. Then open chapter <b>&nbsp;Q&nbsp;</b>, section <b>&nbsp;Q.II&nbsp;</b>,<br>and click a subsection like “Q.II.d) Control of finished product”.<br>The page should jump so the toolbox masthead sits just under the fixed nav.</div>
+
+  <div class="vcl-app" id="vcl-app">
+  <div class="page-shell">
+  <header class="app-header">
+    <div class="app-header__actions">
+      <button type="button" class="app-header__summary hidden" id="vcl-summaryHeaderBtn"><span>Summary</span><span class="app-header__summary-count" id="vcl-summaryHeaderCount">0</span></button>
+      <button type="button" class="app-header__guide" id="vcl-guideBtn"><span>How to use</span></button>
+      <button type="button" class="app-header__home" id="vcl-homeBtn"><span>Start</span></button>
+    </div>
+    <h1>Variation Toolbox</h1>
+    <p class="app-header__copyright">&copy; Dr. Tom Deutschle <span id="vcl-contactSlot"></span></p>
+    <p>One toolbox for the full variation lifecycle.</p>
+  </header>
+  <div class="layout">
+    <div class="browse-col" id="vcl-browseCol">
+      <div class="search-box"><input type="text" id="vcl-searchInput" placeholder="Search by code or keyword ..." autocomplete="off" /></div>
+      <div class="browse-tree" id="vcl-browseTree"></div>
+    </div>
+    <div class="detail-col" id="vcl-detailCol">
+      <div class="classification-head" id="vcl-detailHead"></div>
+      <div class="detail-empty" id="vcl-detailEmpty"></div>
+      <div class="hidden" id="vcl-detailPanel"></div>
+    </div>
+    <div class="summary-col hidden" id="vcl-summaryCol">
+      <div class="summary-header"><div class="summary-header__top"><div class="summary-header__info"><h2 class="summary-header__title">Summary of Variations</h2><p class="summary-header__count" id="vcl-summaryCount"></p></div>
+        <div class="summary-header__actions"><button type="button" id="vcl-summaryExpandAll">Expand all</button><button type="button" id="vcl-summaryCollapseAll">Collapse all</button><button type="button" id="vcl-summaryClearAll" class="summary-header__clear">Clear all</button><button type="button" id="vcl-summaryExportDocx">Export to .docx</button><button type="button" id="vcl-summaryPrint">Print</button></div></div>
+        <p class="summary-header__hint"></p></div>
+      <div class="summary-list" id="vcl-summaryList"></div>
+      <div class="summary-footer"><button type="button" id="vcl-summaryExportWorkflow" class="summary-footer__button summary-footer__button--workflow">Export to Guided Workflow &rarr;</button><button type="button" id="vcl-summaryExportBudget" class="summary-footer__button summary-footer__button--budget">Export to Budget Planning Tool &rarr;</button><button type="button" id="vcl-summaryExportCalculator" class="summary-footer__button">Export to Variation Fee Calculator &rarr;</button></div>
+    </div>
+    <div class="grouping-col hidden" id="vcl-groupingCol"></div>
+    <div class="grouping-col hidden" id="vcl-preciseScopeCol"></div>
+    <div class="grouping-col hidden" id="vcl-qaCol"></div>
+    <div class="grouping-col hidden" id="vcl-art5Col"></div>
+    <div class="timetables-col hidden" id="vcl-timetablesCol"></div>
+    <div class="workload-col hidden" id="vcl-workflowCol"></div>
+    <div class="budget-col hidden" id="vcl-budgetCol"></div>
+    <div class="calculator-col hidden" id="vcl-calculatorCol">
+      <div class="classification-head" id="vcl-calcHead"></div>
+      <div class="vclcalc-app" id="vclcalc-app"><div class="rail" id="vclcalc-rail"></div><div id="vclcalc-stepContent"></div><div class="src"><div class="fx-status-row"><span id="vclcalc-fxStatus"></span></div></div></div>
+    </div>
+  </div>
+  </div>
+  <div class="selection-bar hidden" id="vcl-selectionBar">
+    <div class="selection-bar__summary"><button class="selection-bar__toggle" id="vcl-selectionToggle" aria-expanded="false"><span class="selection-bar__chevron" id="vcl-selectionChevron">&#9656;</span><span id="vcl-selectionCount"></span></button>
+      <div class="selection-bar__buttons"><button class="selection-bar__link" id="vcl-selectionViewSummary">Open summary →</button><button class="selection-bar__clear" id="vcl-selectionClear">Clear all</button></div></div>
+    <div class="selection-bar__list hidden" id="vcl-selectionList"></div>
+  </div>
+  <div class="hidden" id="vcl-guideModal"></div>
+  </div>
+
+  <div style="height:1200px"></div>
+
+  <!-- Load order mirrors lookup.php's dependency graph. -->
+  <script src="../../variation-fee-calculator/assets/js/vcl-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-qa-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-art5-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-app.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-sg-logic.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-timeline.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-submission.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-annual-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-budget.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workflow.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-app.js?v=137"></script>
+</body>
+</html>

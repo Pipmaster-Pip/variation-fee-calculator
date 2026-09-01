@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Guided Workflow — preview (Change + row alignment fixes)</title>
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workflow-style.css?v=137" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workload-style.css?v=137" />
+<style>
+  body { margin: 0; padding: 24px; background: #EFEFEC; font-family: -apple-system, sans-serif; }
+  .vclcalc-app { display: none; } /* hidden calculator DOM so vcl-calc-app.js finds its hooks */
+  #vcl-wf-col { max-width: 920px; margin: 0 auto; }
+  .note { max-width: 920px; margin: 0 auto 16px; font: 13px/1.5 -apple-system, sans-serif; color:#555; }
+</style>
+</head>
+<body>
+  <p class="note"><b>Preview.</b> Seeded like a Classification&nbsp;→&nbsp;Guided Workflow export:
+  base <code>Q.II.a.1</code> (Type&nbsp;II) plus 5 additional variations. Click <b>Change</b> on the
+  base — the 5 additional variations must stay visible. Also check the text in the white boxes is
+  vertically centred against the ✕ button.</p>
+  <div class="vcl-app">
+    <div id="vcl-wf-col"></div>
+    <div class="vclcalc-app" id="vclcalc-app">
+      <div class="rail" id="vclcalc-rail"></div>
+      <div id="vclcalc-stepContent"></div>
+      <div class="src"><div class="fx-status-row"><span id="vclcalc-fxStatus"></span></div></div>
+    </div>
+  </div>
+
+  <script src="../../variation-fee-calculator/assets/js/vcl-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-qa-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-art5-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-app.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours-data.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-sg-logic.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-timeline.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-submission.js?v=137"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workflow.js?v=137"></script>
+  <script>
+    window.VCL_WORKFLOW.render(document.getElementById("vcl-wf-col"));
+    // Reproduce the reported export scenario: one Type II base + five extra variations
+    // (4 x Type IB, 1 x Type IB default), matching the screenshot's tally.
+    window.VCL_WORKFLOW.prefill({ variations: [
+      { code: "Q.II.a.1", variantId: undefined, type: "II" },
+      { code: "E.1",      variantId: undefined, type: "IB" },
+      { code: "Q.II.a.2", variantId: undefined, type: "IB" },
+      { code: "Q.II.a.2", variantId: undefined, type: "IB" },
+      { code: "Q.II.a.2", variantId: undefined, type: "IB" },
+      { code: "Q.II.e.1", variantId: undefined, type: "IB" }
+    ] });
+  </script>
+</body>
+</html>

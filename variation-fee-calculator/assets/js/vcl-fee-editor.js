@@ -209,33 +209,177 @@
   // Rendering
   // ========================================================================
   function render() {
-    renderRail();
+    renderPicker();
     renderCountry();
   }
 
-  function renderRail() {
-    var ul = document.getElementById('vclfe-rail-list');
-    ul.textContent = '';
-    COUNTRIES.forEach(function (c) {
-      var li = document.createElement('li');
+  // ---- country picker ----------------------------------------------------
+  // Sits above the tables rather than beside them: a country with caps and a
+  // surcharge runs to ten columns, and a side rail took exactly the width those
+  // columns need -- which is what put a scrollbar under every table.
+  //
+  // Three shapes, chosen with VCLFE_CONFIG.picker:
+  //   tabs   -- every country code in one register row, nothing hidden
+  //   pills  -- a search box and one chip per country, wrapping
+  //   select -- a dropdown between two step arrows, the most compact
+  // Read on every render rather than captured once, so the shape can be swapped
+  // at runtime -- which is how the harness and the design preview compare them.
+  function currentPicker() {
+    return ({ pills: 1, select: 1, tabs: 1 })[CFG.picker] ? CFG.picker : 'tabs';
+  }
+
+  function selectCountry(cc) {
+    if (cc === activeCc) return;
+    activeCc = cc;
+    openRow = null;
+    render();
+  }
+
+  function renderPicker() {
+    var host = document.getElementById('vclfe-picker');
+    if (!host) return;
+    var shape = currentPicker();
+    host.textContent = '';
+    host.className = 'vclfe-picker vclfe-picker--' + shape;
+    if (shape === 'pills') pickerPills(host);
+    else if (shape === 'select') pickerSelect(host);
+    else pickerTabs(host);
+  }
+
+  var pillFilter = '';
+
+  function pickerPills(host) {
+    var bar = document.createElement('div');
+    bar.className = 'vclfe-pillbar';
+
+    var search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'vclfe-search';
+    search.placeholder = 'Land suchen';
+    search.value = pillFilter;
+    search.setAttribute('aria-label', 'Land suchen');
+    search.addEventListener('input', function () {
+      pillFilter = search.value;
+      renderPicker();
+      var again = host.querySelector('.vclfe-search');
+      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    });
+    bar.appendChild(search);
+
+    var q = pillFilter.trim().toLowerCase();
+    var shown = COUNTRIES.filter(function (c) {
+      return !q || c.name.toLowerCase().indexOf(q) > -1 || c.cc.toLowerCase().indexOf(q) > -1;
+    });
+
+    var count = document.createElement('span');
+    count.className = 'vclfe-pillcount';
+    count.textContent = q ? shown.length + ' von ' + COUNTRIES.length : COUNTRIES.length + ' Laender';
+    bar.appendChild(count);
+    host.appendChild(bar);
+
+    var wrap = document.createElement('div');
+    wrap.className = 'vclfe-pills';
+    shown.forEach(function (c) {
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = (c.cc === activeCc ? 'is-active ' : '') + (countryEdited(c.cc) ? 'is-edited' : '');
-      b.appendChild(document.createTextNode(c.name + ' '));
+      b.className = 'vclfe-pill'
+        + (c.cc === activeCc ? ' is-active' : '')
+        + (countryEdited(c.cc) ? ' is-edited' : '');
+      b.appendChild(document.createTextNode(c.name));
       var n = document.createElement('span');
       n.className = 'n';
       n.textContent = c.n;
       b.appendChild(n);
-      b.addEventListener('click', function () {
-        activeCc = c.cc;
-        openRow = null;
-        render();
-        root.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      });
-      li.appendChild(b);
-      ul.appendChild(li);
+      b.addEventListener('click', function () { selectCountry(c.cc); });
+      wrap.appendChild(b);
     });
+    if (!shown.length) {
+      var none = document.createElement('p');
+      none.className = 'vclfe-pillnone';
+      none.textContent = 'Kein Land mit diesem Namen.';
+      wrap.appendChild(none);
+    }
+    host.appendChild(wrap);
   }
+
+  function pickerSelect(host) {
+    var i = -1;
+    COUNTRIES.forEach(function (c, n) { if (c.cc === activeCc) i = n; });
+
+    function step(delta) {
+      var next = COUNTRIES[i + delta];
+      if (next) selectCountry(next.cc);
+    }
+
+    var prev = document.createElement('button');
+    prev.type = 'button';
+    prev.className = 'vclfe-step';
+    prev.textContent = '‹';
+    prev.title = 'Vorheriges Land';
+    prev.setAttribute('aria-label', 'Vorheriges Land');
+    prev.disabled = i <= 0;
+    prev.addEventListener('click', function () { step(-1); });
+    host.appendChild(prev);
+
+    var sel = document.createElement('select');
+    sel.className = 'vclfe-select';
+    sel.setAttribute('aria-label', 'Land wählen');
+    COUNTRIES.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = c.cc;
+      o.textContent = c.name + '  ·  ' + c.n + ' Zeilen' + (countryEdited(c.cc) ? '  ●' : '');
+      if (c.cc === activeCc) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', function () { selectCountry(sel.value); });
+    host.appendChild(sel);
+
+    var next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'vclfe-step';
+    next.textContent = '›';
+    next.title = 'Nächstes Land';
+    next.setAttribute('aria-label', 'Nächstes Land');
+    next.disabled = i < 0 || i >= COUNTRIES.length - 1;
+    next.addEventListener('click', function () { step(1); });
+    host.appendChild(next);
+
+    var pos = document.createElement('span');
+    pos.className = 'vclfe-pos';
+    pos.textContent = (i + 1) + ' / ' + COUNTRIES.length;
+    host.appendChild(pos);
+
+    var edited = COUNTRIES.filter(function (c) { return countryEdited(c.cc); });
+    if (edited.length) {
+      var badge = document.createElement('span');
+      badge.className = 'vclfe-editedlist';
+      badge.textContent = 'geändert: ' + edited.map(function (c) { return c.cc; }).join(', ');
+      host.appendChild(badge);
+    }
+  }
+
+  function pickerTabs(host) {
+    // Sorted by code, not by name: a register of codes is scanned as codes, and
+    // "AT BE BG CH ..." reads as ordered where the by-name order does not.
+    // "DE - BfArM" is the one code carrying an authority suffix -- shown short so
+    // it does not break the rhythm of the row; the full name is in the tooltip
+    // and in the heading below.
+    COUNTRIES.slice()
+      .sort(function (a, b) { return tabLabel(a.cc) < tabLabel(b.cc) ? -1 : 1; })
+      .forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'vclfe-tab'
+          + (c.cc === activeCc ? ' is-active' : '')
+          + (countryEdited(c.cc) ? ' is-edited' : '');
+        b.textContent = tabLabel(c.cc);
+        b.title = c.name + ' — ' + c.n + ' Gebührenzeilen';
+        b.addEventListener('click', function () { selectCountry(c.cc); });
+        host.appendChild(b);
+      });
+  }
+
+  function tabLabel(cc) { return cc.split(' ')[0]; }
 
   function renderCountry() {
     var main = document.getElementById('vclfe-main');
@@ -347,8 +491,19 @@
     htr.appendChild(th('Verfahrensart'));
     htr.appendChild(th('Fee code'));
     cols.forEach(function (c) {
-      var cell = th(c.label + ' (' + unitForColumn(activeCc, mode, c.key) + ')', 'num');
+      // Label and unit stack instead of sitting on one nowrap line: the long
+      // ones ("Fuehrende Variation (EUR)") set the column width, and with eight
+      // to ten columns that alone pushed the table past the page.
+      var cell = th('', 'num');
       cell.title = c.hint;
+      var name = document.createElement('span');
+      name.className = 'vclfe-th__label';
+      name.textContent = c.label;
+      var unitEl = document.createElement('span');
+      unitEl.className = 'vclfe-th__unit';
+      unitEl.textContent = unitForColumn(activeCc, mode, c.key);
+      cell.appendChild(name);
+      cell.appendChild(unitEl);
       htr.appendChild(cell);
     });
     htr.appendChild(th(''));
@@ -455,7 +610,7 @@
       inp.classList.remove('is-bad');
       setEdit(row, col.key, mode, v);
       renderCountry();
-      renderRail();
+      renderPicker();
     });
     td.appendChild(inp);
     return td;
@@ -655,4 +810,8 @@
            : (COUNTRIES.length ? COUNTRIES[0].cc : null);
   applyToEngine();
   render();
+
+  // Minimal handle for the harness and the design preview: change
+  // VCLFE_CONFIG.picker, then re-render.
+  window.VCLFE = { render: render };
 })();

@@ -64,35 +64,100 @@
 #vclfe-root.is-dirty .vclfe-dirty{display:inline}
 
 /* ---- layout ------------------------------------------------------------ */
-.vclfe-layout{display:grid; grid-template-columns:230px 1fr; gap:26px; margin-top:22px; align-items:start}
-/* Without this a grid item's automatic minimum size is its content's, so a
+/* One column. The country picker sits above the tables, so the full width goes
+   to the fee columns -- with a side rail, a country carrying caps and a
+   surcharge put a scrollbar under every table. */
+.vclfe-layout{margin-top:22px}
+/* Without this a flex/grid item's automatic minimum size is its content's, so a
    country with ten fee columns would widen the whole page instead of scrolling
    inside its own card. */
 .vclfe-layout > *{min-width:0}
 .vclfe-card{min-width:0}
-@media (max-width:1000px){ .vclfe-layout{grid-template-columns:1fr} }
 
-.vclfe-rail{
-  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
-  padding:8px; box-shadow:var(--shadow); position:sticky; top:46px;
+/* ---- country picker ---------------------------------------------------- */
+.vclfe-picker{margin:18px 0 4px}
+
+/* Variant "tabs": every country code on one register row. Nothing is hidden,
+   nothing has to be searched for, and it costs a single line of height. */
+.vclfe-picker--tabs{
+  display:flex; flex-wrap:wrap; gap:2px;
+  padding-bottom:9px; border-bottom:1px solid var(--line-strong);
 }
-.vclfe-rail h3{
-  font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; font-weight:600;
-  color:var(--ink-faint); margin:0; padding:8px 10px 10px;
+.vclfe-tab{
+  font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.03em;
+  padding:6px 9px; min-width:38px; cursor:pointer;
+  border:1px solid transparent; border-radius:2px 2px 0 0;
+  background:none; color:var(--ink-soft);
+  position:relative; margin-bottom:-10px; padding-bottom:11px;
 }
-.vclfe-rail ul{list-style:none; margin:0; padding:0; max-height:560px; overflow-y:auto}
-.vclfe-rail button{
-  display:flex; justify-content:space-between; align-items:center; gap:8px;
-  width:100%; text-align:left; border:0; background:none; cursor:pointer;
-  padding:6px 10px; border-radius:2px; color:var(--ink-soft);
-  font:inherit; font-family:var(--sans); font-size:13px;
+.vclfe-tab:hover{background:var(--sunk); color:var(--ink)}
+.vclfe-tab.is-active{
+  background:var(--panel); color:var(--accent-deep); font-weight:600;
+  border-color:var(--line-strong); border-bottom-color:var(--panel);
 }
-.vclfe-rail button:hover{background:var(--sunk); color:var(--ink)}
-.vclfe-rail button.is-active{background:var(--accent-soft); color:var(--accent-deep); font-weight:600}
-.vclfe-rail .n{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
-.vclfe-rail button.is-active .n{color:var(--accent-deep)}
-.vclfe-rail button.is-edited::after{
-  content:"●"; color:var(--amber); font-size:9px; line-height:1;
+.vclfe-tab.is-edited::after{
+  content:""; position:absolute; left:9px; right:9px; top:2px;
+  height:2px; background:var(--amber); border-radius:1px;
+}
+
+/* Variant "pills": search plus one chip per country. Reads as a list of names
+   rather than codes, at the cost of two or three lines of height. */
+.vclfe-picker--pills{
+  padding:14px 15px 15px;
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:var(--radius); box-shadow:var(--shadow);
+}
+.vclfe-pillbar{display:flex; align-items:center; gap:12px; margin-bottom:12px}
+#vclfe-root input.vclfe-search{
+  flex:0 1 240px; min-height:0; padding:6px 10px;
+  font-family:var(--sans); font-size:13px;
+  border:1px solid var(--line-strong); border-radius:2px;
+  background:var(--paper); color:var(--ink); box-shadow:none;
+}
+#vclfe-root input.vclfe-search:hover{border-color:var(--accent)}
+.vclfe-pillcount{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.vclfe-pills{display:flex; flex-wrap:wrap; gap:6px}
+.vclfe-pill{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  font:inherit; font-family:var(--sans); font-size:12.5px;
+  padding:5px 10px; border-radius:999px;
+  border:1px solid var(--line); background:var(--paper); color:var(--ink-soft);
+}
+.vclfe-pill:hover{border-color:var(--line-strong); color:var(--ink)}
+.vclfe-pill .n{font-family:var(--mono); font-size:10.5px; color:var(--ink-faint)}
+.vclfe-pill.is-active{
+  background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;
+}
+.vclfe-pill.is-active .n{color:rgba(255,255,255,.78)}
+.vclfe-pill.is-edited{border-color:var(--amber); background:var(--amber-soft)}
+.vclfe-pill.is-active.is-edited{background:var(--accent); border-color:var(--amber)}
+.vclfe-pillnone{margin:2px 0; font-size:13px; color:var(--ink-faint)}
+
+/* Variant "select": a dropdown between two step arrows. The least height of
+   the three, and the only one that walks the list country by country. */
+.vclfe-picker--select{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding-bottom:14px; border-bottom:1px solid var(--line-strong);
+}
+.vclfe-step{
+  font-family:var(--sans); font-size:15px; line-height:1; font-weight:600;
+  width:32px; height:32px; cursor:pointer;
+  border:1px solid var(--line-strong); border-radius:2px;
+  background:var(--panel); color:var(--ink-soft);
+}
+.vclfe-step:hover:not([disabled]){border-color:var(--accent); color:var(--accent-deep)}
+.vclfe-step[disabled]{opacity:.35; cursor:default}
+#vclfe-root select.vclfe-select{
+  min-width:290px; height:32px; padding:0 10px;
+  font-family:var(--sans); font-size:13.5px; font-weight:600;
+  border:1px solid var(--line-strong); border-radius:2px;
+  background:var(--panel); color:var(--ink); box-shadow:none;
+}
+#vclfe-root select.vclfe-select:hover{border-color:var(--accent)}
+.vclfe-pos{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.vclfe-editedlist{
+  font-family:var(--mono); font-size:11px; color:var(--amber);
+  margin-left:auto; text-align:right;
 }
 
 /* ---- role groups ------------------------------------------------------- */
@@ -110,14 +175,23 @@
 }
 .vclfe-scroll{overflow-x:auto}
 .vclfe-card:has(+ .vclfe-panel){border-bottom-left-radius:0; border-bottom-right-radius:0}
-#vclfe-root table{border-collapse:collapse; width:100%; min-width:680px; font-size:13.5px}
+#vclfe-root table{border-collapse:collapse; width:100%; min-width:660px; font-size:13.5px}
 #vclfe-root th{
   text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
-  font-weight:600; color:var(--ink-faint); padding:10px 12px;
-  border-bottom:1px solid var(--line); white-space:nowrap; background:var(--sunk);
+  font-weight:600; color:var(--ink-faint); padding:9px 9px;
+  border-bottom:1px solid var(--line); background:var(--sunk);
+  vertical-align:bottom;
+}
+/* The label wraps over at most two lines and the unit sits under it, so a long
+   column name no longer dictates how wide the column has to be. */
+.vclfe-th__label{display:block; max-width:104px; margin-left:auto; line-height:1.3}
+#vclfe-root th:not(.num) .vclfe-th__label{margin-left:0}
+.vclfe-th__unit{
+  display:block; margin-top:3px; font-family:var(--mono); font-size:9.5px;
+  letter-spacing:.06em; color:var(--accent); text-transform:none;
 }
 #vclfe-root th.num, #vclfe-root td.num{text-align:right}
-#vclfe-root td{padding:0 12px; border-bottom:1px solid var(--line); vertical-align:middle; height:46px}
+#vclfe-root td{padding:0 9px; border-bottom:1px solid var(--line); vertical-align:middle; height:46px}
 #vclfe-root tbody tr:last-child td{border-bottom:none}
 #vclfe-root tbody tr:hover td{background:var(--sunk)}
 #vclfe-root tr.is-open td{background:var(--accent-soft)}
@@ -132,7 +206,7 @@
 
 #vclfe-root input.vclfe-amount{
   font-family:var(--mono); font-size:12.5px; font-variant-numeric:tabular-nums;
-  width:96px; min-height:0; text-align:right; padding:5px 8px;
+  width:84px; min-height:0; text-align:right; padding:5px 7px;
   border:1px solid var(--line-strong); border-radius:2px;
   background:var(--paper); color:var(--ink); box-shadow:none;
 }

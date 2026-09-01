@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Summary redesign — 2 proposals</title>
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css" />
+<style>
+  /* Neutralise the app's full-bleed breakout so the mock sits in a normal column. */
+  .vcl-app { position: static; left: auto; width: auto; max-width: 940px; margin: 0 auto 8px;
+    padding: 0; transform: none; }
+  body { background: #EFEFEC; padding: 24px 16px 60px; font-family: "Libre Franklin", -apple-system, sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .block { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin: 0 0 22px; }
+  .block > h2 { font: 700 15px/1.2 "Libre Franklin", sans-serif; margin: 0 0 4px; color: #1B212C; }
+  .block > .lead { font: 13px/1.5 sans-serif; color: #4D5566; margin: 0 0 16px; }
+  .tag { display:inline-block; font: 700 11px/1 sans-serif; padding: 3px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+  .tag--now { background:#eee; color:#555; }
+  .tag--p1 { background: var(--classify-bg); color: var(--classify); }
+  .tag--p2 { background: var(--classify-bg); color: var(--classify); }
+  h1 { font: 800 20px/1.2 "Source Serif 4", Georgia, serif; margin: 0 0 6px; }
+  .intro { font: 13px/1.6 sans-serif; color:#4D5566; margin:0 0 22px; max-width: 760px; }
+
+  /* ---- Clear all button in the header (proposal for point 1) ---- */
+  .vcl-app .summary-header__actions button.is-clear { color: var(--ii); border-color: var(--border); }
+  .vcl-app .summary-header__actions button.is-clear:hover { background: rgba(178,58,46,0.07); border-color: var(--ii); }
+
+  /* ================= PROPOSAL 1: "Variant-row" look (badge hard right, white card) ========= */
+  .p1-item { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+    background: var(--panel); border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px;
+    margin-bottom: 8px; cursor:pointer; color: var(--ink); transition: background .12s, border-color .12s; }
+  .p1-item:hover { background: var(--classify-tint); border-color: var(--classify); }
+  .p1-item__left { display:flex; align-items:center; gap:10px; min-width:0; flex:1; }
+  .p1-item__num { font: 700 12px/1 "IBM Plex Mono", monospace; color: var(--muted); flex-shrink:0; }
+  .p1-item__code { font: 600 12.5px/1 "IBM Plex Mono", monospace; color: var(--classify); flex-shrink:0; }
+  .p1-item__titles { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .p1-item__title { font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .p1-item__subtitle { font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .p1-item__right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .p1-x { background:none; border:none; cursor:pointer; color:var(--muted); font-size:18px; line-height:1; padding:2px 4px; }
+  .p1-x:hover { color: var(--ii); }
+
+  /* ================= PROPOSAL 2: "Entry-header band" look (Steel-Blue identity band) ======= */
+  .p2-item { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+    background: var(--classify-bg); border: 1.5px solid var(--classify); border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 8px; cursor:pointer; color: var(--ink); }
+  .p2-item:hover { filter: brightness(1.02); }
+  .p2-item__left { display:flex; align-items:baseline; gap:8px; min-width:0; flex:1; }
+  .p2-item__num { font: 700 12px/1 "IBM Plex Mono", monospace; color: var(--classify); opacity:.7; flex-shrink:0; }
+  .p2-item__code { font: 700 13px/1.3 "IBM Plex Mono", monospace; color: var(--classify); white-space:nowrap; flex-shrink:0; }
+  .p2-item__dash { color: var(--classify); opacity:.5; flex-shrink:0; }
+  .p2-item__title { font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .p2-item__right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .p2-x { background:none; border:none; cursor:pointer; color:var(--classify); font-size:18px; line-height:1; padding:2px 4px; }
+  .p2-x:hover { color: var(--ii); }
+  /* Expanded state: blue header band + white body inside one rounded card. */
+  .p2-card { border: 1.5px solid var(--classify); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+  .p2-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px;
+    background: var(--classify-bg); cursor:pointer; }
+  .p2-head:hover { filter: brightness(1.02); }
+  .p2-chevron { color: var(--classify); font-size:10px; flex-shrink:0; width:10px; }
+  .p2-card--open .p2-item__title { white-space: normal; font-weight:600; }
+  .p2-head__titles { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .p2-head__subtitle { font-size:11.5px; color: var(--classify); opacity:.85; white-space:normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Summary-Box — 2 Redesign-Vorschläge</h1>
+  <p class="intro">Beide Vorschläge nutzen die echten Farb-Tokens und den Kartenstil aus der
+  <b>Classification of Variations</b>, damit die Summary-Einträge denselben Wiedererkennungswert
+  bekommen. In allen Varianten ist zusätzlich der neue <b>Clear all</b>-Button oben im Header
+  ergänzt (Punkt 1). Der Badge wandert – wie in der Classification – nach <b>rechts</b>.</p>
+
+  <!-- ============ AKTUELL ============ -->
+  <div class="vcl-app"><div class="block">
+    <h2>Aktuell <span class="tag tag--now">Ist-Zustand</span></h2>
+    <p class="lead">Badge links zwischen Code und Titel (Inset-Ring), 1px-Rahmen. Kein Clear all im Header.</p>
+    <div class="summary-header" style="border:none;padding:0;margin-bottom:14px;">
+      <div class="summary-header__top">
+        <div class="summary-header__info">
+          <h2 class="summary-header__title" style="font-size:16px;">Summary of Variations</h2>
+          <p class="summary-header__count">3 items in this application</p>
+        </div>
+        <div class="summary-header__actions">
+          <button>Expand all</button><button>Collapse all</button>
+          <button>Export to .docx</button><button>Print</button>
+        </div>
+      </div>
+    </div>
+    <div class="summary-list">
+      <div class="summary-item"><div class="summary-item__row">
+        <button class="summary-item__head" type="button">
+          <span class="summary-item__num">1.</span>
+          <span class="mono summary-item__code">Q.V.a.1(a)</span>
+          <span class="summary-item__typecol"><span class="badge type-ii">II</span></span>
+          <span class="summary-item__titles">
+            <span class="summary-item__title">Inclusion of a new, updated or amended Plasma Master File in the marketing authorisation dossier of…</span>
+            <span class="summary-item__subtitle">First-time inclusion of a new Plasma Master File affecting the properties of the finished product</span>
+          </span>
+        </button>
+        <button class="summary-item__remove" type="button">&times;</button>
+      </div></div>
+      <div class="summary-item"><div class="summary-item__row">
+        <button class="summary-item__head" type="button">
+          <span class="summary-item__num">2.</span>
+          <span class="mono summary-item__code">Q.V.a.z</span>
+          <span class="summary-item__typecol"><span class="badge type-ib">IB (unforeseen)</span></span>
+          <span class="summary-item__titles"><span class="summary-item__title">Other variation</span></span>
+        </button>
+        <button class="summary-item__remove" type="button">&times;</button>
+      </div></div>
+      <div class="summary-item"><div class="summary-item__row">
+        <button class="summary-item__head" type="button">
+          <span class="summary-item__num">3.</span>
+          <span class="mono summary-item__code">Q.II.d.1(a)</span>
+          <span class="summary-item__typecol"><span class="badge type-ia">IA</span></span>
+          <span class="summary-item__titles"><span class="summary-item__title">Change within the specifications acceptance criteria</span></span>
+        </button>
+        <button class="summary-item__remove" type="button">&times;</button>
+      </div></div>
+    </div>
+  </div></div>
+
+  <!-- ============ VORSCHLAG 1 ============ -->
+  <div class="vcl-app"><div class="block">
+    <h2>Vorschlag 1 — „Variant-Zeile" <span class="tag tag--p1">wie die Listen-Zeilen der Classification</span></h2>
+    <p class="lead">Weiße Karte, 1,5px-Rahmen, Steel-Blue-Hover-Tönung, Badge <b>rechts</b> — exakt der
+    <code>.entry-variant-row</code>-Look. Code in Classify-Blau (mono). Dezent, ruhig.</p>
+    <div class="summary-header" style="border:none;padding:0;margin-bottom:14px;">
+      <div class="summary-header__top">
+        <div class="summary-header__info">
+          <h2 class="summary-header__title" style="font-size:16px;">Summary of Variations</h2>
+          <p class="summary-header__count">3 items in this application</p>
+        </div>
+        <div class="summary-header__actions">
+          <button>Expand all</button><button>Collapse all</button>
+          <button class="is-clear">Clear all</button>
+          <button>Export to .docx</button><button>Print</button>
+        </div>
+      </div>
+    </div>
+    <div class="p1-item">
+      <div class="p1-item__left">
+        <span class="p1-item__num">1.</span>
+        <span class="p1-item__code">Q.V.a.1(a)</span>
+        <span class="p1-item__titles">
+          <span class="p1-item__title">Inclusion of a new, updated or amended Plasma Master File in the marketing authorisation dossier of…</span>
+          <span class="p1-item__subtitle">First-time inclusion of a new Plasma Master File affecting the properties of the finished product</span>
+        </span>
+      </div>
+      <div class="p1-item__right"><span class="badge type-ii">II</span><button class="p1-x">&times;</button></div>
+    </div>
+    <div class="p1-item">
+      <div class="p1-item__left">
+        <span class="p1-item__num">2.</span>
+        <span class="p1-item__code">Q.V.a.z</span>
+        <span class="p1-item__titles"><span class="p1-item__title">Other variation</span></span>
+      </div>
+      <div class="p1-item__right"><span class="badge type-ib">IB (unforeseen)</span><button class="p1-x">&times;</button></div>
+    </div>
+    <div class="p1-item">
+      <div class="p1-item__left">
+        <span class="p1-item__num">3.</span>
+        <span class="p1-item__code">Q.II.d.1(a)</span>
+        <span class="p1-item__titles"><span class="p1-item__title">Change within the specifications acceptance criteria</span></span>
+      </div>
+      <div class="p1-item__right"><span class="badge type-ia">IA</span><button class="p1-x">&times;</button></div>
+    </div>
+  </div></div>
+
+  <!-- ============ VORSCHLAG 2 ============ -->
+  <div class="vcl-app"><div class="block">
+    <h2>Vorschlag 2 — „Eintrags-Header" <span class="tag tag--p2">wie das blaue Kopf-Band der Classification</span></h2>
+    <p class="lead">Steel-Blue-Identitätsband (<code>.entry-summary</code>): getönter Hintergrund, blauer
+    1,5px-Rahmen, Code groß in Classify-Blau, Titel nach Gedankenstrich, Badge <b>rechts</b>.
+    Stärkster Wiedererkennungswert zum Detail-Kopf der Classification.</p>
+    <div class="summary-header" style="border:none;padding:0;margin-bottom:14px;">
+      <div class="summary-header__top">
+        <div class="summary-header__info">
+          <h2 class="summary-header__title" style="font-size:16px;">Summary of Variations</h2>
+          <p class="summary-header__count">3 items in this application</p>
+        </div>
+        <div class="summary-header__actions">
+          <button>Expand all</button><button>Collapse all</button>
+          <button class="is-clear">Clear all</button>
+          <button>Export to .docx</button><button>Print</button>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="color:var(--classify);margin-top:-6px;">↓ Item&nbsp;1 ist <b>angeklickt/aufgeklappt</b>: das blaue Band bleibt als Kopf, darunter klappt der weiße Detailbereich auf (Conditions / Documentation / Notes / Precise scope) — exakt wie im heutigen Summary-Body.</p>
+
+    <!-- OPEN item: blue header band + white detail body in one rounded card -->
+    <div class="p2-card p2-card--open">
+      <div class="p2-head">
+        <div class="p2-item__left">
+          <span class="p2-chevron">▾</span>
+          <span class="p2-item__num">1.</span>
+          <span class="p2-item__code">Q.V.a.1(a)</span><span class="p2-item__dash">—</span>
+          <span class="p2-head__titles">
+            <span class="p2-item__title">Inclusion of a new, updated or amended Plasma Master File in the marketing authorisation dossier of…</span>
+            <span class="p2-head__subtitle">First-time inclusion of a new Plasma Master File affecting the properties of the finished product</span>
+          </span>
+        </div>
+        <div class="p2-item__right"><span class="badge type-ii">II</span><button class="p2-x">&times;</button></div>
+      </div>
+      <div class="summary-item__body">
+        <div class="summary-item__section">
+          <h4>Conditions to be fulfilled</h4>
+          <p style="font-size:13px;line-height:1.55;color:var(--muted);margin:0;">No specific conditions listed for this variant.</p>
+        </div>
+        <div class="summary-item__section">
+          <h4>Documentation to be supplied</h4>
+          <p style="font-size:13px;line-height:1.55;color:var(--muted);margin:0;">No Annex-specific documentation list. Type II changes require a full variation application (assessment report, updated product information, etc.) rather than a standardised Annex checklist.</p>
+        </div>
+        <div class="summary-item__section">
+          <h4>Notes</h4>
+          <textarea class="summary-note" placeholder="Optional justification or remarks for this item…"></textarea>
+        </div>
+        <div class="summary-item__section">
+          <h4>Precise scope wording</h4>
+          <p class="precise-scope-wording"><span class="code-chip">Q.V.a.1.a</span> To submit a 2nd step notification procedure for the inclusion of a new Plasma Master File Certificate (EMEA/H/PMF/{number}) granted by the EMA to {PMF holder} on {date}.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLLAPSED items -->
+    <div class="p2-card"><div class="p2-head">
+      <div class="p2-item__left">
+        <span class="p2-chevron">▸</span>
+        <span class="p2-item__num">2.</span>
+        <span class="p2-item__code">Q.V.a.z</span><span class="p2-item__dash">—</span>
+        <span class="p2-item__title">Other variation</span>
+      </div>
+      <div class="p2-item__right"><span class="badge type-ib">IB (unforeseen)</span><button class="p2-x">&times;</button></div>
+    </div></div>
+    <div class="p2-card"><div class="p2-head">
+      <div class="p2-item__left">
+        <span class="p2-chevron">▸</span>
+        <span class="p2-item__num">3.</span>
+        <span class="p2-item__code">Q.II.d.1(a)</span><span class="p2-item__dash">—</span>
+        <span class="p2-item__title">Change within the specifications acceptance criteria</span>
+      </div>
+      <div class="p2-item__right"><span class="badge type-ia">IA</span><button class="p2-x">&times;</button></div>
+    </div></div>
+  </div></div>
+
+</div>
+</body>
+</html>
