@@ -509,6 +509,7 @@ const appState = {
   feeDataCc: null,          // which country the public fee-data page shows
   feeDataCur: 'local',      // 'local' or 'eur' -- only meaningful for non-euro countries
   feeDataOpen: false,       // is the quick-calculation box unfolded
+  feeDataReturnStep: 0,     // the wizard step the fee-data page was opened from
   // Quick calculation on that page: procedure role, number of strengths, how many
   // variations of each type, and the special-case row chosen per type. Kept in
   // appState so a re-render (currency switch, country change) does not throw the
@@ -817,6 +818,13 @@ function wireCalcInfoPanels() {
   if (feeDataBtn) {
     feeDataBtn.addEventListener('click', () => {
       appState.feeDataCc = appState.selectedCountries[0] || 'IT';
+      // Non-euro countries always open in their own currency -- the same reset
+      // the country chips do. Without it a country left in EUR earlier came
+      // back in EUR on the next visit.
+      appState.feeDataCur = 'local';
+      // The link sits in all four steps, so remember where the reader came
+      // from; "Back to the calculator" returns there instead of to step 0.
+      if (typeof appState.step === 'number') appState.feeDataReturnStep = appState.step;
       appState.step = 'feedata';
       render();
       if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
@@ -2478,7 +2486,7 @@ function renderStepFeeData() {
   const backBtn = document.getElementById('vclcalc-fdBack');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      appState.step = 0;
+      appState.step = appState.feeDataReturnStep;
       render();
       if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
     });
