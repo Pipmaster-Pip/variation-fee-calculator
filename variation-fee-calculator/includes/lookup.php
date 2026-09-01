@@ -317,12 +317,13 @@ function vcl_register_assets() {
 	// over the shipped table before it resolves a single cell. Nothing is printed
 	// while nobody has edited anything.
 	$vcl_fee_overrides = vcl_get_fee_overrides();
-	if ( $vcl_fee_overrides['rows'] || $vcl_fee_overrides['points'] ) {
+	if ( $vcl_fee_overrides['rows'] || $vcl_fee_overrides['points'] || $vcl_fee_overrides['countries'] ) {
 		wp_add_inline_script(
 			'vcl-calc-data',
 			'window.VCLCALC_OVERRIDES = ' . wp_json_encode( array(
-				'rows'   => (object) $vcl_fee_overrides['rows'],
-				'points' => (object) $vcl_fee_overrides['points'],
+				'rows'      => (object) $vcl_fee_overrides['rows'],
+				'points'    => (object) $vcl_fee_overrides['points'],
+				'countries' => (object) $vcl_fee_overrides['countries'],
 			) ) . ';',
 			'after'
 		);

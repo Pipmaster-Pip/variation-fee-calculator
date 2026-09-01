@@ -51,7 +51,11 @@ function vcl_fee_editable_fields() {
 /**
  * The saved overrides, always in the shape
  * array( 'rows' => array( '<rowNo>' => array( '<field>' => float ) ),
- *        'points' => array( '<cc>' => float ), 'updated' => ..., 'by' => ... ).
+ *        'points' => array( '<cc>' => float ),
+ *        'countries' => array( '<CC>' => array( 'checked' => 'Y-m-d',
+ *                                               'source' => string,
+ *                                               'updated' => 'Y-m-d' ) ),
+ *        'updated' => ..., 'by' => ... ).
  */
 function vcl_get_fee_overrides() {
 	$saved = get_option( VCL_FEE_OVERRIDES_OPTION, array() );
@@ -59,10 +63,11 @@ function vcl_get_fee_overrides() {
 		$saved = array();
 	}
 	return wp_parse_args( $saved, array(
-		'rows'    => array(),
-		'points'  => array(),
-		'updated' => '',
-		'by'      => '',
+		'rows'      => array(),
+		'points'    => array(),
+		'countries' => array(),
+		'updated'   => '',
+		'by'        => '',
 	) );
 }
 
@@ -74,7 +79,7 @@ function vcl_get_fee_overrides() {
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -115,6 +120,38 @@ function vcl_sanitize_fee_overrides( $payload ) {
 				continue;
 			}
 			$clean['points'][ $code ] = $num;
+		}
+	}
+
+	// Per-country provenance: a checked date the user maintains by hand, the
+	// free-text source reference, and an edited date we stamp on save. Anything
+	// that is not a date or a string is dropped, like everywhere else here.
+	if ( isset( $payload['countries'] ) && is_array( $payload['countries'] ) ) {
+		foreach ( $payload['countries'] as $cc => $fields ) {
+			if ( ! is_array( $fields ) ) {
+				$dropped++;
+				continue;
+			}
+			$code  = sanitize_text_field( (string) $cc );
+			$entry = array();
+
+			foreach ( array( 'checked', 'updated' ) as $key ) {
+				if ( empty( $fields[ $key ] ) ) {
+					continue;
+				}
+				$date = sanitize_text_field( (string) $fields[ $key ] );
+				if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+					$entry[ $key ] = $date;
+				} else {
+					$dropped++;
+				}
+			}
+			if ( ! empty( $fields['source'] ) ) {
+				$entry['source'] = sanitize_text_field( (string) $fields['source'] );
+			}
+			if ( $entry ) {
+				$clean['countries'][ $code ] = $entry;
+			}
 		}
 	}
 
@@ -183,13 +220,15 @@ function vcl_fee_editor_assets( $hook ) {
 	// showing the amounts that are actually live.
 	wp_add_inline_script( 'vcl-calc-data',
 		'window.VCLCALC_OVERRIDES = ' . wp_json_encode( array(
-			'rows'   => (object) $overrides['rows'],
-			'points' => (object) $overrides['points'],
+			'rows'      => (object) $overrides['rows'],
+			'points'    => (object) $overrides['points'],
+			'countries' => (object) $overrides['countries'],
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
-			'rows'   => (object) $overrides['rows'],
-			'points' => (object) $overrides['points'],
+			'rows'      => (object) $overrides['rows'],
+			'points'    => (object) $overrides['points'],
+			'countries' => (object) $overrides['countries'],
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
@@ -375,10 +414,11 @@ function vcl_handle_save_fee_overrides() {
 
 	$user = wp_get_current_user();
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
-		'rows'    => $clean['rows'],
-		'points'  => $clean['points'],
-		'updated' => current_time( 'mysql' ),
-		'by'      => $user ? $user->display_name : '',
+		'rows'      => $clean['rows'],
+		'points'    => $clean['points'],
+		'countries' => $clean['countries'],
+		'updated'   => current_time( 'mysql' ),
+		'by'        => $user ? $user->display_name : '',
 	), false );
 
 	vcl_fee_editor_redirect( array( 'vclfe_status' => 'saved', 'vclfe_dropped' => $dropped ) );
@@ -402,14 +442,15 @@ function vcl_handle_export_fee_overrides() {
 
 	$overrides = vcl_get_fee_overrides();
 	$payload   = array(
-		'format'  => VCL_FEE_EXPORT_FORMAT,
-		'plugin'  => VFC_VERSION,
-		'site'    => home_url(),
-		'exported'=> current_time( 'mysql' ),
-		'updated' => $overrides['updated'],
-		'by'      => $overrides['by'],
-		'rows'    => (object) $overrides['rows'],
-		'points'  => (object) $overrides['points'],
+		'format'    => VCL_FEE_EXPORT_FORMAT,
+		'plugin'    => VFC_VERSION,
+		'site'      => home_url(),
+		'exported'  => current_time( 'mysql' ),
+		'updated'   => $overrides['updated'],
+		'by'        => $overrides['by'],
+		'rows'      => (object) $overrides['rows'],
+		'points'    => (object) $overrides['points'],
+		'countries' => (object) $overrides['countries'],
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -465,10 +506,11 @@ function vcl_handle_import_fee_overrides() {
 
 	$user = wp_get_current_user();
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
-		'rows'    => $clean['rows'],
-		'points'  => $clean['points'],
-		'updated' => current_time( 'mysql' ),
-		'by'      => ( $user ? $user->display_name : '' ) . ' (Import)',
+		'rows'      => $clean['rows'],
+		'points'    => $clean['points'],
+		'countries' => $clean['countries'],
+		'updated'   => current_time( 'mysql' ),
+		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );
 
 	vcl_fee_editor_redirect( array(
