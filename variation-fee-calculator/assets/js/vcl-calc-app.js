@@ -681,6 +681,23 @@ window.VCLCALC = {
     const grandTotal = results.reduce((acc, cr) => acc + (cr.total || 0), 0);
     return { countries: results, grandTotal };
   },
+  // Open the public fee-data page. Moved here from the old "Fee data by country" box at the
+  // foot of every step: the entry point now lives in the calculator's view heading, which is
+  // rendered by the host guide (vcl-app.js, a different IIFE) and therefore needs a public door
+  // into this one. Same behaviour as the retired button, verbatim.
+  openFeeData() {
+    appState.feeDataCc = appState.selectedCountries[0] || 'IT';
+    // Non-euro countries always open in their own currency -- the same reset
+    // the country chips do. Without it a country left in EUR earlier came
+    // back in EUR on the next visit.
+    appState.feeDataCur = 'local';
+    // The button sits above all four steps, so remember where the reader came
+    // from; "Back to the calculator" returns there instead of to step 0.
+    if (typeof appState.step === 'number') appState.feeDataReturnStep = appState.step;
+    appState.step = 'feedata';
+    render();
+    if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+  },
   setGlobalCounts(counts) {
     const parts = [];
     ['IA', 'IB', 'II'].forEach((type) => {
@@ -778,20 +795,18 @@ function tileName(cc) {
   return /^[A-Za-z]{2}\s*[-–]/.test(cc) ? n.replace(/\s*\([^)]*\)\s*$/, '') : n;
 }
 
-// Change history + HA-websites info panels. Shown at the bottom of every calculator step (not just
-// the result), so the fee-data provenance and the HA links are reachable from anywhere in the flow.
-// Only one step renders at a time (contentEl.innerHTML is replaced), so the fixed IDs stay unique.
+// Change-history info panel. Shown at the bottom of every calculator step (not just the result),
+// so the fee-data provenance is reachable from anywhere in the flow. Only one step renders at a
+// time (contentEl.innerHTML is replaced), so the fixed IDs stay unique.
+// The former "Fee data by country" box that lived here is gone: the fee-data page is now entered
+// from the "Fee data — country details" button in the view heading (vcl-app.js fillCalcHead(),
+// via window.VCLCALC.openFeeData) instead of from the foot of the page.
 function calcInfoPanelsHtml() {
   return `
     ${(typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) ? `
     <div class="panel" style="margin-bottom:18px;">
       <button class="btn ghost" id="vclcalc-toggleChangelog" style="padding-left:0;">📋 View change history (${IMPRINT.length} entries)</button>
       <div id="vclcalc-changelogPanel" style="display:none; margin-top:14px;"></div>
-    </div>
-    ` : ''}
-    ${(typeof HA_WEBSITES !== 'undefined' && HA_WEBSITES.length > 0) ? `
-    <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vclcalc-openFeeData" style="padding-left:0;">🔗 Fee data by country &mdash; amounts, sources and check dates</button>
     </div>
     ` : ''}
   `;
@@ -812,22 +827,6 @@ function wireCalcInfoPanels() {
         panel.style.display = '';
         changelogBtn.textContent = `📋 Hide change history`;
       }
-    });
-  }
-  const feeDataBtn = document.getElementById('vclcalc-openFeeData');
-  if (feeDataBtn) {
-    feeDataBtn.addEventListener('click', () => {
-      appState.feeDataCc = appState.selectedCountries[0] || 'IT';
-      // Non-euro countries always open in their own currency -- the same reset
-      // the country chips do. Without it a country left in EUR earlier came
-      // back in EUR on the next visit.
-      appState.feeDataCur = 'local';
-      // The link sits in all four steps, so remember where the reader came
-      // from; "Back to the calculator" returns there instead of to step 0.
-      if (typeof appState.step === 'number') appState.feeDataReturnStep = appState.step;
-      appState.step = 'feedata';
-      render();
-      if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
     });
   }
 }
@@ -858,11 +857,11 @@ function renderStepCountries() {
         `).join('')}
       </div>
     </div>
-    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <span class="hint" style="margin:0;">${n} countr${n===1?'y':'ies'} selected</span>
       <button class="btn primary" id="vclcalc-toStep2" ${n===0?'disabled':''}>Continue</button>
     </div>
+    ${calcInfoPanelsHtml()}
   `;
 
   document.getElementById('vclcalc-countrySearch').addEventListener('input', (e) => {
@@ -927,11 +926,11 @@ function renderStepCountryDetails() {
       </div>
       <div id="vclcalc-countryDetailList"></div>
     </div>
-    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back1">← Back</button>
       <button class="btn primary" id="vclcalc-toStep3">Continue</button>
     </div>
+    ${calcInfoPanelsHtml()}
   `;
 
   const list = document.getElementById('vclcalc-countryDetailList');
@@ -1045,11 +1044,11 @@ function renderStepVariations() {
       <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per type below — countries without that distinction automatically use their standard fee.</p>
       <div id="vclcalc-specialBlocks"></div>
     </div>
-    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back2">← Back</button>
       <button class="btn primary" id="vclcalc-toResult" ${totalVariationCount()===0?'disabled':''}>Calculate fees</button>
     </div>
+    ${calcInfoPanelsHtml()}
   `;
 
   const counters = document.getElementById('vclcalc-typeCounters');
@@ -1834,14 +1833,14 @@ function renderStepResult() {
       </button>
     </div>
 
-    ${calcInfoPanelsHtml()}
-
     ${anyNoData ? `<div class="note-box">One or more countries did not return a fee for the selected combination. Please double-check the role/variation selection for the affected country.</div>` : ''}
 
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back3">← Edit selection</button>
       <button class="btn primary" id="vclcalc-restart">New calculation</button>
     </div>
+
+    ${calcInfoPanelsHtml()}
   `;
 
   document.getElementById('vclcalc-back3').addEventListener('click', () => setStep(2));
