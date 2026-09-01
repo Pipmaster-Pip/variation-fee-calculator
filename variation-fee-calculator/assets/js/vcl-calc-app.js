@@ -2166,13 +2166,23 @@ function renderStepFeeData() {
   // its own currency whatever the (Task 6) switch is set to.
   const local = !!meta.currency && (appState.feeDataCur === 'local' || !rate);
 
+  // One formatter for every amount on this page -- the tables, the "in plain
+  // words" ranges and the quick calculation's total alike. The page exists to
+  // show the amounts that are actually in force, so a value that carries cents
+  // (BE 1552.19 EUR, CZ 6567.50 CZK) is printed with them and a whole amount is
+  // printed without. Formatting the table differently from the quick calculation
+  // is what made the same Belgian fee read "1.552" above and "1.552,19" two
+  // centimetres below. Display only -- the engine's arithmetic is untouched.
+  const fmtAmount = (v) => {
+    const r = Math.round(v * 100) / 100;
+    const dec = Number.isInteger(r) ? 0 : 2;
+    return r.toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  };
   const fmt = (v) => {
     if (v === null || v === undefined) return '&ndash;';
     if (v === 0) return '0';
-    if (!meta.currency) return v.toLocaleString('de-DE', { maximumFractionDigits: 0 });
-    return local
-      ? v.toLocaleString('de-DE', { maximumFractionDigits: 0 })
-      : (v / rate).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!meta.currency) return fmtAmount(v);
+    return fmtAmount(local ? v : v / rate);
   };
   const cell = (row, key) => {
     const raw = meta.currency ? row[key + '_lc'] : row[key];
@@ -2459,9 +2469,7 @@ function renderStepFeeData() {
       </div>
       <div class="fd-total">
         <span class="fd-total-l">Total fee</span>
-        <span class="fd-total-r">${amount.toLocaleString('de-DE', {
-          maximumFractionDigits: showLocal ? 0 : 2
-        })} ${escapeHtml(unit)}</span>
+        <span class="fd-total-r">${fmtAmount(amount)} ${escapeHtml(unit)}</span>
       </div>
       ${capFired ? '<p class="fd-hint">A fee cap applies to this combination.</p>' : ''}
       ${groupingFired ? '<p class="fd-hint">A grouping fee applies to this combination.</p>' : ''}`;
