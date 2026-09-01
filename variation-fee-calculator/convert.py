@@ -46,6 +46,13 @@ What this script does:
        window.VFC_DATA in vfc-data.js.
 
 Important if the table structure changes in a future Excel version (new
+WARNING -- this script no longer reproduces the shipped assets/js/vcl-calc-data.js.
+Since 856712f that file has been maintained by hand as well: it carries POINT_VALUES
+(Slovenia's point value), the F_pt..V_pt point columns and the T/U/V cap/surcharge
+columns, none of which this script emits. Running it and overwriting the shipped file
+silently deletes all three and breaks Slovenia. Regenerate only into a scratch file and
+merge the parts you actually want.
+
 columns, shifted rows, new cross-sheet references): this script assumes
 the current column order and row layout (header rows 1-3, data from row 4,
 sheet name "Variation fee calculator"). If the structure has changed
