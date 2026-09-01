@@ -16,29 +16,6 @@ const ROWS_BY_ROW = {};
 FEE_ROWS.forEach(r => { ROWS_BY_ROW[r.row] = r; });
 
 // ============================================================================
-// Point-based fee schedules
-// Some authorities publish their fees as point counts multiplied by a point
-// value that is revised on its own schedule (Slovenia: Article 18). Those rows
-// carry F_pt..V_pt; the euro amounts are derived here so that maintaining the
-// points and the point value is enough. Runs before anything reads a row.
-// ============================================================================
-const POINT_COLUMNS = ['F','G','H','I','J','K','T','U','V'];
-
-function applyPointValues() {
-  if (!POINT_VALUES) return;
-  FEE_ROWS.forEach(r => {
-    const pv = POINT_VALUES[r.cc];
-    if (!pv) return;
-    POINT_COLUMNS.forEach(c => {
-      const pts = r[c + '_pt'];
-      if (pts === undefined || pts === null) return;
-      r[c] = Math.round(pts * pv * 100) / 100;
-    });
-  });
-}
-applyPointValues();
-
-// ============================================================================
 // Live exchange-rate support
 // Currencies available from Frankfurter (ECB data): CZK, DKK, HUF, ISK,
 // NOK, PLN, SEK, GBP, CHF.
@@ -133,6 +110,103 @@ function updateFxStatus(source, date) {
     fxStatusEl.style.color = 'var(--amber)';
   }
 }
+
+// ============================================================================
+// Editable fee data
+// Two layers sit between the shipped fee table and the numbers the engine
+// reads, both applied once here -- before anything resolves a cell.
+//
+//  1. Admin overrides. Whatever was typed into the fee editor (wp-admin ->
+//     Variation Toolbox -> Gebühren) arrives as window.VCLCALC_OVERRIDES and
+//     wins over the value in this plugin's data file. Sparse: only edited
+//     cells appear, so an untouched install behaves exactly as before.
+//  2. Point-based schedules. Some authorities publish their fees as a point
+//     count times a point value that is revised on its own schedule (Slovenia,
+//     Article 18). Those rows carry F_pt..V_pt; the euro amounts are derived
+//     from them, so points and point value are the only things to maintain.
+//
+// Countries billing in their own currency keep F_lc..V_lc as the authoritative
+// amount -- the euro columns are FX snapshots. Editing a local amount therefore
+// has to re-run the conversion, which is why applyLiveRatesToRows() is called
+// again below whenever an override actually landed.
+// ============================================================================
+const AMOUNT_COLUMNS = ['F','G','H','I','J','K','T','U','V'];
+const OVERRIDABLE = new Set(
+  AMOUNT_COLUMNS.flatMap(c => [c, c + '_lc', c + '_pt'])
+);
+
+// The shipped values, kept aside before anything is overridden. Without them
+// applyOverrides() could only ever add edits, never take one back -- which the
+// fee editor needs, since it re-applies the whole (shrinking or growing) edit
+// set on every keystroke to keep its live example honest.
+const SHIPPED_AMOUNTS = FEE_ROWS.map(r => {
+  const snap = {};
+  OVERRIDABLE.forEach(f => { if (f in r) snap[f] = r[f]; });
+  return snap;
+});
+const SHIPPED_POINT_VALUES = Object.assign({}, POINT_VALUES);
+
+function applyOverrides() {
+  const ov = window.VCLCALC_OVERRIDES;
+  let touched = false;
+
+  // Start from the shipped state every time, so this is idempotent.
+  FEE_ROWS.forEach((r, i) => {
+    const snap = SHIPPED_AMOUNTS[i];
+    Object.keys(snap).forEach(f => { r[f] = snap[f]; });
+  });
+  if (POINT_VALUES) {
+    Object.keys(POINT_VALUES).forEach(cc => { delete POINT_VALUES[cc]; });
+    Object.assign(POINT_VALUES, SHIPPED_POINT_VALUES);
+  }
+
+  if (ov && typeof ov === 'object') {
+    if (ov.points && POINT_VALUES) {
+      Object.keys(ov.points).forEach(cc => {
+        const v = Number(ov.points[cc]);
+        if (Number.isFinite(v) && v > 0) { POINT_VALUES[cc] = v; touched = true; }
+      });
+    }
+    if (ov.rows) {
+      Object.keys(ov.rows).forEach(key => {
+        const r = ROWS_BY_ROW[key];
+        if (!r) return;
+        const fields = ov.rows[key];
+        if (!fields || typeof fields !== 'object') return;
+        Object.keys(fields).forEach(f => {
+          if (!OVERRIDABLE.has(f)) return;
+          const raw = fields[f];
+          if (raw === null || raw === '') { r[f] = null; touched = true; return; }
+          const v = Number(raw);
+          if (Number.isFinite(v)) { r[f] = v; touched = true; }
+        });
+      });
+    }
+  }
+
+  applyPointValues();
+  // Re-derive the euro columns from the local ones, but only when something was
+  // actually overridden: doing it on an untouched install would replace the
+  // workbook's own snapshots with values recomputed from the static rates --
+  // the same numbers, but needless float drift.
+  if (touched) applyLiveRatesToRows();
+  return touched;
+}
+
+function applyPointValues() {
+  if (!POINT_VALUES) return;
+  FEE_ROWS.forEach(r => {
+    const pv = POINT_VALUES[r.cc];
+    if (!pv) return;
+    AMOUNT_COLUMNS.forEach(c => {
+      const pts = r[c + '_pt'];
+      if (pts === undefined || pts === null) return;
+      r[c] = Math.round(pts * pv * 100) / 100;
+    });
+  });
+}
+
+applyOverrides();
 
 function cellRef(letter, row, state) {
   if (row === 2) return state.global[letter];
@@ -511,6 +585,19 @@ window.VCLCALC = {
   // Returns { countries: [countryResult...], grandTotal } in EUR (each countryResult also
   // carries currency/fxRate/totalLocal). Goes through computeCountryResult -- the same code the
   // calculator uses -- so results match the standalone tool exactly.
+  // Re-applies window.VCLCALC_OVERRIDES on top of the shipped fee table. The fee
+  // editor calls this after every change so its live example is priced by the
+  // same engine the site uses, with the amounts currently in the form.
+  applyOverrides() { return applyOverrides(); },
+  // The fee table as this plugin build ships it, before any override. The editor
+  // needs it to tell an edit from an untouched value -- it cannot read that off
+  // the rows themselves, since applyOverrides() has already rewritten those.
+  // Shape: { rows: { '<rowNo>': { F: 1234, F_lc: null, ... } }, points: { cc: v } }.
+  shippedFees() {
+    const rows = {};
+    FEE_ROWS.forEach((r, i) => { rows[r.row] = Object.assign({}, SHIPPED_AMOUNTS[i]); });
+    return { rows, points: Object.assign({}, SHIPPED_POINT_VALUES) };
+  },
   computeFees(input) {
     const counts = { IA: 0, IB: 0, II: 0 };
     if (input && input.counts) ['IA', 'IB', 'II'].forEach((t) => { counts[t] = Math.max(0, parseInt(input.counts[t], 10) || 0); });

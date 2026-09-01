@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<title>Gebühren-Editor harness</title>
+<!--
+  Mirrors the markup vcl_render_fee_editor() prints in wp-admin, so the editor
+  can be driven without a WordPress install. Everything below the <form> is a
+  copy of that function's output; the two scripts and the stylesheet are the
+  real ones from the plugin.
+-->
+<style>
+  body{margin:0;padding:20px;background:#f0f0f1;font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#3c434a}
+  .wrap{max-width:1240px}
+  h1{font-size:23px;font-weight:400;margin:0 0 16px}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script>
+  // Cache-busted like the other harnesses: a stale script has silently
+  // invalidated more than one check here before.
+  var VCLFE_BUST = Date.now();
+  document.write('<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-fee-editor.css?v=' + VCLFE_BUST + '">');
+  // Stands in for wp_localize_script(). Set overrides here to test the
+  // "already saved" state.
+  window.VCLFE_CONFIG = { overrides: { rows: {}, points: {} }, startCountry: 'IT' };
+</script>
+</head><body>
+
+<div class="wrap">
+  <h1>Variation Toolbox — Gebühren bearbeiten <em style="font-size:13px;color:#8f6e2e">(Harness, kein WordPress)</em></h1>
+
+  <div id="vclfe-root">
+
+    <div class="vclfe-note">
+      <span class="vclfe-note__tag">Hinweis</span>
+      <div>
+        <b>Hier werden Beträge gepflegt, keine Rechenwege.</b>
+        Wie die Sätze einer Zeile zusammengerechnet werden (Staffelung, Gruppenpauschale,
+        Deckel), steht weiterhin in der Formel dieser Zeile.
+      </div>
+    </div>
+
+    <form onsubmit="event.preventDefault(); console.log('payload', document.getElementById('vclfe-payload').value);">
+      <input type="hidden" name="vclfe_payload" id="vclfe-payload" value="">
+
+      <header class="vclfe-masthead">
+        <div>
+          <h2 id="vclfe-title">—</h2>
+          <p class="vclfe-meta" id="vclfe-meta"></p>
+        </div>
+        <div class="vclfe-actions">
+          <span class="vclfe-dirty" id="vclfe-editcount"></span>
+          <button type="button" class="vclfe-btn" id="vclfe-reset">Verwerfen</button>
+          <button type="submit" class="vclfe-btn vclfe-btn--primary">Speichern</button>
+        </div>
+      </header>
+
+      <div class="vclfe-layout">
+        <nav class="vclfe-rail" aria-label="Länder">
+          <h3>Länder</h3>
+          <ul id="vclfe-rail-list"></ul>
+        </nav>
+        <main id="vclfe-main"></main>
+      </div>
+    </form>
+  </div>
+
+  <!-- vcl-calc-app.js binds these on load -->
+  <div hidden aria-hidden="true">
+    <div id="vclcalc-app"></div><div id="vclcalc-rail"></div><div id="vclcalc-stepContent"></div>
+    <div id="vclcalc-fxStatus"></div><div id="vclcalc-headerTag"></div><div id="vclcalc-typeCounters"></div>
+    <div id="vclcalc-countryDetailList"></div><div id="vclcalc-specialPanel"></div>
+    <div id="vclcalc-specialBlocks"></div><div id="vclcalc-changelogPanel"></div>
+    <div id="vclcalc-haWebsitesPanel"></div><div id="vclcalc-strengthsNote"></div>
+    <input id="vclcalc-countrySearch">
+    <button id="vclcalc-selectAll"></button><button id="vclcalc-resetSelection"></button>
+    <button id="vclcalc-restart"></button><button id="vclcalc-strengthsReset"></button>
+    <button id="vclcalc-toStep2"></button><button id="vclcalc-toStep3"></button>
+    <button id="vclcalc-toResult"></button><button id="vclcalc-back1"></button>
+    <button id="vclcalc-back2"></button><button id="vclcalc-back3"></button>
+    <button id="vclcalc-toggleChangelog"></button><button id="vclcalc-toggleHaWebsites"></button>
+  </div>
+</div>
+
+<script>
+  ['vcl-calc-data.js', 'vcl-calc-app.js', 'vcl-fee-editor.js'].forEach(function (f) {
+    document.write('<script src="../../variation-fee-calculator/assets/js/' + f + '?v=' + VCLFE_BUST + '"><\/script>');
+  });
+</script>
+
+</body></html>

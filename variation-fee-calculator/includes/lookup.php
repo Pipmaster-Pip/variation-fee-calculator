@@ -312,6 +312,22 @@ function vcl_register_assets() {
 		true
 	);
 
+	// Amounts typed into the fee editor (wp-admin -> Variation Toolbox -> Gebühren)
+	// ride along with the fee data as a sparse overlay; vcl-calc-app.js lays them
+	// over the shipped table before it resolves a single cell. Nothing is printed
+	// while nobody has edited anything.
+	$vcl_fee_overrides = vcl_get_fee_overrides();
+	if ( $vcl_fee_overrides['rows'] || $vcl_fee_overrides['points'] ) {
+		wp_add_inline_script(
+			'vcl-calc-data',
+			'window.VCLCALC_OVERRIDES = ' . wp_json_encode( array(
+				'rows'   => (object) $vcl_fee_overrides['rows'],
+				'points' => (object) $vcl_fee_overrides['points'],
+			) ) . ';',
+			'after'
+		);
+	}
+
 	$calc_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-calc-app.js';
 	$calc_app_ver  = file_exists( $calc_app_file ) ? filemtime( $calc_app_file ) : VFC_VERSION;
 

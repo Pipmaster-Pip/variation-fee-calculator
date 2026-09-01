@@ -1,0 +1,236 @@
+/* ==========================================================================
+   Fee editor (wp-admin)
+   Design follows the approved mockup: cool paper, Source Serif headings,
+   monospaced amounts, one card per procedure role. Scoped under
+   #vclfe-root so nothing here can leak into the rest of wp-admin.
+   ========================================================================== */
+
+#vclfe-root{
+  --ink:#1b212c; --ink-soft:#4d5566; --ink-faint:#838da0;
+  --paper:#f3f5f8; --panel:#ffffff; --sunk:#eef1f6;
+  --line:#dde2e9; --line-strong:#c3cbd6;
+  --accent:#8f6e2e; --accent-soft:#f5eedd; --accent-deep:#5f4a1e;
+  --amber:#a8651a; --amber-soft:#fbf0e2;
+  --ok:#2f6b4f; --ok-soft:#e6f0ea;
+  --sans:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
+  --serif:"Source Serif 4",Georgia,serif;
+  --mono:"IBM Plex Mono","SF Mono",Consolas,monospace;
+  --radius:3px;
+  --shadow:0 1px 2px rgba(20,30,48,.05), 0 6px 20px rgba(20,30,48,.06);
+
+  font-family:var(--sans);
+  color:var(--ink);
+  line-height:1.5;
+  max-width:1180px;
+  margin-right:20px;
+}
+#vclfe-root *{box-sizing:border-box}
+
+/* ---- header ------------------------------------------------------------ */
+.vclfe-masthead{
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:20px; flex-wrap:wrap;
+  padding-bottom:14px; border-bottom:1px solid var(--line-strong);
+}
+.vclfe-masthead h2{
+  font-family:var(--serif); font-weight:600; font-size:26px;
+  margin:0; padding:0; letter-spacing:-.01em;
+}
+.vclfe-meta{
+  margin:5px 0 0; font-size:13px; color:var(--ink-soft);
+  display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+}
+.vclfe-dot{color:var(--line-strong)}
+.vclfe-code{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
+.vclfe-actions{display:flex; gap:8px; align-items:center}
+
+.vclfe-btn{
+  font:inherit; font-family:var(--sans); font-size:13px; font-weight:600;
+  padding:8px 15px; border:1px solid var(--line-strong);
+  background:var(--panel); color:var(--ink);
+  border-radius:var(--radius); cursor:pointer;
+}
+.vclfe-btn:hover{border-color:var(--accent)}
+.vclfe-btn[disabled]{opacity:.45; cursor:default}
+.vclfe-btn[disabled]:hover{border-color:var(--line-strong)}
+.vclfe-btn--primary{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep)}
+.vclfe-btn:focus-visible,
+.vclfe-toggle:focus-visible,
+#vclfe-root input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+.vclfe-dirty{
+  font-size:12.5px; color:var(--amber); font-weight:600; display:none;
+}
+#vclfe-root.is-dirty .vclfe-dirty{display:inline}
+
+/* ---- layout ------------------------------------------------------------ */
+.vclfe-layout{display:grid; grid-template-columns:230px 1fr; gap:26px; margin-top:22px; align-items:start}
+/* Without this a grid item's automatic minimum size is its content's, so a
+   country with ten fee columns would widen the whole page instead of scrolling
+   inside its own card. */
+.vclfe-layout > *{min-width:0}
+.vclfe-card{min-width:0}
+@media (max-width:1000px){ .vclfe-layout{grid-template-columns:1fr} }
+
+.vclfe-rail{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:8px; box-shadow:var(--shadow); position:sticky; top:46px;
+}
+.vclfe-rail h3{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; font-weight:600;
+  color:var(--ink-faint); margin:0; padding:8px 10px 10px;
+}
+.vclfe-rail ul{list-style:none; margin:0; padding:0; max-height:560px; overflow-y:auto}
+.vclfe-rail button{
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  width:100%; text-align:left; border:0; background:none; cursor:pointer;
+  padding:6px 10px; border-radius:2px; color:var(--ink-soft);
+  font:inherit; font-family:var(--sans); font-size:13px;
+}
+.vclfe-rail button:hover{background:var(--sunk); color:var(--ink)}
+.vclfe-rail button.is-active{background:var(--accent-soft); color:var(--accent-deep); font-weight:600}
+.vclfe-rail .n{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.vclfe-rail button.is-active .n{color:var(--accent-deep)}
+.vclfe-rail button.is-edited::after{
+  content:"●"; color:var(--amber); font-size:9px; line-height:1;
+}
+
+/* ---- role groups ------------------------------------------------------- */
+.vclfe-group{margin-bottom:26px}
+.vclfe-group__head{
+  display:flex; align-items:baseline; gap:10px; margin:0 0 10px;
+  padding-bottom:7px; border-bottom:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));
+}
+.vclfe-group__head h3{font-family:var(--serif); font-size:17px; font-weight:600; margin:0; padding:0}
+.vclfe-group__head p{margin:0; font-size:12.5px; color:var(--ink-soft)}
+
+.vclfe-card{
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;
+}
+.vclfe-scroll{overflow-x:auto}
+.vclfe-card:has(+ .vclfe-panel){border-bottom-left-radius:0; border-bottom-right-radius:0}
+#vclfe-root table{border-collapse:collapse; width:100%; min-width:680px; font-size:13.5px}
+#vclfe-root th{
+  text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  font-weight:600; color:var(--ink-faint); padding:10px 12px;
+  border-bottom:1px solid var(--line); white-space:nowrap; background:var(--sunk);
+}
+#vclfe-root th.num, #vclfe-root td.num{text-align:right}
+#vclfe-root td{padding:0 12px; border-bottom:1px solid var(--line); vertical-align:middle; height:46px}
+#vclfe-root tbody tr:last-child td{border-bottom:none}
+#vclfe-root tbody tr:hover td{background:var(--sunk)}
+#vclfe-root tr.is-open td{background:var(--accent-soft)}
+#vclfe-root tr.is-open:hover td{background:var(--accent-soft)}
+
+.vclfe-type{font-weight:600; white-space:nowrap}
+.vclfe-special{
+  font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--ink-soft); border:1px solid var(--line-strong); border-radius:2px;
+  padding:2px 5px; margin-left:7px; vertical-align:1px; white-space:nowrap;
+}
+
+#vclfe-root input.vclfe-amount{
+  font-family:var(--mono); font-size:12.5px; font-variant-numeric:tabular-nums;
+  width:96px; min-height:0; text-align:right; padding:5px 8px;
+  border:1px solid var(--line-strong); border-radius:2px;
+  background:var(--paper); color:var(--ink); box-shadow:none;
+}
+#vclfe-root input.vclfe-amount:hover{border-color:var(--accent)}
+#vclfe-root input.vclfe-amount.is-zero{color:var(--ink-faint)}
+#vclfe-root input.vclfe-amount.is-edited{
+  border-color:var(--amber); background:var(--amber-soft); color:var(--ink);
+}
+#vclfe-root input.vclfe-amount.is-bad{border-color:#b32d2e; background:#fbeaea}
+.vclfe-empty{color:var(--ink-faint)}
+
+.vclfe-toggle{
+  font:inherit; font-family:var(--sans); font-size:12px; font-weight:600; cursor:pointer;
+  border:1px solid var(--line-strong); background:var(--panel); color:var(--ink-soft);
+  border-radius:2px; padding:4px 9px; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.vclfe-toggle:hover{border-color:var(--accent); color:var(--accent-deep)}
+tr.is-open .vclfe-toggle{background:var(--accent); border-color:var(--accent); color:#fff}
+.vclfe-chev{transition:transform .15s ease}
+tr.is-open .vclfe-chev{transform:rotate(90deg)}
+
+/* ---- row panel --------------------------------------------------------- */
+.vclfe-panel{
+  display:grid; grid-template-columns:1fr 320px; gap:24px;
+  padding:20px 22px 22px;
+  background:var(--sunk); border:1px solid var(--line); border-top:0;
+  border-radius:0 0 var(--radius) var(--radius);
+}
+@media (max-width:900px){ .vclfe-panel{grid-template-columns:1fr} }
+.vclfe-panel h4{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--ink-faint); font-weight:600; margin:0 0 10px;
+}
+.vclfe-sentence{
+  margin:0; padding:13px 15px;
+  background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+  border-radius:2px; font-size:13.5px; line-height:1.65;
+}
+.vclfe-sentence b{font-family:var(--mono); font-weight:600; font-size:12.5px; color:var(--accent-deep)}
+.vclfe-formula{
+  margin:12px 0 0; font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+  line-height:1.6; word-break:break-all;
+}
+
+.vclfe-example{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:15px 16px; align-self:start;
+}
+.vclfe-ex__ctx{margin:-4px 0 12px; font-size:11.5px; color:var(--ink-faint); font-family:var(--mono)}
+.vclfe-ex__grid{display:grid; grid-template-columns:1fr auto; gap:8px 10px; align-items:center; font-size:13px}
+#vclfe-root .vclfe-ex__grid input{
+  width:62px; text-align:right; padding:4px 7px; min-height:0;
+  font-family:var(--mono); font-size:12.5px;
+  border:1px solid var(--line-strong); border-radius:2px; background:var(--paper); color:var(--ink);
+}
+.vclfe-ex__out{margin-top:14px; padding-top:12px; border-top:1px solid var(--line)}
+.vclfe-ex__line{
+  display:flex; justify-content:space-between; gap:10px; font-size:12.5px;
+  color:var(--ink-soft); padding:3px 0; font-variant-numeric:tabular-nums;
+}
+.vclfe-ex__line span:last-child{font-family:var(--mono)}
+.vclfe-ex__total{
+  display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+  margin-top:9px; padding-top:9px; border-top:1px solid var(--line-strong);
+}
+.vclfe-ex__total .lbl{font-size:12.5px; font-weight:600}
+.vclfe-ex__total .val{
+  font-family:var(--serif); font-size:23px; font-weight:600; color:var(--accent-deep);
+  font-variant-numeric:tabular-nums;
+}
+.vclfe-ex__hint{margin:10px 0 0; font-size:11.5px; color:var(--ink-faint); line-height:1.5}
+
+/* ---- point value ------------------------------------------------------- */
+.vclfe-points{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  margin:0 0 22px; padding:14px 16px;
+  background:var(--accent-soft); border:1px solid var(--accent);
+  border-radius:var(--radius);
+}
+.vclfe-points label{font-size:13.5px; font-weight:600}
+#vclfe-root .vclfe-points input{
+  width:110px; text-align:right; padding:5px 8px; min-height:0;
+  font-family:var(--mono); font-size:12.5px;
+  border:1px solid var(--accent); border-radius:2px; background:var(--panel); color:var(--ink);
+}
+.vclfe-points p{margin:0; font-size:12.5px; color:var(--ink-soft); flex:1 1 320px}
+
+/* ---- notices ----------------------------------------------------------- */
+.vclfe-note{
+  display:flex; gap:12px; align-items:flex-start;
+  margin:16px 0 0; padding:12px 16px;
+  background:var(--amber-soft); border:1px solid color-mix(in srgb,var(--amber) 35%,var(--line));
+  border-radius:var(--radius); font-size:13.5px;
+}
+.vclfe-note__tag{
+  flex:none; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--amber); border:1px solid currentColor;
+  border-radius:2px; padding:2px 6px; margin-top:1px;
+}
+.vclfe-note b{font-weight:600}
