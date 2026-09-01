@@ -139,6 +139,10 @@ function vcl_sanitize_fee_overrides( $payload ) {
 				if ( empty( $fields[ $key ] ) ) {
 					continue;
 				}
+				if ( ! is_scalar( $fields[ $key ] ) ) {
+					$dropped++;
+					continue;
+				}
 				$date = sanitize_text_field( (string) $fields[ $key ] );
 				if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
 					$entry[ $key ] = $date;
@@ -147,7 +151,11 @@ function vcl_sanitize_fee_overrides( $payload ) {
 				}
 			}
 			if ( ! empty( $fields['source'] ) ) {
-				$entry['source'] = sanitize_text_field( (string) $fields['source'] );
+				if ( is_scalar( $fields['source'] ) ) {
+					$entry['source'] = sanitize_text_field( (string) $fields['source'] );
+				} else {
+					$dropped++;
+				}
 			}
 			if ( $entry ) {
 				$clean['countries'][ $code ] = $entry;

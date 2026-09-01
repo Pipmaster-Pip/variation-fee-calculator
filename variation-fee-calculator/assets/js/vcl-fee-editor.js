@@ -253,7 +253,7 @@
   // The example is priced by the real calculator, so the edits have to reach
   // the row objects it reads. Same shape the front end receives from PHP.
   function applyToEngine() {
-    window.VCLCALC_OVERRIDES = { rows: edits, points: pointEdits };
+    window.VCLCALC_OVERRIDES = { rows: edits, points: pointEdits, countries: countryOverrides };
     if (window.VCLCALC && typeof window.VCLCALC.applyOverrides === 'function') {
       window.VCLCALC.applyOverrides();
     }
