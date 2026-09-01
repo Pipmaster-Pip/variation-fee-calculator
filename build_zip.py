@@ -69,8 +69,13 @@ def main():
         raise SystemExit("ERROR missing files: " + ", ".join(missing))
 
     on_disk = set()
-    for root, _dirs, names in os.walk(SRC):
+    for root, dirs, names in os.walk(SRC):
+        # Byte-code caches are never shipped and are created by anyone who imports
+        # convert.py (the test suite does). Pruning them keeps "test, then build" working.
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
         for n in names:
+            if n.endswith((".pyc", ".pyo")):
+                continue
             rel = os.path.relpath(os.path.join(root, n), SRC).replace(os.sep, "/")
             on_disk.add(rel)
     extra = sorted(on_disk - set(FILES))

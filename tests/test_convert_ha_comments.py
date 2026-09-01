@@ -2,7 +2,12 @@
 (e.g. Italy: 'Elenco Tariffe aggiornato ad Luglio 2025'). It used to be
 dropped on purpose; the public fee page needs it."""
 import importlib.util
+import sys
 from pathlib import Path
+
+# Importing convert.py must not drop a __pycache__ into the plugin folder: build_zip.py
+# refuses to package a folder that holds anything outside its FILES list.
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]
 XLSX = ROOT / "Variation-Fee-Calculator-EU.xlsx"
