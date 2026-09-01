@@ -515,7 +515,10 @@
 
 /* The calculator view heading reuses .classification-head; recolour its divider
    line to the calculator's gold identity (Classification keeps its blue line). */
-.vcl-app #vcl-calcHead { border-bottom-color: #C7A653; }
+/* Equal air on both sides of that line: .classification-head pairs a 16px padding above
+   with a 20px margin below, which reads lopsided once a button sits directly over the rule.
+   Only the calculator heading is corrected -- Classification keeps its own rhythm. */
+.vcl-app #vcl-calcHead { border-bottom-color: #C7A653; padding-bottom: 20px; }
 .vcl-app #vcl-calcHead .ref-line span { color: #8F6E2E; }
 
 /* Calculator column: occupies the same grid cell as the other views, with the
