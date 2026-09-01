@@ -504,7 +504,12 @@ const appState = {
   // those are the ones a later change of the default leaves alone. Keyed by country code.
   strengthsDefault: 1,
   strengthsManual: {},
-  results: null
+  results: null,
+  // ---- Public fee-data page (step === 'feedata') ----
+  feeDataCc: null,          // which country the public fee-data page shows
+  feeDataCur: 'local',      // 'local' or 'eur' -- only meaningful for non-euro countries
+  feeDataOpen: false,       // is the quick-calculation box unfolded
+  feeDataSearch: ''
 };
 
 // ---- Classification-exception hints ----
@@ -739,6 +744,9 @@ function setStep(n) {
 }
 
 function renderRail() {
+  // The public fee-data page is not one of the wizard's four steps, so the
+  // stepper would sit above it with nothing marked active. Leave it empty there.
+  if (typeof appState.step !== 'number') { railEl.innerHTML = ''; return; }
   railEl.innerHTML = STEPS.map((label, i) => {
     let cls = 'rail-step';
     const isDone = i < appState.step;
@@ -2136,9 +2144,161 @@ function exportExcel(res) {
   XLSX.writeFile(wb, `variation-fees-${dateStr}.xlsx`);
 }
 
+// ============================================================================
+// Public fee-data page: one country at a time, amounts and provenance open.
+// Reached from the calculator; the exact entry point is still to be decided, so
+// the page is addressed only through appState.step === 'feedata'.
+// ============================================================================
+
+// Column meanings straight from the workbook's header row: F is the first
+// variation of the first strength, G every further strength, H/I/J every
+// further variation of type IA/IB/II, and K the flat grouping fee.
+const FEE_COLS = [
+  { key: 'F', label: '1st variation' },
+  { key: 'H', label: 'Each further IA' },
+  { key: 'I', label: 'Each further IB' },
+  { key: 'J', label: 'Each further II' },
+  { key: 'G', label: 'Each further strength' },
+  { key: 'K', label: 'Grouping fee' }
+];
+const ROLE_CAPTION = {
+  RMS: 'Reference Member State',
+  CMS: 'Concerned Member State',
+  national: 'Purely national marketing authorisation'
+};
+
+function feeDataOverrides() {
+  return (typeof window !== 'undefined' && window.VCLCALC_OVERRIDES) || null;
+}
+
+function renderStepFeeData() {
+  const FD = (typeof window !== 'undefined' && window.VCL_FEEDATA) || null;
+  if (!FD) {
+    // vcl-feedata.js failed to load: say so rather than throwing inside render().
+    contentEl.innerHTML = '<div class="panel"><p class="hint">The fee data could not be loaded. Please reload the page.</p></div>';
+    return;
+  }
+
+  const cc = appState.feeDataCc || 'IT';
+  const rows = FEE_ROWS.filter(r => r.cc === cc);
+  const meta = FD.countryMeta(cc, HA_WEBSITES, CC_TO_CURRENCY, feeDataOverrides());
+  const rate = meta.currency ? FD.deriveRate(rows) : null;
+  // Without a rate there is nothing to convert to, so such a country stays on
+  // its own currency whatever the (Task 6) switch is set to.
+  const local = !!meta.currency && (appState.feeDataCur === 'local' || !rate);
+
+  const fmt = (v) => {
+    if (v === null || v === undefined) return '&ndash;';
+    if (v === 0) return '0';
+    if (!meta.currency) return v.toLocaleString('de-DE', { maximumFractionDigits: 0 });
+    return local
+      ? v.toLocaleString('de-DE', { maximumFractionDigits: 0 })
+      : (v / rate).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const cell = (row, key) => {
+    const raw = meta.currency ? row[key + '_lc'] : row[key];
+    const cls = (raw === null || raw === undefined) ? 'fd-num fd-dash'
+      : (raw === 0 ? 'fd-num fd-zero' : 'fd-num');
+    return `<td class="${cls}">${fmt(raw)}</td>`;
+  };
+
+  const chips = FD.chipList(COUNTRY_NAMES, FEE_ROWS);
+  const q = appState.feeDataSearch.trim().toLowerCase();
+  const shown = chips.filter(c => !q || c.name.toLowerCase().includes(q) || c.cc.toLowerCase().includes(q));
+
+  const anySpecial = rows.some(r => r.special && r.special !== 'standard');
+
+  const tables = FD.groupByRole(rows).map(g => `
+    <div class="fd-group">
+      <div class="fd-grouphead">
+        <h2>${g.role === 'national' ? 'National procedure' : 'As ' + escapeHtml(g.role)}</h2>
+        <p>${escapeHtml(ROLE_CAPTION[g.role] || '')}</p>
+      </div>
+      <div class="fd-card"><div class="fd-scroll">
+        <table class="fd-tbl">
+          <thead><tr>
+            <th>Procedure</th>
+            ${anySpecial ? '<th>Special case</th>' : ''}
+            <th>Fee code</th>
+            ${FEE_COLS.map(c => `<th class="fd-num">${escapeHtml(c.label)}${
+              meta.currency ? `<span class="fd-cur">${escapeHtml(local ? meta.currency : 'EUR')}</span>` : ''
+            }</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${g.rows.map(r => `
+              <tr>
+                <td><span class="fd-tname">Type ${escapeHtml(r.type)}</span></td>
+                ${anySpecial ? `<td class="fd-sc">${escapeHtml(r.special || 'standard')}</td>` : ''}
+                <td class="fd-code">${r.fee_code ? escapeHtml(String(r.fee_code)) : '&ndash;'}</td>
+                ${FEE_COLS.map(c => cell(r, c.key)).join('')}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div></div>
+    </div>`).join('');
+
+  contentEl.innerHTML = `
+    <div class="fd-picker">
+      <div class="fd-pillbar">
+        <input type="search" class="fd-search" id="vclcalc-fdSearch" placeholder="Find a country"
+               aria-label="Find a country" value="${escapeHtml(appState.feeDataSearch)}">
+        <span class="fd-pillcount">${q ? `${shown.length} of ${chips.length}` : `${chips.length} countries`}</span>
+      </div>
+      <div class="fd-pills">
+        ${shown.length ? shown.map(c => `
+          <button type="button" class="fd-pill${c.cc === cc ? ' is-active' : ''}" data-fdcc="${escapeHtml(c.cc)}">
+            ${escapeHtml(c.name)}<span class="n">${c.n}</span>
+          </button>`).join('') : '<p class="fd-pillnone">No country with that name.</p>'}
+      </div>
+    </div>
+
+    <header class="fd-masthead">
+      <div>
+        <h1>${escapeHtml(COUNTRY_NAMES[cc] || cc)}</h1>
+        <p class="fd-meta">
+          <span class="fd-code">${escapeHtml(cc)}</span><span class="fd-dot">&middot;</span>
+          <span>Currency ${escapeHtml(meta.currency || 'EUR')}</span><span class="fd-dot">&middot;</span>
+          <span>${rows.length} fee row${rows.length === 1 ? '' : 's'}</span>
+          ${meta.checked ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Checked</span> <b>${escapeHtml(formatImprintDate(meta.checked))}</b></span>` : ''}
+          ${meta.edited ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Last edited</span> <b>${escapeHtml(formatImprintDate(meta.edited))}</b></span>` : ''}
+          ${meta.linkText ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Authority</span> ${
+            meta.linkUrl
+              ? `<a href="${escapeHtml(meta.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(meta.linkText)}</a>`
+              : escapeHtml(meta.linkText)
+          }</span>` : ''}
+          ${meta.payment ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Payment</span> ${escapeHtml(meta.payment)}</span>` : ''}
+        </p>
+        ${meta.source ? `<p class="fd-src">Source: <b>${escapeHtml(meta.source)}</b></p>` : ''}
+        ${(meta.currency && rate) ? `<p class="fd-src fd-fx">Published in <b>${escapeHtml(meta.currency)}</b> by the authority &mdash; euro amounts are converted at <b>1 EUR = ${rate.toLocaleString('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 })} ${escapeHtml(meta.currency)}</b>.</p>` : ''}
+      </div>
+      <div class="fd-headright" id="vclcalc-fdHeadRight"></div>
+    </header>
+
+    <div id="vclcalc-fdBody">${tables}</div>
+  `;
+
+  contentEl.querySelectorAll('[data-fdcc]').forEach((b) => {
+    b.addEventListener('click', () => {
+      appState.feeDataCc = b.getAttribute('data-fdcc');
+      appState.feeDataCur = 'local';
+      render();
+    });
+  });
+  const searchEl = document.getElementById('vclcalc-fdSearch');
+  if (searchEl) {
+    searchEl.addEventListener('input', () => {
+      appState.feeDataSearch = searchEl.value;
+      render();
+      const again = document.getElementById('vclcalc-fdSearch');
+      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    });
+  }
+}
+
 function render() {
   renderRail();
-  if (appState.step === 0) renderStepCountries();
+  if (appState.step === 'feedata') renderStepFeeData();
+  else if (appState.step === 0) renderStepCountries();
   else if (appState.step === 1) renderStepCountryDetails();
   else if (appState.step === 2) renderStepVariations();
   else if (appState.step === 3) renderStepResult();

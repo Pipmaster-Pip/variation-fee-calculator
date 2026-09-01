@@ -329,13 +329,26 @@ function vcl_register_assets() {
 		);
 	}
 
+	// Pure helpers for the public fee-data page (no DOM, unit-tested separately).
+	// Registered before the calculator so it can be a hard dependency of it.
+	$feedata_file = VFC_PLUGIN_DIR . 'assets/js/vcl-feedata.js';
+	$feedata_ver  = file_exists( $feedata_file ) ? filemtime( $feedata_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-feedata',
+		VFC_PLUGIN_URL . 'assets/js/vcl-feedata.js',
+		array(),
+		$feedata_ver,
+		true
+	);
+
 	$calc_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-calc-app.js';
 	$calc_app_ver  = file_exists( $calc_app_file ) ? filemtime( $calc_app_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-calc-app',
 		VFC_PLUGIN_URL . 'assets/js/vcl-calc-app.js',
-		array( 'vcl-calc-data', 'vclcalc-xlsx' ),
+		array( 'vcl-calc-data', 'vclcalc-xlsx', 'vcl-feedata' ),
 		$calc_app_ver,
 		true
 	);

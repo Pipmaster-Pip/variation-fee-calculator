@@ -1237,3 +1237,86 @@
 .vclcalc-app .vres-ov tfoot, .vclcalc-app .vres-tbl tfoot{
   border:0; margin:0; padding:0; background-image:none; box-shadow:none;
 }
+
+/* ---- Public fee-data page ------------------------------------------------
+   One country at a time: chips first, then the country's provenance, then one
+   table per procedure role. Cards follow the calculator's own 12px panels. */
+.vclcalc-app .fd-picker{
+  padding:14px 15px 15px; margin-bottom:20px;
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; box-shadow:var(--shadow);
+}
+.vclcalc-app .fd-pillbar{display:flex; align-items:center; gap:12px; margin-bottom:12px}
+.vclcalc-app input.fd-search{
+  flex:0 1 240px; padding:6px 11px; font-family:var(--sans); font-size:13px;
+  border:1px solid var(--line-strong); border-radius:6px;
+  background:var(--paper); color:var(--ink);
+}
+.vclcalc-app input.fd-search:hover{border-color:var(--accent)}
+.vclcalc-app .fd-pillcount{font-size:11px; color:var(--ink-faint); font-variant-numeric:tabular-nums}
+.vclcalc-app .fd-pills{display:flex; flex-wrap:wrap; gap:6px}
+.vclcalc-app .fd-pill{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  font:inherit; font-family:var(--sans); font-size:12.5px;
+  padding:5px 10px; border-radius:999px;
+  border:1px solid var(--line); background:var(--paper); color:var(--ink-soft);
+}
+.vclcalc-app .fd-pill:hover{border-color:var(--line-strong); color:var(--ink)}
+.vclcalc-app .fd-pill:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.vclcalc-app .fd-pill .n{font-size:10.5px; color:var(--ink-faint); font-variant-numeric:tabular-nums}
+.vclcalc-app .fd-pill.is-active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+.vclcalc-app .fd-pill.is-active .n{color:rgba(255,255,255,.78)}
+.vclcalc-app .fd-pillnone{margin:2px 0; font-size:13px; color:var(--ink-faint)}
+
+.vclcalc-app .fd-masthead{
+  display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  padding-bottom:14px; border-bottom:1px solid var(--line-strong);
+}
+.vclcalc-app .fd-masthead h1{
+  font-family:var(--serif); font-weight:600; font-size:27px; margin:0; letter-spacing:-.01em;
+}
+.vclcalc-app .fd-meta{
+  margin:7px 0 0; font-size:12.5px; color:var(--ink-soft);
+  display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+}
+.vclcalc-app .fd-dot{color:var(--line-strong)}
+.vclcalc-app .fd-meta .fd-lbl{color:var(--ink-faint)}
+.vclcalc-app .fd-meta b{font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums}
+.vclcalc-app .fd-meta a{color:var(--accent-deep); text-underline-offset:2px}
+.vclcalc-app .fd-src{margin:8px 0 0; font-size:12px; color:var(--ink-faint)}
+.vclcalc-app .fd-src b{font-weight:500; color:var(--ink-soft)}
+.vclcalc-app .fd-fx b{font-variant-numeric:tabular-nums; color:var(--ink)}
+.vclcalc-app .fd-headright{display:flex; gap:8px; align-items:center}
+
+.vclcalc-app .fd-group{margin:24px 0}
+.vclcalc-app .fd-grouphead{
+  display:flex; align-items:baseline; gap:10px; margin:0 0 10px; padding-bottom:7px;
+  border-bottom:1px solid var(--accent-soft);
+}
+.vclcalc-app .fd-grouphead h2{font-family:var(--serif); font-size:18px; font-weight:600; margin:0}
+.vclcalc-app .fd-grouphead p{margin:0; font-size:12.5px; color:var(--ink-soft)}
+.vclcalc-app .fd-card{
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; box-shadow:var(--shadow); overflow:hidden;
+}
+.vclcalc-app .fd-scroll{overflow-x:auto}
+.vclcalc-app .fd-tbl{border-collapse:collapse; width:100%; min-width:700px; font-size:13.5px}
+.vclcalc-app .fd-tbl th{
+  text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  font-weight:600; color:var(--ink-faint); padding:9px; white-space:nowrap;
+  border-bottom:1px solid var(--line); background:#fbfcfd; vertical-align:bottom;
+}
+.vclcalc-app .fd-tbl th.fd-num, .vclcalc-app .fd-tbl td.fd-num{text-align:right}
+.vclcalc-app .fd-tbl td{
+  padding:0 9px; height:44px; vertical-align:middle; border-bottom:1px solid var(--line);
+}
+.vclcalc-app .fd-tbl tbody tr:last-child td{border-bottom:none}
+.vclcalc-app .fd-tbl td.fd-num{font-variant-numeric:tabular-nums; color:var(--ink)}
+.vclcalc-app .fd-tbl td.fd-zero, .vclcalc-app .fd-tbl td.fd-dash{color:var(--ink-faint)}
+.vclcalc-app .fd-tname{font-weight:600; white-space:nowrap}
+.vclcalc-app .fd-sc{font-size:12px; color:var(--ink-soft)}
+.vclcalc-app .fd-tbl td.fd-code, .vclcalc-app .fd-code{font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
+.vclcalc-app .fd-cur{
+  display:block; margin-top:2px; font-size:9.5px; letter-spacing:.06em;
+  color:var(--accent); text-transform:none;
+}
