@@ -132,10 +132,58 @@
     var v = snap ? snap[f] : row[f];
     return (v === undefined) ? null : v;
   }
+  // ---- couplings ---------------------------------------------------------
+  // Half the fee table repeats itself: "each additional variation costs the same
+  // as the first", "half of it", "three quarters". The workbook says so with a
+  // formula rather than a second typed number, and those formulas are shipped
+  // with the data (see tools/fee-migration/extract_links.py). A coupled cell
+  // therefore shows a derived amount and is not asked for again.
+  //
+  // Typing into a coupled cell breaks its coupling -- and only that cell's.
+  // Emptying it restores the coupling. There is no separate "still linked" flag
+  // to drift out of step: an override on the cell IS the broken coupling.
+  function linkFor(row, col) {
+    return (row.links && row.links[col]) || null;
+  }
+
+  function derivedValue(row, col, mode) {
+    var link = linkFor(row, col);
+    if (!link) return null;
+    var source = link.r ? (ROW_BY_NUMBER[link.r] || row) : row;
+    var base = currentValue(source, link.c, mode);
+    if (base === null || base === undefined) return null;
+    return base * (link.f === undefined ? 1 : link.f)
+                + (link.o === undefined ? 0 : link.o);
+  }
+
+  function linkExplanation(row, col, mode) {
+    var link = linkFor(row, col);
+    if (!link) return '';
+    var label = (COLUMNS.filter(function (c) { return c.key === link.c; })[0] || {}).label || link.c;
+    var where = link.r ? ' der Zeile „' + rowShortName(link.r) + '"' : '';
+    var how = '';
+    if (link.f !== undefined && link.o !== undefined) {
+      how = ' × ' + fmt(link.f) + ' + ' + fmt(link.o);
+    } else if (link.f !== undefined) {
+      how = ' × ' + fmt(link.f);
+    } else if (link.o !== undefined) {
+      how = ' + ' + fmt(link.o);
+    }
+    return 'Folgt „' + label + '"' + where + how
+      + '. Zum Entkoppeln einfach einen eigenen Betrag eintippen; '
+      + 'Feld leeren stellt die Kopplung wieder her.';
+  }
+
   function currentValue(row, col, mode) {
     var f = fieldName(col, mode);
     var e = edits[row.row];
     if (e && Object.prototype.hasOwnProperty.call(e, f)) return e[f];
+    // A coupled cell reads its amount off the row, which the engine has already
+    // resolved -- the shipped value would be stale the moment its source moves.
+    if (linkFor(row, col)) {
+      var v = row[f];
+      return (v === undefined) ? null : v;
+    }
     return baseValue(row, col, mode);
   }
   function isEdited(row, col, mode) {
@@ -154,8 +202,11 @@
 
   function setEdit(row, col, mode, value) {
     var f = fieldName(col, mode);
-    var base = baseValue(row, col, mode);
-    if (nearlyEqual(value, base)) {
+    // What "unchanged" means differs: a free cell is unchanged when it matches
+    // the shipped amount, a coupled one when it matches what its coupling gives.
+    var base = linkFor(row, col) ? derivedValue(row, col, mode)
+                                 : baseValue(row, col, mode);
+    if (value === null || nearlyEqual(value, base)) {
       if (edits[row.row]) {
         delete edits[row.row][f];
         if (!Object.keys(edits[row.row]).length) delete edits[row.row];
@@ -436,6 +487,20 @@
     scroll.appendChild(table);
     card.appendChild(scroll);
     sec.appendChild(card);
+
+    if (rows.some(function (r) { return r.links; })) {
+      var legend = document.createElement('p');
+      legend.className = 'vclfe-legend';
+      var swatch = document.createElement('span');
+      swatch.className = 'vclfe-legend__swatch';
+      legend.appendChild(swatch);
+      legend.appendChild(document.createTextNode(
+        'So gekennzeichnete Beträge folgen einem anderen Feld — meist der '
+        + 'Grundgebühr derselben Zeile — genau wie die Formeln in der '
+        + 'Arbeitsmappe. Sie ziehen automatisch nach. Tippst Du einen eigenen '
+        + 'Betrag ein, gilt der; leerst Du das Feld, folgt es wieder.'));
+      sec.appendChild(legend);
+    }
     // The panel sits BELOW the card, not inside the table: a country with caps
     // and a surcharge runs to ten columns, and a panel inside that table would
     // scroll sideways out of view together with it.
@@ -687,15 +752,37 @@
       return td;
     }
 
+    var edited = isEdited(row, col.key, mode);
+    var coupled = !!linkFor(row, col.key) && !edited;
+
     var inp = document.createElement('input');
     inp.type = 'text';
     inp.className = 'vclfe-amount'
       + (value === 0 ? ' is-zero' : '')
-      + (isEdited(row, col.key, mode) ? ' is-edited' : '');
+      + (edited ? ' is-edited' : '')
+      + (coupled ? ' is-coupled' : '');
     inp.value = fmt(value);
-    inp.setAttribute('aria-label', (TYPE_LABELS[row.type] || row.type) + ' — ' + col.label);
+    var label = (TYPE_LABELS[row.type] || row.type) + ' — ' + col.label;
+    if (coupled) {
+      var why = linkExplanation(row, col.key, mode);
+      inp.title = why;
+      label += ' (gekoppelt)';
+    } else if (linkFor(row, col.key)) {
+      inp.title = 'Eigener Betrag, Kopplung gelöst. Feld leeren stellt sie wieder her.';
+      label += ' (entkoppelt)';
+    }
+    inp.setAttribute('aria-label', label);
     inp.addEventListener('change', function () {
-      var v = parseAmount(inp.value);
+      var raw = String(inp.value).trim();
+      // Emptying a coupled cell is how the coupling is restored; emptying a free
+      // cell would just delete a fee, so that is refused.
+      if (raw === '' && linkFor(row, col.key)) {
+        setEdit(row, col.key, mode, null);
+        renderCountry();
+        renderPicker();
+        return;
+      }
+      var v = parseAmount(raw);
       if (v === undefined || v === null || v < 0) {
         inp.classList.add('is-bad');
         return;

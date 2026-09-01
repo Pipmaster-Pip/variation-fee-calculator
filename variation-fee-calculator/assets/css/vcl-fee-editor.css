@@ -343,3 +343,24 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 .vclfe-pillcount,
 .vclfe-rule__n,
 .vclfe-th__unit{font-variant-numeric:tabular-nums}
+
+/* ---- coupled amounts --------------------------------------------------- */
+/* A coupled cell is not typed, it follows another. Recessed rather than
+   disabled: it stays editable, because typing into it is how the coupling is
+   broken. */
+#vclfe-root input.vclfe-amount.is-coupled{
+  background:transparent; border-style:dashed; border-color:var(--line-strong);
+  color:var(--ink-soft);
+}
+#vclfe-root input.vclfe-amount.is-coupled:hover,
+#vclfe-root input.vclfe-amount.is-coupled:focus{
+  background:var(--paper); border-style:solid; border-color:var(--accent); color:var(--ink);
+}
+.vclfe-legend{
+  display:flex; align-items:flex-start; gap:9px;
+  margin:9px 2px 0; font-size:12.5px; color:var(--ink-soft); max-width:88ch;
+}
+.vclfe-legend__swatch{
+  flex:none; width:26px; height:17px; margin-top:1px;
+  border:1px dashed var(--line-strong); border-radius:2px; background:transparent;
+}

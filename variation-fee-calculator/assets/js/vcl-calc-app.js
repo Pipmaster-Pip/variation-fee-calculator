@@ -184,6 +184,7 @@ function applyOverrides() {
     }
   }
 
+  resolveLinks(ov);
   applyPointValues();
   // Re-derive the euro columns from the local ones, but only when something was
   // actually overridden: doing it on an untouched install would replace the
@@ -191,6 +192,53 @@ function applyOverrides() {
   // the same numbers, but needless float drift.
   if (touched) applyLiveRatesToRows();
   return touched;
+}
+
+// The notation a row is maintained in: its own currency where it has one,
+// points where the schedule is published in points, euro otherwise. A coupling
+// is on the column, so it has to be resolved in whichever of the three the row
+// actually carries.
+function notationOf(r) {
+  if (r.currency) return '_lc';
+  if (POINT_VALUES && POINT_VALUES[r.cc]) return '_pt';
+  return '';
+}
+
+// Couplings, read out of the workbook by tools/fee-migration/extract_links.py.
+// The fee schedules repeat themselves -- "each additional variation costs the
+// same as the first", "half of it", "three quarters" -- and the workbook says so
+// with a formula rather than a second typed number. Same here: a coupled cell
+// derives its amount as source * f + o and is not entered by hand.
+//
+// An override on a coupled cell breaks its coupling, and only for that cell:
+// that is what typing into it means, and deleting the override restores it. No
+// separate "is it still linked" flag exists to fall out of step with the values.
+function resolveLinks(overrides) {
+  var rowOverrides = (overrides && overrides.rows) || {};
+  // A coupling may point at a cell that is itself coupled, so repeat until
+  // nothing moves. The chains in the workbook are two links long at most; the
+  // cap only stops a cycle from spinning.
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    FEE_ROWS.forEach((r) => {
+      if (!r.links) return;
+      const suffix = notationOf(r);
+      const typed = rowOverrides[r.row] || {};
+      Object.keys(r.links).forEach((col) => {
+        const field = col + suffix;
+        if (Object.prototype.hasOwnProperty.call(typed, field)) return;
+        const link = r.links[col];
+        const source = link.r ? ROWS_BY_ROW[link.r] : r;
+        if (!source) return;
+        const base = source[link.c + suffix];
+        if (base === null || base === undefined) return;
+        const value = base * (link.f === undefined ? 1 : link.f)
+                           + (link.o === undefined ? 0 : link.o);
+        if (r[field] !== value) { r[field] = value; changed = true; }
+      });
+    });
+    if (!changed) break;
+  }
 }
 
 function applyPointValues() {
@@ -589,6 +637,18 @@ window.VCLCALC = {
   // editor calls this after every change so its live example is priced by the
   // same engine the site uses, with the amounts currently in the form.
   applyOverrides() { return applyOverrides(); },
+  // Which cells of a row are coupled to another, and how. The fee editor shows
+  // a coupled cell as derived rather than asking for the number again.
+  feeLinks() {
+    const out = {};
+    FEE_ROWS.forEach((r) => { if (r.links) out[r.row] = r.links; });
+    return out;
+  },
+  // The notation a row is maintained in ('_lc', '_pt' or '').
+  notationOf(row) {
+    const r = ROWS_BY_ROW[row];
+    return r ? notationOf(r) : '';
+  },
   // The fee table as this plugin build ships it, before any override. The editor
   // needs it to tell an edit from an untouched value -- it cannot read that off
   // the rows themselves, since applyOverrides() has already rewritten those.
