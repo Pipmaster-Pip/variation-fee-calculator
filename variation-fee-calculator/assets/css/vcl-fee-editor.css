@@ -348,13 +348,17 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 /* A coupled cell is not typed, it follows another. Recessed rather than
    disabled: it stays editable, because typing into it is how the coupling is
    broken. */
+/* Recessed ground plus a marked leading edge: enough to pick out at a glance in
+   a column of white fields, not enough to compete with the amounts themselves. */
 #vclfe-root input.vclfe-amount.is-coupled{
-  background:transparent; border-style:dashed; border-color:var(--line-strong);
+  background:var(--sunk);
+  border-color:var(--line);
+  border-left:2px solid color-mix(in srgb, var(--accent) 50%, var(--line));
   color:var(--ink-soft);
 }
 #vclfe-root input.vclfe-amount.is-coupled:hover,
 #vclfe-root input.vclfe-amount.is-coupled:focus{
-  background:var(--paper); border-style:solid; border-color:var(--accent); color:var(--ink);
+  background:var(--panel); border-color:var(--accent); color:var(--ink);
 }
 .vclfe-legend{
   display:flex; align-items:flex-start; gap:9px;
@@ -362,5 +366,19 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 }
 .vclfe-legend__swatch{
   flex:none; width:26px; height:17px; margin-top:1px;
-  border:1px dashed var(--line-strong); border-radius:2px; background:transparent;
+  border:1px solid var(--line); border-left:2px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+  border-radius:2px; background:var(--sunk);
 }
+
+/* ---- "In einfachen Worten" --------------------------------------------- */
+.vclfe-rule__plain{
+  margin:12px 0 0; padding:12px 14px;
+  background:var(--accent-soft); border-radius:2px;
+  border-left:3px solid var(--accent);
+}
+.vclfe-rule__plain h5{
+  margin:0 0 7px; font-size:10.5px; text-transform:uppercase; letter-spacing:.08em;
+  font-weight:600; color:var(--accent-deep);
+}
+.vclfe-rule__plain ul{margin:0; padding-left:17px; display:flex; flex-direction:column; gap:3px}
+.vclfe-rule__plain li{font-size:13.5px; line-height:1.5; color:var(--ink)}

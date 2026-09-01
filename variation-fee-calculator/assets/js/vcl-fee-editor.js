@@ -598,6 +598,356 @@
     return facts;
   }
 
+  // ========================================================================
+  // In einfachen Worten
+  //
+  // The transliteration above is exact but still shaped like a formula. This
+  // turns the same formula into sentences, by parsing it and walking the tree --
+  // not by recognising which "kind of rule" a row is. That distinction matters:
+  // deriving named rules from these formulas was tried in the migration study
+  // and reproduced only about 70 % of the amounts. Every sentence below is a
+  // restatement of a branch that is actually in the formula.
+  //
+  // Where a piece cannot be phrased with confidence, it falls back to the
+  // transliterated text rather than inventing a description, so the worst case
+  // is prose that reads a bit technical -- never prose that is wrong.
+  // ========================================================================
+
+  function tokenize(text) {
+    var tokens = [], i = 0;
+    while (i < text.length) {
+      var ch = text[i];
+      if (ch === ' ') { i++; continue; }
+      if (text.substr(i, 2) === '<>' || text.substr(i, 2) === '>=' || text.substr(i, 2) === '<=') {
+        tokens.push({ t: 'op', v: text.substr(i, 2) }); i += 2; continue;
+      }
+      if ('+-*/(),=<>'.indexOf(ch) > -1) { tokens.push({ t: 'op', v: ch }); i++; continue; }
+      if (ch === '"') {
+        var j = i + 1;
+        while (j < text.length && text[j] !== '"') j++;
+        tokens.push({ t: 'str', v: text.slice(i + 1, j) }); i = j + 1; continue;
+      }
+      var m = /^[0-9]+(\.[0-9]+)?/.exec(text.slice(i));
+      if (m) { tokens.push({ t: 'num', v: parseFloat(m[0]) }); i += m[0].length; continue; }
+      m = /^[A-Za-z_][A-Za-z0-9_.]*/.exec(text.slice(i));
+      if (m) {
+        var word = m[0]; i += word.length;
+        var cell = /^([A-Z]{1,2})([0-9]+)$/.exec(word);
+        if (cell) tokens.push({ t: 'cell', col: cell[1], row: parseInt(cell[2], 10) });
+        else tokens.push({ t: 'name', v: word });
+        continue;
+      }
+      return null;   // something unexpected -- give up on this formula
+    }
+    return tokens;
+  }
+
+  function parseFormula(text) {
+    var tokens = tokenize(text.replace(/^=/, ''));
+    if (!tokens) return null;
+    var pos = 0;
+
+    function peek() { return tokens[pos]; }
+    function eat(v) {
+      var tk = tokens[pos];
+      if (!tk || tk.t !== 'op' || tk.v !== v) throw new Error('erwartet ' + v);
+      pos++;
+      return tk;
+    }
+    function expr() { return comparison(); }
+    function comparison() {
+      var left = sum();
+      var tk = peek();
+      if (tk && tk.t === 'op' && ['=', '<>', '>', '<', '>=', '<='].indexOf(tk.v) > -1) {
+        pos++;
+        return { t: 'cmp', op: tk.v, l: left, r: sum() };
+      }
+      return left;
+    }
+    function sum() {
+      var node = product();
+      for (;;) {
+        var tk = peek();
+        if (tk && tk.t === 'op' && (tk.v === '+' || tk.v === '-')) {
+          pos++;
+          node = { t: 'arith', op: tk.v, l: node, r: product() };
+        } else return node;
+      }
+    }
+    function product() {
+      var node = unary();
+      for (;;) {
+        var tk = peek();
+        if (tk && tk.t === 'op' && (tk.v === '*' || tk.v === '/')) {
+          pos++;
+          node = { t: 'arith', op: tk.v, l: node, r: unary() };
+        } else return node;
+      }
+    }
+    function unary() {
+      var tk = peek();
+      if (tk && tk.t === 'op' && tk.v === '-') { pos++; return { t: 'neg', v: unary() }; }
+      return primary();
+    }
+    function primary() {
+      var tk = peek();
+      if (!tk) throw new Error('unerwartetes Ende');
+      if (tk.t === 'num') { pos++; return { t: 'num', v: tk.v }; }
+      if (tk.t === 'str') { pos++; return { t: 'str', v: tk.v }; }
+      if (tk.t === 'cell') { pos++; return { t: 'cell', col: tk.col, row: tk.row }; }
+      if (tk.t === 'name') {
+        pos++;
+        eat('(');
+        var args = [];
+        if (!(peek() && peek().t === 'op' && peek().v === ')')) {
+          args.push(expr());
+          while (peek() && peek().t === 'op' && peek().v === ',') { pos++; args.push(expr()); }
+        }
+        eat(')');
+        return { t: 'call', name: tk.v.toUpperCase(), args: args };
+      }
+      if (tk.t === 'op' && tk.v === '(') { pos++; var e = expr(); eat(')'); return e; }
+      throw new Error('unerwartetes Zeichen');
+    }
+
+    try {
+      var tree = expr();
+      return pos === tokens.length ? tree : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ---- phrases -----------------------------------------------------------
+  var COUNT_NOUN = { M: 'Typ-IA-Variation', N: 'Typ-IB-Variation', O: 'Typ-II-Variation' };
+  // Both cases, because these appear as the subject of a condition ("wenn der
+  // Deckel ...") and as the object of a result ("kostet es den Deckel").
+  var SUM_NOUN = {
+    P: ['die Typ-IA-Gebühren', 'die Typ-IA-Gebühren'],
+    Q: ['die Typ-IB-Gebühren', 'die Typ-IB-Gebühren'],
+    R: ['die Typ-II-Gebühren', 'die Typ-II-Gebühren']
+  };
+  var RATE_NOUN = {
+    F: ['die Grundgebühr', 'die Grundgebühr'],
+    G: ['der Aufschlag je Stärke', 'den Aufschlag je Stärke'],
+    H: ['der Satz für jede weitere Typ IA', 'den Satz für jede weitere Typ IA'],
+    I: ['der Satz für jede weitere Typ IB', 'den Satz für jede weitere Typ IB'],
+    J: ['der Satz für jede weitere Typ II', 'den Satz für jede weitere Typ II'],
+    K: ['die Gruppenpauschale', 'die Gruppenpauschale'],
+    T: ['der Deckel', 'den Deckel'],
+    U: ['der Deckel ab zwei Stärken', 'den Deckel ab zwei Stärken'],
+    V: ['der Zuschlag', 'den Zuschlag']
+  };
+
+  function isCell(node, cols) {
+    return node && node.t === 'cell' && cols.indexOf(node.col) > -1;
+  }
+  function isNum(node, v) {
+    return node && node.t === 'num' && node.v === v;
+  }
+
+  function money(v) { return fmt(v); }
+
+  // A value, as a noun phrase. `k` picks nominative (0) or accusative (1).
+  // Returns null when it cannot be phrased -- the caller then drops the whole
+  // explanation rather than shipping half a sentence.
+  function sayValue(node, row, k) {
+    if (!node) return null;
+    k = k || 0;
+    if (node.t === 'str' && node.v === '') return 'nichts';
+    if (node.t === 'num') return node.v === 0 ? 'nichts' : money(node.v);
+    if (node.t === 'cell') {
+      if (SUM_NOUN[node.col]) return SUM_NOUN[node.col][k];
+      if (node.col === 'S') return k ? 'die Gesamtgebühr' : 'die Gesamtgebühr';
+      if (RATE_NOUN[node.col]) {
+        return RATE_NOUN[node.col][k] + (node.row === row ? '' : ' aus „' + rowShortName(node.row) + '"');
+      }
+      if (COUNT_NOUN[node.col]) return 'die Zahl der ' + COUNT_NOUN[node.col] + 'en';
+      if (node.col === 'L') return 'die Zahl der Stärken';
+      return null;
+    }
+    if (node.t === 'arith' && node.op === '+') {
+      // P+Q+R and friends: a list of sub-totals
+      var parts = [];
+      (function collect(n) {
+        if (n.t === 'arith' && n.op === '+') { collect(n.l); collect(n.r); return; }
+        parts.push(n);
+      })(node);
+      var said = parts.map(function (p) { return sayValue(p, row, k); });
+      if (said.every(function (x) { return x; })) {
+        if (said.length === 2) return said[0] + ' und ' + said[1];
+        return said.slice(0, -1).join(', ') + ' und ' + said[said.length - 1];
+      }
+    }
+    return null;
+  }
+
+  // A condition, phrased as the subordinate clause after "Wenn".
+  function sayCondition(node, negated, row) {
+    if (!node) return null;
+
+    if (node.t === 'call' && node.name === 'ISBLANK') return null;   // plumbing
+
+    if (node.t === 'cmp') {
+      var l = node.l, r = node.r, op = node.op;
+
+      // count = 0  /  count > 1  /  count = 1. Tagged with the count they talk
+      // about and how tight they are, so "at least one" can be dropped next to
+      // "more than one" instead of being spelled out beside it.
+      if (isCell(l, ['M', 'N', 'O']) && r.t === 'num') {
+        var noun = COUNT_NOUN[l.col];
+        var key = 'count:' + l.col;
+        if (op === '=' && r.v === 0) {
+          return negated ? { t: 'mindestens eine ' + noun + ' dabei ist', key: key, rank: 1 }
+                         : { t: 'keine ' + noun + ' dabei ist', key: key, rank: 3 };
+        }
+        if (op === '>' && r.v === 1) {
+          return negated ? { t: 'höchstens eine ' + noun + ' dabei ist', key: key, rank: 2 }
+                         : { t: 'mehr als eine ' + noun + ' dabei ist', key: key, rank: 3 };
+        }
+        if (op === '=' && r.v === 1) {
+          return negated ? { t: 'nicht genau eine ' + noun + ' dabei ist', key: key, rank: 2 }
+                         : { t: 'genau eine ' + noun + ' dabei ist', key: key, rank: 3 };
+        }
+      }
+      // strengths = 1
+      if (isCell(l, ['L']) && isNum(r, 1) && op === '=') {
+        return negated ? { t: 'es mehr als eine Stärke gibt', key: 'strengths', rank: 3 }
+                       : { t: 'es nur eine Stärke gibt', key: 'strengths', rank: 3 };
+      }
+      // a sum against a cap
+      if (isCell(r, ['T', 'U']) && op === '>') {
+        var what = sayValue(l, row, 0);
+        var cap = r.col === 'T' ? 'den Deckel' : 'den Deckel ab zwei Stärken';
+        if (what) {
+          return negated ? what + ' ' + cap + ' nicht überschreiten'
+                         : what + ' über ' + cap + ' hinausgehen';
+        }
+      }
+      // (N+O)>0 style: are other types present
+      if (op === '>' && isNum(r, 0)) {
+        var cols = [];
+        (function collect(n) {
+          if (n.t === 'arith' && n.op === '+') { collect(n.l); collect(n.r); return; }
+          if (n.t === 'cell' && COUNT_NOUN[n.col]) cols.push(COUNT_NOUN[n.col]);
+        })(l);
+        if (cols.length) {
+          var list = cols.length === 1 ? cols[0]
+                   : cols.slice(0, -1).join(', ') + ' oder ' + cols[cols.length - 1];
+          return negated ? 'keine ' + list + ' dabei ist' : 'auch ' + list + 'en dabei sind';
+        }
+      }
+    }
+    return null;
+  }
+
+  // Walk the IF-tree into a list of cases, each with its conditions and result.
+  function decisionTable(node, row) {
+    var cases = [];
+    (function walk(n, conds) {
+      if (n && n.t === 'call' && n.name === 'IF' && n.args.length === 3) {
+        walk(n.args[1], conds.concat([{ node: n.args[0], neg: false }]));
+        walk(n.args[2], conds.concat([{ node: n.args[0], neg: true }]));
+        return;
+      }
+      cases.push({ conds: conds, value: n });
+    })(node, []);
+    return cases;
+  }
+
+  function eli5(row, field) {
+    var text = row[field];
+    if (!text) return null;
+    var tree = parseFormula(text);
+    if (!tree) return null;
+
+    // Every branch of the formula, phrased. One unphrasable piece and the whole
+    // explanation is dropped -- half an explanation of a fee is worse than none.
+    var cases = [];
+    var raw = decisionTable(tree, row.row);
+    for (var i = 0; i < raw.length; i++) {
+      var value = sayValue(raw[i].value, row.row, 1);
+      if (value === null) return null;
+      var clauses = [];
+      for (var j = 0; j < raw[i].conds.length; j++) {
+        var cond = raw[i].conds[j];
+        // The "this row is not part of the submission" guard is plumbing, not a
+        // fee rule, and is dropped. Anything else unphrasable aborts.
+        if (cond.node && cond.node.t === 'call' && cond.node.name === 'ISBLANK') continue;
+        var said = sayCondition(cond.node, cond.neg, row.row);
+        if (said === null) return null;
+        clauses.push(typeof said === 'string' ? { t: said, key: said, rank: 3 } : said);
+      }
+      // Two clauses about the same thing where one implies the other: keep the
+      // tighter. "At least one Type IA" next to "more than one Type IA" is not
+      // wrong, just noise.
+      var byKey = {};
+      clauses.forEach(function (c) {
+        if (!byKey[c.key] || c.rank > byKey[c.key].rank) byKey[c.key] = c;
+      });
+      var tightened = clauses.filter(function (c) { return byKey[c.key] === c; });
+      // "at least one" plus "at most one" is exactly one, and reads better so.
+      var pairs = {};
+      clauses.forEach(function (c) { (pairs[c.key] = pairs[c.key] || []).push(c); });
+      tightened = tightened.map(function (c) {
+        var group = pairs[c.key] || [];
+        if (group.length === 2 && group[0].rank === 1 && group[1].rank === 2) {
+          var noun = group[0].t.replace('mindestens eine ', '').replace(' dabei ist', '');
+          return { t: 'genau eine ' + noun + ' dabei ist', key: c.key, rank: 3 };
+        }
+        return c;
+      });
+      cases.push({ clauses: tightened.map(function (c) { return c.t; }), value: value });
+    }
+
+    // A branch with no conditions left and no fee is the unselected row again.
+    cases = cases.filter(function (c) { return c.clauses.length || c.value !== 'nichts'; });
+    if (!cases.length) return null;
+
+    // "Costs nothing" branches are the entry conditions; they read best up front.
+    var nothing = cases.filter(function (c) { return c.value === 'nichts'; });
+    var rest = cases.filter(function (c) { return c.value !== 'nichts'; });
+
+    // Some rows carry a fee of zero throughout -- a UK Type IA as a CMS, for
+    // one. Walking the reader through two branches that both end at nothing
+    // hides that behind procedure.
+    if (!rest.length) return ['Für diese Zeile fällt keine Gebühr an.'];
+
+    // A condition every remaining branch shares says nothing about the choice
+    // between them, so it is stated once instead of in each line. A pure
+    // factorisation -- the branches keep meaning exactly what they meant.
+    var shared = [];
+    if (rest.length > 1) {
+      shared = rest[0].clauses.filter(function (clause) {
+        return rest.every(function (c) { return c.clauses.indexOf(clause) > -1; });
+      });
+      rest.forEach(function (c) {
+        c.clauses = c.clauses.filter(function (x) { return shared.indexOf(x) < 0; });
+      });
+    }
+
+    var lines = [];
+    nothing.forEach(function (c) {
+      lines.push(c.clauses.length
+        ? 'Wenn ' + c.clauses.join(' und ') + ', kostet es nichts.'
+        : 'Es kostet nichts.');
+    });
+    if (shared.length) {
+      lines.push('Sonst, wenn ' + shared.join(' und ') + ':');
+    }
+    rest.forEach(function (c, i) {
+      var last = i === rest.length - 1;
+      if (c.clauses.length) {
+        lines.push('Wenn ' + c.clauses.join(' und ') + ', kostet es ' + c.value + '.');
+      } else if (last && (shared.length || nothing.length)) {
+        lines.push('Sonst kostet es ' + c.value + '.');
+      } else {
+        lines.push('Es kostet ' + c.value + '.');
+      }
+    });
+    return lines.length ? lines : null;
+  }
+
   function rulesSection(rows) {
     var sec = document.createElement('section');
     sec.className = 'vclfe-group vclfe-rules';
@@ -668,6 +1018,23 @@
         ul.appendChild(li);
       });
       card.appendChild(ul);
+    }
+
+    var plain = eli5(group.first, 'Sf');
+    if (plain) {
+      var box = document.createElement('div');
+      box.className = 'vclfe-rule__plain';
+      var h = document.createElement('h5');
+      h.textContent = 'In einfachen Worten';
+      box.appendChild(h);
+      var ul = document.createElement('ul');
+      plain.forEach(function (line) {
+        var li = document.createElement('li');
+        li.textContent = line;
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+      card.appendChild(box);
     }
 
     var list = document.createElement('dl');
