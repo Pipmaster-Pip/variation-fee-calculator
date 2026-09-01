@@ -2279,12 +2279,15 @@ function renderStepFeeData() {
       const v = meta.currency ? r.G_lc : r.G;
       return v === null || v === undefined || v === 0;
     });
+    // "Each further" rates live in columns H/I/J (IA/IB/II). Some countries
+    // (e.g. Denmark) never charge one -- those columns are null on every row --
+    // so the sentence must only appear when the table actually has a value.
+    const eachFurther = ['H', 'I', 'J'].some((key) => colRange(g.rows, key));
     return `
       <div class="fd-plain">
         <h3>In plain words</h3>
         <p class="fd-sentence">
-          The first variation of a procedure is charged the <b>1st variation</b> rate${first ? ` (${first})` : ''};
-          every further variation of the same type is charged its own &ldquo;each further&rdquo; rate.
+          The first variation of a procedure is charged the <b>1st variation</b> rate${first ? ` (${first})` : ''}${eachFurther ? ';\n          every further variation of the same type is charged its own &ldquo;each further&rdquo; rate.' : '.'}
           ${strengthFlat
             ? `The number of strengths does not change these amounts in ${escapeHtml(COUNTRY_NAMES[cc] || cc)}.`
             : `Each strength beyond the first adds ${colRange(g.rows, 'G')} to a rate.`}
