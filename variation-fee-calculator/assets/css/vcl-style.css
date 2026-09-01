@@ -1513,6 +1513,10 @@
    the tool bar (#8F6E2E) and the .vclcalc-app palette inside the panel below. */
 .vcl-app .classification-head--calc {
   border-bottom-color: color-mix(in srgb, #8F6E2E 35%, var(--border));
+  /* Symmetric divider: the shared header leaves 16px above the rule and 20px below it, which
+     read as lopsided now that a button sits directly on top of the line. Matching the 20px
+     margin-bottom gives this head the same air on both sides. */
+  padding-bottom: 20px;
 }
 .vcl-app .classification-head--calc h3 { color: #8F6E2E; }
 

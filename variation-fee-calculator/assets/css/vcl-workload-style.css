@@ -560,10 +560,28 @@
 /* Search-match count, moved to the top of the detail area. */
 .vcl-app .results-meta--detail { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; font-weight: 500; }
 
-/* Excel-download link in the calculator heading. */
-.vcl-app #vcl-calcHead .calc-excel-dl { margin: 8px 0 0; font-size: 12.5px; }
-.vcl-app #vcl-calcHead .calc-excel-dl a { color: #8f6e2e; text-decoration: none; font-weight: 500; }
-.vcl-app #vcl-calcHead .calc-excel-dl a:hover { text-decoration: underline; }
+/* Entry into the public fee-data page, in the calculator heading -- it took the place of the
+   retired Excel-download link. Tinted pill in the Fee Calculator's own gold identity, using the
+   exact same shape as the masthead's Summary pill (.app-header__summary) and the same three gold
+   values the calculator tile in the tool bar carries: #8F6E2E / #F5EEDD / #5F4A1E. No icon and no
+   arrow -- the label says where it goes. */
+.vcl-app #vcl-calcHead .calc-head-actions { margin: 14px 0 0; }
+.vcl-app #vcl-calcHead .calc-feedata-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5F4A1E;
+  background: #F5EEDD;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.vcl-app #vcl-calcHead .calc-feedata-btn:hover { border-color: #8F6E2E; }
+.vcl-app #vcl-calcHead .calc-feedata-btn:focus-visible { outline: 2px solid #8F6E2E; outline-offset: 2px; }
 
 /* Sub-lines read as normal body text, not bold: the nav card's subtitle only turns
    bold once its tab is active (.tab--active sets font-weight on the whole button),
