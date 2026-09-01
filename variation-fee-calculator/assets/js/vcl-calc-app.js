@@ -509,6 +509,11 @@ const appState = {
   feeDataCc: null,          // which country the public fee-data page shows
   feeDataCur: 'local',      // 'local' or 'eur' -- only meaningful for non-euro countries
   feeDataOpen: false,       // is the quick-calculation box unfolded
+  // Quick calculation on that page: procedure role, number of strengths, how many
+  // variations of each type, and the special-case row chosen per type. Kept in
+  // appState so a re-render (currency switch, country change) does not throw the
+  // reader's input away.
+  feeDataQuick: { role: null, strengths: 1, IA: 0, IB: 0, II: 1, special: { IA: null, IB: null, II: null } },
   feeDataSearch: ''
 };
 
@@ -2214,13 +2219,128 @@ function renderStepFeeData() {
     return `<td class="${cls}">${fmt(raw)}</td>`;
   };
 
+  // ---- Quick calculation -------------------------------------------------
+  // The box owns no fee logic of its own. It collects a role, a strength count,
+  // a variation count and a special case per type, then hands all of it to the
+  // very same engine (window.VCLCALC.computeFees) the calculator and every other
+  // tool uses -- so caps, grouping fees, subsumption and the fee editor's
+  // overrides apply here without being re-implemented.
+  const VAR_TYPES = ['IA', 'IB', 'II'];
+  const roleGroups = FD.groupByRole(rows);
+  const qc = appState.feeDataQuick;
+  // The stored role may belong to the country looked at before this one.
+  if (!roleGroups.some(g => g.role === qc.role)) {
+    qc.role = (roleGroups[0] || {}).role || 'RMS';
+  }
+  // Per type: the rows this country/role offers, and the one the engine would
+  // actually price with the currently stored preference (resolveRow is what
+  // computeCountryResult calls internally, so the two can never diverge). Where
+  // a type offers more than one row the reader gets a selector, because the fee
+  // can differ by a factor of two -- Italy prices a Type II as "reduced" or
+  // "standard", and only the reader knows which one applies.
+  const qcRows = {};
+  VAR_TYPES.forEach((t) => {
+    qcRows[t] = {
+      candidates: rowsFor(cc, qc.role, t),
+      picked: resolveRow(cc, qc.role, t, qc.special[t])
+    };
+  });
+
+  const qcNumField = (key, label) => `
+          <label class="fd-field">
+            <span>${escapeHtml(label)}</span>
+            <input type="text" inputmode="numeric" autocomplete="off"
+                   data-fdq="${escapeAttr(key)}" value="${escapeAttr(String(qc[key]))}">
+          </label>`;
+  const qcSpecialField = (t) => {
+    const cand = qcRows[t].candidates;
+    if (cand.length < 2) return '';
+    const cur = qcRows[t].picked ? (qcRows[t].picked.special || '') : '';
+    return `
+          <label class="fd-field">
+            <span>Type ${escapeHtml(t)} &mdash; special case</span>
+            <select data-fdqspecial="${escapeAttr(t)}">
+              ${cand.map(r => `<option value="${escapeAttr(r.special || '')}"${
+                (r.special || '') === cur ? ' selected' : ''
+              }>${escapeHtml(r.special || 'standard')}</option>`).join('')}
+            </select>
+          </label>`;
+  };
+
+  const quickCalc = `
+    <div class="fd-calc" id="vclcalc-fdCalc"${appState.feeDataOpen ? '' : ' hidden'}>
+      <div class="fd-calchead">
+        <h3>Quick calculation &mdash; ${escapeHtml(COUNTRY_NAMES[cc] || cc)}</h3>
+        <div class="fd-roles" role="group" aria-label="Procedure role">
+          ${roleGroups.map(g => `
+            <button type="button" class="fd-rolebtn${g.role === qc.role ? ' on' : ''}" data-fdqrole="${escapeAttr(g.role)}">
+              ${g.role === 'national' ? 'National' : escapeHtml(g.role)}
+            </button>`).join('')}
+        </div>
+      </div>
+      <div class="fd-calcgrid">
+        <div class="fd-fields">
+          ${qcNumField('strengths', 'Strengths')}
+          ${qcNumField('IA', 'Type IA variations')}
+          ${qcNumField('IB', 'Type IB variations')}
+          ${qcNumField('II', 'Type II variations')}
+          ${VAR_TYPES.map(qcSpecialField).join('')}
+        </div>
+        <div class="fd-out" id="vclcalc-fdOut" aria-live="polite"></div>
+      </div>
+    </div>`;
+
+  // ---- "In plain words" --------------------------------------------------
+  // Says what the columns mean, in this country's own numbers. Deliberately a
+  // RANGE over the whole role group rather than one picked row: which line
+  // applies depends on the variation type and the special case, so naming a
+  // single amount as "the" fee would be wrong for every country that has more
+  // than one row -- Italy's first variation is 1.055 EUR as a Type IA and
+  // 29.357 EUR as a standard Type II, Denmark's spans four Type II rows.
+  const unitTxt = meta.currency ? (local ? meta.currency : 'EUR') : 'EUR';
+  const colRange = (grows, key) => {
+    const vals = grows
+      .map(r => (meta.currency ? r[key + '_lc'] : r[key]))
+      .filter(v => typeof v === 'number');
+    if (!vals.length) return null;
+    const lo = Math.min.apply(null, vals);
+    const hi = Math.max.apply(null, vals);
+    const one = v => `<b>${fmt(v)} ${escapeHtml(unitTxt)}</b>`;
+    return lo === hi ? one(lo) : `${one(lo)} to ${one(hi)}`;
+  };
+  const plainWords = (g) => {
+    const first = colRange(g.rows, 'F');
+    const grouping = colRange(g.rows, 'K');
+    // Most countries charge nothing per additional strength (column G is 0
+    // throughout), so promising a surcharge would be plain wrong there.
+    const strengthFlat = g.rows.every((r) => {
+      const v = meta.currency ? r.G_lc : r.G;
+      return v === null || v === undefined || v === 0;
+    });
+    return `
+      <div class="fd-plain">
+        <h3>In plain words</h3>
+        <p class="fd-sentence">
+          The first variation of a procedure is charged the <b>1st variation</b> rate${first ? ` (${first})` : ''};
+          every further variation of the same type is charged its own &ldquo;each further&rdquo; rate.
+          ${strengthFlat
+            ? `The number of strengths does not change these amounts in ${escapeHtml(COUNTRY_NAMES[cc] || cc)}.`
+            : `Each strength beyond the first adds ${colRange(g.rows, 'G')} to a rate.`}
+          ${grouping
+            ? `Some lines also carry a <b>grouping fee</b> (${grouping}), charged instead of the single rates when more than one variation of that type is filed together.`
+            : ''}
+          Which line applies depends on the variation type and, where the table shows one, the special case.
+        </p>
+      </div>`;
+  };
+
   const chips = FD.chipList(COUNTRY_NAMES, FEE_ROWS);
   const q = appState.feeDataSearch.trim().toLowerCase();
   const shown = chips.filter(c => !q || c.name.toLowerCase().includes(q) || c.cc.toLowerCase().includes(q));
 
   const anySpecial = rows.some(r => r.special && r.special !== 'standard');
 
-  const tables = FD.groupByRole(rows).map(g => `
+  const tables = roleGroups.map((g, gi) => `
     <div class="fd-group">
       <div class="fd-grouphead">
         <h2>${g.role === 'national' ? 'National procedure' : 'As ' + escapeHtml(g.role)}</h2>
@@ -2247,6 +2367,7 @@ function renderStepFeeData() {
           </tbody>
         </table>
       </div></div>
+      ${gi === 0 ? plainWords(g) : ''}
     </div>`).join('');
 
   contentEl.innerHTML = `
@@ -2284,6 +2405,10 @@ function renderStepFeeData() {
         ${(meta.currency && rate) ? `<p class="fd-src fd-fx">Published in <b>${escapeHtml(meta.currency)}</b> by the authority &mdash; euro amounts are converted at <b>1 EUR = ${rate.toLocaleString('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 })} ${escapeHtml(meta.currency)}</b>.</p>` : ''}
       </div>
       <div class="fd-headright" id="vclcalc-fdHeadRight">
+        <button type="button" class="btn fd-openbtn" id="vclcalc-fdOpen"
+                aria-expanded="${appState.feeDataOpen ? 'true' : 'false'}" aria-controls="vclcalc-fdCalc">
+          <span class="fd-caret" aria-hidden="true">&#9654;</span> Quick calculation
+        </button>
         ${(meta.currency && rate) ? `
         <div class="fd-curtoggle" role="group" aria-label="Currency">
           <button type="button" class="fd-curbtn${local ? ' on' : ''}" data-fdcur="local">${escapeHtml(meta.currency)}</button>
@@ -2291,7 +2416,7 @@ function renderStepFeeData() {
         </div>` : ''}
       </div>
     </header>
-
+    ${quickCalc}
     <div id="vclcalc-fdBody">${tables}</div>
   `;
 
@@ -2317,6 +2442,93 @@ function renderStepFeeData() {
       if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
     });
   }
+
+  // ---- Quick calculation: wiring and output ------------------------------
+  const fdQuickNum = (v) => {
+    const n = parseInt(String(v).replace(/[^\d]/g, ''), 10);
+    return (isNaN(n) || n < 0) ? 0 : n;
+  };
+
+  function fdQuickRender() {
+    const out = document.getElementById('vclcalc-fdOut');
+    if (!out) return;
+    const counts = { IA: qc.IA, IB: qc.IB, II: qc.II };
+    if (!counts.IA && !counts.IB && !counts.II) {
+      out.innerHTML = '<p class="fd-hint">Enter at least one variation to see a fee.</p>';
+      return;
+    }
+    const strengths = Math.max(1, qc.strengths);
+    const cr = window.VCLCALC.computeFees({
+      countries: [{ cc: cc, role: qc.role, strengths: strengths, special: qc.special }],
+      counts: counts
+    }).countries[0];
+    if (!cr || !cr.hasData || cr.total === null || cr.total === undefined) {
+      out.innerHTML = '<p class="fd-hint">This country has no fee line for that combination.</p>';
+      return;
+    }
+    // The tables above are converted with the rate read back off the data itself
+    // (VCL_FEEDATA.deriveRate), while cr.totalLocal uses the wizard's live/static
+    // FX rate -- and that one is null for most non-euro countries when no live
+    // rate is available. Converting the engine's euro total with the page's own
+    // rate keeps the sum, the tables and the currency pill on one arithmetic.
+    const showLocal = !!meta.currency && local && !!rate;
+    const amount = showLocal ? cr.total * rate : cr.total;
+    const unit = showLocal ? meta.currency : 'EUR';
+    // The same test computeCountryBreakdown() uses to label the mechanic. A
+    // country result carries no `mechanic` field to read it off, only the raw
+    // per-item cap/grouping values it is derived from.
+    const capFired = cr.groupCapValue !== null || cr.items.some(it => it.capValue !== null);
+    const groupingFired = cr.items.some(it => it.groupingFee !== null);
+    out.innerHTML = `
+      <div class="fd-lines">
+        ${VAR_TYPES.slice().reverse().filter(t => counts[t] > 0).map((t) => {
+          const picked = qcRows[t].picked;
+          return `<div class="fd-line"><span>${counts[t]}&times; Type ${escapeHtml(t)}</span><span>${
+            picked && picked.special ? escapeHtml(picked.special) : '&ndash;'
+          }</span></div>`;
+        }).join('')}
+        <div class="fd-line"><span>${strengths} strength${strengths === 1 ? '' : 's'}</span><span>${
+          escapeHtml(qc.role === 'national' ? 'National procedure' : 'As ' + qc.role)
+        }</span></div>
+      </div>
+      <div class="fd-total">
+        <span class="fd-total-l">Total fee</span>
+        <span class="fd-total-r">${amount.toLocaleString('de-DE', {
+          maximumFractionDigits: showLocal ? 0 : 2
+        })} ${escapeHtml(unit)}</span>
+      </div>
+      ${capFired ? '<p class="fd-hint">A fee cap applies to this combination.</p>' : ''}
+      ${groupingFired ? '<p class="fd-hint">A grouping fee applies to this combination.</p>' : ''}`;
+  }
+
+  const openBtn = document.getElementById('vclcalc-fdOpen');
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      appState.feeDataOpen = !appState.feeDataOpen;
+      render();
+      const again = document.getElementById('vclcalc-fdOpen');
+      if (again) again.focus();
+    });
+  }
+  // Only the output is redrawn on a keystroke; a full render() here would pull
+  // the caret out of the field being typed in.
+  contentEl.querySelectorAll('[data-fdq]').forEach((el) => {
+    el.addEventListener('input', () => {
+      qc[el.getAttribute('data-fdq')] = fdQuickNum(el.value);
+      fdQuickRender();
+    });
+  });
+  // Role and special case change which rows exist, so those do re-render.
+  contentEl.querySelectorAll('[data-fdqrole]').forEach((b) => {
+    b.addEventListener('click', () => { qc.role = b.getAttribute('data-fdqrole'); render(); });
+  });
+  contentEl.querySelectorAll('[data-fdqspecial]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      qc.special[sel.getAttribute('data-fdqspecial')] = sel.value || null;
+      render();
+    });
+  });
+  if (appState.feeDataOpen) fdQuickRender();
 }
 
 function render() {
