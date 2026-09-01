@@ -5,3 +5,5 @@ out/*
 !out/fee-rules.json
 !out/report.md
 !out/findings.md
+!out/normalized-rows.json
+!out/normalize-report.md
