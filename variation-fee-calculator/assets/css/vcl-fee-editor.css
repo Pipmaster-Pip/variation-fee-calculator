@@ -382,3 +382,19 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 }
 .vclfe-rule__plain ul{margin:0; padding-left:17px; display:flex; flex-direction:column; gap:3px}
 .vclfe-rule__plain li{font-size:13.5px; line-height:1.5; color:var(--ink)}
+
+/* ---- per-country provenance ------------------------------------------- */
+.vclfe-prov{
+  display:flex; flex-wrap:wrap; gap:14px 22px; align-items:flex-end;
+  margin-top:14px; padding-top:13px; border-top:1px solid var(--line);
+}
+.vclfe-prov__f{display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:var(--ink-soft)}
+.vclfe-prov__f input{
+  min-height:0; padding:6px 10px;
+  font-family:var(--sans); font-size:13px;
+  border:1px solid var(--line-strong); border-radius:6px;
+  background:var(--paper); color:var(--ink); box-shadow:none;
+}
+.vclfe-prov__f input[type="text"]{min-width:320px}
+.vclfe-prov__f input:hover{border-color:var(--accent)}
+.vclfe-prov__note{flex:1 1 100%; margin:0; font-size:11.5px; color:var(--ink-faint)}

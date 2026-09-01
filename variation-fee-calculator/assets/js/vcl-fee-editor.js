@@ -59,6 +59,12 @@
   var saved = CFG.overrides || {};
   var edits = deepCopy(saved.rows || {});
   var pointEdits = deepCopy(saved.points || {});
+  // Per-country provenance (checked date + source): keyed by country code,
+  // independent of the amount edits above so a country switch shows the
+  // right values without touching edits/pointEdits.
+  var countryOverrides = (window.VCLCALC_OVERRIDES && window.VCLCALC_OVERRIDES.countries)
+    ? JSON.parse(JSON.stringify(window.VCLCALC_OVERRIDES.countries))
+    : {};
   var activeCc = null;
   var openRow = null;
   var example = { strengths: 1, IA: 0, IB: 0, II: 1 };
@@ -286,6 +292,49 @@
     host.textContent = '';
     host.className = 'vclfe-picker';
     pickerPills(host);
+    renderProvenance(host);
+  }
+
+  // Provenance for the active country: the date the user checked the amounts
+  // against the authority's schedule, and the reference they checked against.
+  // Both feed the public fee page's header.
+  function renderProvenance(host) {
+    var meta = document.createElement('div');
+    meta.className = 'vclfe-prov';
+
+    var saved = (countryOverrides[activeCc] || {});
+
+    function field(key, label, type, placeholder) {
+      var wrap = document.createElement('label');
+      wrap.className = 'vclfe-prov__f';
+      var span = document.createElement('span');
+      span.textContent = label;
+      var input = document.createElement('input');
+      input.type = type;
+      input.value = saved[key] || '';
+      if (placeholder) { input.placeholder = placeholder; }
+      input.addEventListener('input', function () {
+        if (!countryOverrides[activeCc]) { countryOverrides[activeCc] = {}; }
+        if (input.value) { countryOverrides[activeCc][key] = input.value; }
+        else { delete countryOverrides[activeCc][key]; }
+        applyToEngine();
+      });
+      wrap.appendChild(span);
+      wrap.appendChild(input);
+      meta.appendChild(wrap);
+    }
+
+    field('checked', 'Zuletzt gegen die Gebührenordnung geprüft', 'date', '');
+    field('source', 'Quelle (Fundstelle der Gebührenordnung)', 'text',
+          'z. B. Elenco Tariffe aggiornato ad Luglio 2025');
+
+    var note = document.createElement('p');
+    note.className = 'vclfe-prov__note';
+    note.textContent = 'Das Änderungsdatum wird beim Speichern automatisch gesetzt. '
+      + 'Behördenlink und Zahlungsweise stammen aus der Excel und sind hier nicht änderbar.';
+    meta.appendChild(note);
+
+    host.appendChild(meta);
   }
 
   var pillFilter = '';
@@ -1340,7 +1389,23 @@
   // ========================================================================
   document.getElementById('vclfe-payload').form.addEventListener('submit', function () {
     document.getElementById('vclfe-payload').value =
-      JSON.stringify({ rows: edits, points: pointEdits });
+      JSON.stringify({
+        rows: edits,
+        points: pointEdits,
+        countries: (function () {
+          var out = {};
+          Object.keys(countryOverrides).forEach(function (cc) {
+            var e = countryOverrides[cc];
+            if (!e || (!e.checked && !e.source)) { return; }
+            out[cc] = {
+              checked: e.checked || '',
+              source: e.source || '',
+              updated: new Date().toISOString().slice(0, 10)
+            };
+          });
+          return out;
+        }())
+      });
   });
 
   document.getElementById('vclfe-reset').addEventListener('click', function () {
