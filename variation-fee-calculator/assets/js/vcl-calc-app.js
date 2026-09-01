@@ -790,8 +790,7 @@ function calcInfoPanelsHtml() {
     ` : ''}
     ${(typeof HA_WEBSITES !== 'undefined' && HA_WEBSITES.length > 0) ? `
     <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vclcalc-toggleHaWebsites" style="padding-left:0;">🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)</button>
-      <div id="vclcalc-haWebsitesPanel" style="display:none; margin-top:14px;"></div>
+      <button class="btn ghost" id="vclcalc-openFeeData" style="padding-left:0;">🔗 Fee data by country &mdash; amounts, sources and check dates</button>
     </div>
     ` : ''}
   `;
@@ -814,19 +813,13 @@ function wireCalcInfoPanels() {
       }
     });
   }
-  const haWebsitesBtn = document.getElementById('vclcalc-toggleHaWebsites');
-  if (haWebsitesBtn) {
-    haWebsitesBtn.addEventListener('click', () => {
-      const panel = document.getElementById('vclcalc-haWebsitesPanel');
-      const isOpen = panel.style.display !== 'none';
-      if (isOpen) {
-        panel.style.display = 'none';
-        haWebsitesBtn.textContent = `🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)`;
-      } else {
-        panel.innerHTML = renderHaWebsitesList();
-        panel.style.display = '';
-        haWebsitesBtn.textContent = `🔗 Hide update status and link to HA websites`;
-      }
+  const feeDataBtn = document.getElementById('vclcalc-openFeeData');
+  if (feeDataBtn) {
+    feeDataBtn.addEventListener('click', () => {
+      appState.feeDataCc = appState.selectedCountries[0] || 'IT';
+      appState.step = 'feedata';
+      render();
+      if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
     });
   }
 }
@@ -1310,37 +1303,6 @@ function renderChangelogList() {
       </div>
     </div>
   `).join('');
-  return `<div class="breakdown" style="max-height:420px; overflow-y:auto;">${rows}</div>`;
-}
-
-function renderHaWebsitesList() {
-  if (typeof HA_WEBSITES === 'undefined' || HA_WEBSITES.length === 0) return '<div class="breakdown"></div>';
-  const sorted = [...HA_WEBSITES].sort((a, b) => {
-    const nameA = COUNTRY_NAMES[a.cc] || a.cc;
-    const nameB = COUNTRY_NAMES[b.cc] || b.cc;
-    return nameA.localeCompare(nameB, 'en');
-  });
-  const rows = sorted.map(entry => {
-    const countryName = COUNTRY_NAMES[entry.cc] || entry.cc;
-    const linkHtml = entry.link_url
-      ? `<a href="${escapeHtml(entry.link_url)}" target="_blank" rel="noopener">${escapeHtml(entry.link_text || entry.link_url)}</a>`
-      : escapeHtml(entry.link_text || '–');
-    const updatedCalc = formatImprintDate(entry.updated_calc) || '–';
-    const checkedHa = formatImprintDate(entry.checked_ha) || '–';
-    const payment = entry.payment ? escapeHtml(entry.payment) : '–';
-    const annual = entry.annual ? escapeHtml(entry.annual) : '–';
-    return `
-    <div class="breakdown-row">
-      <div class="bd-left">
-        <span class="bd-name" style="font-weight:600; font-size:13px;">${escapeHtml(countryName)} <span class="badge">${escapeHtml(entry.cc)}</span></span>
-        <span class="bd-meta" style="display:block;">Authority: ${linkHtml}</span>
-        <span class="bd-meta" style="display:block;">Fees last updated in calculator: <span style="font-family:var(--mono); color:var(--ink-soft);">${updatedCalc}</span></span>
-        <span class="bd-meta" style="display:block;">Fees last checked on HA website: <span style="font-family:var(--mono); color:var(--ink-soft);">${checkedHa}</span></span>
-        <span class="bd-meta" style="display:block;">Payment method: ${payment} · Annual fee: ${annual}</span>
-      </div>
-    </div>
-  `;
-  }).join('');
   return `<div class="breakdown" style="max-height:420px; overflow-y:auto;">${rows}</div>`;
 }
 
@@ -2405,6 +2367,7 @@ function renderStepFeeData() {
         ${(meta.currency && rate) ? `<p class="fd-src fd-fx">Published in <b>${escapeHtml(meta.currency)}</b> by the authority &mdash; euro amounts are converted at <b>1 EUR = ${rate.toLocaleString('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 })} ${escapeHtml(meta.currency)}</b>.</p>` : ''}
       </div>
       <div class="fd-headright" id="vclcalc-fdHeadRight">
+        <button type="button" class="btn" id="vclcalc-fdBack">Back to the calculator</button>
         <button type="button" class="btn fd-openbtn" id="vclcalc-fdOpen"
                 aria-expanded="${appState.feeDataOpen ? 'true' : 'false'}" aria-controls="vclcalc-fdCalc">
           <span class="fd-caret" aria-hidden="true">&#9654;</span> Quick calculation
@@ -2501,6 +2464,14 @@ function renderStepFeeData() {
       ${groupingFired ? '<p class="fd-hint">A grouping fee applies to this combination.</p>' : ''}`;
   }
 
+  const backBtn = document.getElementById('vclcalc-fdBack');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      appState.step = 0;
+      render();
+      if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+    });
+  }
   const openBtn = document.getElementById('vclcalc-fdOpen');
   if (openBtn) {
     openBtn.addEventListener('click', () => {

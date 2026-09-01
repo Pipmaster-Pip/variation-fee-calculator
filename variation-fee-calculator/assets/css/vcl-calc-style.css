@@ -839,12 +839,12 @@
 .vclcalc-app{ max-width:none; margin:0; }
 /* Per-country total in the calculator's dark brown, not near-black. */
 .vclcalc-app .breakdown .breakdown-row .bd-amount{ color:var(--accent-deep); }
-/* Changelog / HA-website toggles: drop the inner box (base ghost gained a border in the
+/* Changelog / fee-data-page link: drop the inner box (base ghost gained a border in the
    restyle above) — keep the outer .panel box, show them as plain links again. */
 .vclcalc-app #vclcalc-toggleChangelog,
-.vclcalc-app #vclcalc-toggleHaWebsites{ border:none; background:none; }
+.vclcalc-app #vclcalc-openFeeData{ border:none; background:none; }
 .vclcalc-app #vclcalc-toggleChangelog:hover,
-.vclcalc-app #vclcalc-toggleHaWebsites:hover{ border:none; background:none; color:var(--accent-deep); }
+.vclcalc-app #vclcalc-openFeeData:hover{ border:none; background:none; color:var(--accent-deep); }
 
 /* --- Classification-exception hints in the special-cases panel (pilot: FR) --- */
 .vclcalc-app .exm-toggle {
