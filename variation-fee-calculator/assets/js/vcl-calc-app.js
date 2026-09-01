@@ -2404,17 +2404,27 @@ function renderStepFeeData() {
     <div id="vclcalc-fdBody">${tables}</div>
   `;
 
+  // Every control on this page that triggers a full render() replaces itself,
+  // which drops focus to <body> and strands anyone using the keyboard. The
+  // search field and the fold-out button already put it back; do the same for
+  // the rest by focusing the replacement of the control that was just used.
+  const refocus = (attr, value) => {
+    const again = contentEl.querySelector('[' + attr + '="' + String(value).replace(/"/g, '\\"') + '"]');
+    if (again) again.focus();
+  };
   contentEl.querySelectorAll('[data-fdcc]').forEach((b) => {
     b.addEventListener('click', () => {
       appState.feeDataCc = b.getAttribute('data-fdcc');
       appState.feeDataCur = 'local';
       render();
+      refocus('data-fdcc', appState.feeDataCc);
     });
   });
   contentEl.querySelectorAll('[data-fdcur]').forEach((b) => {
     b.addEventListener('click', () => {
       appState.feeDataCur = b.getAttribute('data-fdcur');
       render();
+      refocus('data-fdcur', appState.feeDataCur);
     });
   });
   const searchEl = document.getElementById('vclcalc-fdSearch');
@@ -2510,12 +2520,18 @@ function renderStepFeeData() {
   });
   // Role and special case change which rows exist, so those do re-render.
   contentEl.querySelectorAll('[data-fdqrole]').forEach((b) => {
-    b.addEventListener('click', () => { qc.role = b.getAttribute('data-fdqrole'); render(); });
+    b.addEventListener('click', () => {
+      qc.role = b.getAttribute('data-fdqrole');
+      render();
+      refocus('data-fdqrole', qc.role);
+    });
   });
   contentEl.querySelectorAll('[data-fdqspecial]').forEach((sel) => {
     sel.addEventListener('change', () => {
-      qc.special[sel.getAttribute('data-fdqspecial')] = sel.value || null;
+      const t = sel.getAttribute('data-fdqspecial');
+      qc.special[t] = sel.value || null;
       render();
+      refocus('data-fdqspecial', t);
     });
   });
   if (appState.feeDataOpen) fdQuickRender();
