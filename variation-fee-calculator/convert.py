@@ -347,7 +347,7 @@ def load_imprint(xlsx_path: Path):
 
 def load_ha_websites(xlsx_path: Path):
     """Reads the 'HA fee websites' sheet: column A = country code, B = link
-    text + hyperlink URL, C = comments (intentionally excluded), D/E = two
+    text + hyperlink URL, C = comments (source reference, shown on the public fee page), D/E = two
     'last updated/checked' dates, F = payment method, G = annual fee flag.
     Starts at row 2 (row 1 is the header). Stops at the first row where
     column A is empty."""
@@ -377,6 +377,7 @@ def load_ha_websites(xlsx_path: Path):
             "cc": cc,
             "link_text": link_text,
             "link_url": link_url,
+            "comments": ws_vals.cell(row=r, column=3).value,
             "updated_calc": fmt_date(ws_vals.cell(row=r, column=4).value),
             "checked_ha": fmt_date(ws_vals.cell(row=r, column=5).value),
             "payment": ws_vals.cell(row=r, column=6).value,
