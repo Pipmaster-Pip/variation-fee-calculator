@@ -192,16 +192,55 @@ function vcl_count_fee_overrides( $overrides ) {
 // Admin page
 // ---------------------------------------------------------------------------
 
+/**
+ * Top-level menu entry, not a Settings submenu: the fee maintenance is the most
+ * frequently used admin screen of this plugin, so it gets its own icon in the
+ * sidebar instead of hiding two clicks deep under Settings. The page slug is
+ * deliberately unchanged ('vcl-fee-editor') so saved bookmarks that carry it,
+ * and the post-save redirect, keep pointing at the same page. Capability is
+ * unchanged as well ('manage_options').
+ *
+ * Position 58 puts it just below Settings and above the plugin-added block at
+ * 60+, i.e. in the tools/settings neighbourhood rather than among the content
+ * menus.
+ */
 function vcl_fee_editor_menu() {
-	add_options_page(
+	add_menu_page(
 		'Variation Toolbox — Gebühren',
-		'Variation Toolbox — Gebühren',
+		'Toolbox-Gebühren',
 		'manage_options',
 		'vcl-fee-editor',
-		'vcl_render_fee_editor'
+		'vcl_render_fee_editor',
+		'dashicons-money-alt',
+		58
 	);
 }
 add_action( 'admin_menu', 'vcl_fee_editor_menu' );
+
+/**
+ * Compatibility for the old location (Settings -> Variation Toolbox — Gebühren):
+ * bookmarks and any stale redirect still requesting
+ * options-general.php?page=vcl-fee-editor are forwarded to the new top-level
+ * page, query string intact, instead of running into WordPress' "not allowed to
+ * access this page" screen.
+ */
+function vcl_fee_editor_legacy_redirect() {
+	global $pagenow;
+	if ( 'options-general.php' !== $pagenow ) {
+		return;
+	}
+	if ( ! isset( $_GET['page'] ) || 'vcl-fee-editor' !== $_GET['page'] ) {
+		return;
+	}
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$args = $_GET;
+	unset( $args['page'] );
+	wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php?page=vcl-fee-editor' ) ) );
+	exit;
+}
+add_action( 'admin_init', 'vcl_fee_editor_legacy_redirect' );
 
 /**
  * The editor drives the real calculator: it loads vcl-calc-data.js and
@@ -212,7 +251,9 @@ add_action( 'admin_menu', 'vcl_fee_editor_menu' );
  * drift from the one the site actually runs.
  */
 function vcl_fee_editor_assets( $hook ) {
-	if ( $hook !== 'settings_page_vcl-fee-editor' ) {
+	// Top-level menu page, so the hook suffix is 'toplevel_page_...', not
+	// 'settings_page_...' as it was while the editor lived under Settings.
+	if ( $hook !== 'toplevel_page_vcl-fee-editor' ) {
 		return;
 	}
 
@@ -415,7 +456,8 @@ function vcl_render_fee_editor() {
 // ---------------------------------------------------------------------------
 
 function vcl_fee_editor_redirect( $args ) {
-	wp_safe_redirect( add_query_arg( $args, admin_url( 'options-general.php?page=vcl-fee-editor' ) ) );
+	// Follows the menu move: the editor is a top-level page now (same slug).
+	wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php?page=vcl-fee-editor' ) ) );
 	exit;
 }
 
