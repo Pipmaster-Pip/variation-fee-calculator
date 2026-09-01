@@ -3485,6 +3485,14 @@
     state.guidanceOpen = false;
     state.treeCollapsed = false;
     state.guidanceHub = dest === "guidance";
+    // The three embedded tools keep their own inner position (wizard step, station, open
+    // editor) in their own IIFE, which the state resets above cannot reach -- so a tile click
+    // used to land on step 3 / station D / the fee-data page again instead of on the tool's
+    // first screen. Each tool exposes a narrow reset() on its public interface that rewinds
+    // the position WITHOUT discarding what the user typed; see the comments there.
+    if (dest === "calculator" && window.VCLCALC && window.VCLCALC.reset) window.VCLCALC.reset();
+    else if (dest === "workflow" && window.VCL_WORKFLOW && window.VCL_WORKFLOW.reset) window.VCL_WORKFLOW.reset();
+    else if (dest === "budget" && window.VCL_BUDGET && window.VCL_BUDGET.reset) window.VCL_BUDGET.reset();
     if (dest === "calculator") state.view = "calculator";
     else if (dest === "classification") { state.view = "browse"; state.classifyOpen = true; }
     else if (dest === "guidance") { state.view = "browse"; state.guidanceOpen = true; }

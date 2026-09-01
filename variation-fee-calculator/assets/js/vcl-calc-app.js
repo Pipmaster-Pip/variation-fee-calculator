@@ -698,6 +698,17 @@ window.VCLCALC = {
     render();
     if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
   },
+  // "Take me back to this tool's own first screen" -- called by the host guide whenever the
+  // Variation Fee Calculator tile is clicked (vcl-app.js goToDestination). Without it, clicking
+  // the tile while standing on step 3 or on the fee-data page left the reader exactly where they
+  // were, and the fee-data page had no way back to the wizard via the tile at all.
+  // Deliberately NOT a state wipe: the selected countries, their per-country configuration, the
+  // variation counts and an already computed result are the user's input and survive -- only the
+  // wizard's position is rewound to the first step.
+  reset() {
+    appState.step = 0;
+    render();
+  },
   setGlobalCounts(counts) {
     const parts = [];
     ['IA', 'IB', 'II'].forEach((type) => {

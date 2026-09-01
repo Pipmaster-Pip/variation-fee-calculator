@@ -2373,5 +2373,15 @@
     prefill(payload) {
       prefillFromVariations((payload && payload.variations) || []);
     },
+    // "Take me back to this tool's own first screen" -- called by the host guide whenever the
+    // Guided Workflow tile is clicked (vcl-app.js goToDestination), which otherwise left the
+    // user standing on whichever station they had walked to.
+    // Only the position moves: everything the user entered (picked variation, procedure,
+    // countries, dates, RA modules) stays, and `reached` is untouched so the station dots
+    // still let them jump straight back forward.
+    reset() {
+      state.station = "A";
+      if (container) rerender();
+    },
   };
 })();

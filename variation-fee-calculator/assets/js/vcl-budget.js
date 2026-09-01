@@ -2652,5 +2652,21 @@
       };
       if (container) rerender();
     },
+    // "Take me back to this tool's own first screen" -- called by the host guide whenever the
+    // Budget Planning tile is clicked (vcl-app.js goToDestination).
+    // The dashboard is this tool's first screen and is always rendered anyway; what can sit in
+    // front of it is the plan-line / annual-product editor overlay. That overlay holds an
+    // UNSAVED draft, so it is only dismissed when it holds nothing worth keeping
+    // (editorIsDirty() -- the same test the overlay's own close button uses). With work in it
+    // the overlay stays: a tile click must not silently throw away typed input. That also keeps
+    // the Summary hand-off intact, which opens a seeded editor and then routes through
+    // goToDestination("budget").
+    // The plan itself (lines, annual lines, rates) is persisted user data and never touched;
+    // only the transient row expansion is collapsed.
+    reset() {
+      if ((modalState || annualEditor) && !editorIsDirty()) doOverlayClose();
+      state.expandedId = null;
+      if (container) rerender();
+    },
   };
 })();
