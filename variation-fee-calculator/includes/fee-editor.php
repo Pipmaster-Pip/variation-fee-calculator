@@ -25,6 +25,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const VCL_FEE_OVERRIDES_OPTION = 'vcl_fee_overrides';
 
+/** The set replaced by the last import, so a wrong file can be undone. */
+const VCL_FEE_OVERRIDES_PREVIOUS_OPTION = 'vcl_fee_overrides_previous';
+
+/** Bumped only when the exported shape changes in a way an older import
+ * could not read correctly. */
+const VCL_FEE_EXPORT_FORMAT = 1;
+
+/** An export of all 421 rows is a few dozen KB; anything far past that is not
+ * one of our files. */
+const VCL_FEE_IMPORT_MAX_BYTES = 2097152;
+
 /** Amount columns of the fee table, in each of the three notations a row can
  * be maintained in: euro (F), local currency (F_lc), points (F_pt). */
 function vcl_fee_editable_fields() {
@@ -194,6 +205,8 @@ function vcl_render_fee_editor() {
 
 	$status    = isset( $_GET['vclfe_status'] ) ? sanitize_key( $_GET['vclfe_status'] ) : '';
 	$dropped   = isset( $_GET['vclfe_dropped'] ) ? absint( $_GET['vclfe_dropped'] ) : 0;
+	$imported_count = isset( $_GET['vclfe_count'] ) ? absint( $_GET['vclfe_count'] ) : 0;
+	$has_previous   = is_array( get_option( VCL_FEE_OVERRIDES_PREVIOUS_OPTION, null ) );
 	$overrides = vcl_get_fee_overrides();
 	$count     = vcl_count_fee_overrides( $overrides );
 	?>
@@ -206,6 +219,18 @@ function vcl_render_fee_editor() {
 			</p></div>
 		<?php elseif ( $status === 'cleared' ) : ?>
 			<div class="notice notice-success is-dismissible"><p>Alle Änderungen zurückgesetzt — es gelten wieder die Beträge aus der Gebührentabelle des Plugins.</p></div>
+		<?php elseif ( $status === 'imported' ) : ?>
+			<div class="notice notice-success is-dismissible"><p>
+				Gebühren importiert — <?php echo (int) $imported_count; ?> Werte gelten jetzt<?php
+				echo $dropped ? ', ' . (int) $dropped . ' unbrauchbare wurden verworfen' : ''; ?>.
+				Der vorherige Stand liegt bereit und kann unten zurückgeholt werden.
+			</p></div>
+		<?php elseif ( $status === 'undone' ) : ?>
+			<div class="notice notice-success is-dismissible"><p>Der Stand vor dem Import gilt wieder.</p></div>
+		<?php elseif ( $status === 'import_format' ) : ?>
+			<div class="notice notice-error is-dismissible"><p>Diese Datei ist keine Gebühren-Sicherung dieses Plugins. Es wurde nichts geändert.</p></div>
+		<?php elseif ( $status === 'import_error' ) : ?>
+			<div class="notice notice-error is-dismissible"><p>Die Datei konnte nicht gelesen werden. Es wurde nichts geändert.</p></div>
 		<?php elseif ( $status === 'error' ) : ?>
 			<div class="notice notice-error is-dismissible"><p>Die Daten konnten nicht gelesen werden. Es wurde nichts gespeichert.</p></div>
 		<?php endif; ?>
@@ -251,16 +276,57 @@ function vcl_render_fee_editor() {
 				</div>
 			</form>
 
-			<?php if ( $count ) : ?>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:22px">
-					<?php wp_nonce_field( 'vclfe_clear_action', 'vclfe_clear_nonce' ); ?>
-					<input type="hidden" name="action" value="vclfe_clear">
-					<button type="submit" class="vclfe-btn"
-						onclick="return confirm('Wirklich alle <?php echo (int) $count; ?> gespeicherten Änderungen löschen? Danach gelten wieder die Beträge aus der Gebührentabelle des Plugins.');">
-						Alle gespeicherten Änderungen löschen
-					</button>
-				</form>
-			<?php endif; ?>
+			<section class="vclfe-maintain">
+				<h3>Sichern, übertragen, zurücksetzen</h3>
+				<p>
+					Die eingetippten Beträge liegen in der WordPress-Datenbank (Option
+					<code>vcl_fee_overrides</code>) und sind damit in jeder Datenbanksicherung enthalten.
+					Ein Plugin-Update rührt sie nicht an. Der Export unten ist die Datei, mit der Du
+					denselben Stand in die andere Umgebung bringst — oder einfach neben dem Plugin
+					aufbewahrst.
+				</p>
+
+				<div class="vclfe-maintain__row">
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<?php wp_nonce_field( 'vclfe_export_action', 'vclfe_export_nonce' ); ?>
+						<input type="hidden" name="action" value="vclfe_export">
+						<button type="submit" class="vclfe-btn"<?php disabled( ! $count ); ?>>
+							Exportieren<?php echo $count ? ' (' . (int) $count . ' Werte)' : ''; ?>
+						</button>
+					</form>
+
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
+						<?php wp_nonce_field( 'vclfe_import_action', 'vclfe_import_nonce' ); ?>
+						<input type="hidden" name="action" value="vclfe_import">
+						<input type="file" name="vclfe_import_file" accept=".json,application/json" required>
+						<button type="submit" class="vclfe-btn"
+							onclick="return confirm('Der Import ersetzt alle gespeicherten Beträge durch die aus der Datei. Fortfahren?');">
+							Importieren
+						</button>
+					</form>
+				</div>
+
+				<div class="vclfe-maintain__row">
+					<?php if ( $has_previous ) : ?>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<?php wp_nonce_field( 'vclfe_undo_action', 'vclfe_undo_nonce' ); ?>
+							<input type="hidden" name="action" value="vclfe_undo_import">
+							<button type="submit" class="vclfe-btn">Stand vor dem letzten Import zurückholen</button>
+						</form>
+					<?php endif; ?>
+
+					<?php if ( $count ) : ?>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<?php wp_nonce_field( 'vclfe_clear_action', 'vclfe_clear_nonce' ); ?>
+							<input type="hidden" name="action" value="vclfe_clear">
+							<button type="submit" class="vclfe-btn vclfe-btn--danger"
+								onclick="return confirm('Wirklich alle <?php echo (int) $count; ?> gespeicherten Änderungen löschen? Danach gelten wieder die Beträge aus der Gebührentabelle des Plugins.');">
+								Alle gespeicherten Änderungen löschen
+							</button>
+						</form>
+					<?php endif; ?>
+				</div>
+			</section>
 		</div>
 
 		<?php
@@ -315,11 +381,125 @@ function vcl_handle_save_fee_overrides() {
 		'points'  => $clean['points'],
 		'updated' => current_time( 'mysql' ),
 		'by'      => $user ? $user->display_name : '',
-	) );
+	), false );
 
 	vcl_fee_editor_redirect( array( 'vclfe_status' => 'saved', 'vclfe_dropped' => $dropped ) );
 }
 add_action( 'admin_post_vclfe_save', 'vcl_handle_save_fee_overrides' );
+
+/**
+ * Export: the saved amounts as a JSON file, named with the site host and the
+ * date. This is the file that carries a set of fees from NAS to Ionos or the
+ * other way round, and it is small enough to keep next to the plugin in git.
+ *
+ * Sent as a download rather than shown on screen, because the point is to hand
+ * it to the other environment unchanged -- copy-pasting JSON out of a textarea
+ * is where whitespace and quote mangling creep in.
+ */
+function vcl_handle_export_fee_overrides() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Keine Berechtigung.' );
+	}
+	check_admin_referer( 'vclfe_export_action', 'vclfe_export_nonce' );
+
+	$overrides = vcl_get_fee_overrides();
+	$payload   = array(
+		'format'  => VCL_FEE_EXPORT_FORMAT,
+		'plugin'  => VFC_VERSION,
+		'site'    => home_url(),
+		'exported'=> current_time( 'mysql' ),
+		'updated' => $overrides['updated'],
+		'by'      => $overrides['by'],
+		'rows'    => (object) $overrides['rows'],
+		'points'  => (object) $overrides['points'],
+	);
+
+	$host = wp_parse_url( home_url(), PHP_URL_HOST );
+	$name = 'variation-fees-' . sanitize_file_name( $host ? $host : 'site' )
+		. '-' . gmdate( 'Y-m-d' ) . '.json';
+
+	nocache_headers();
+	header( 'Content-Type: application/json; charset=utf-8' );
+	header( 'Content-Disposition: attachment; filename="' . $name . '"' );
+	echo wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+	exit;
+}
+add_action( 'admin_post_vclfe_export', 'vcl_handle_export_fee_overrides' );
+
+/**
+ * Import: reads a file produced by the export above and REPLACES the saved
+ * amounts with it. Replaces rather than merges on purpose -- merging two sets of
+ * fees would leave a state that exists in neither environment, and no one could
+ * say afterwards which amount came from where.
+ *
+ * The previous set is kept in vcl_fee_overrides_previous first, so an import of
+ * the wrong file is one click away from being undone.
+ */
+function vcl_handle_import_fee_overrides() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Keine Berechtigung.' );
+	}
+	check_admin_referer( 'vclfe_import_action', 'vclfe_import_nonce' );
+
+	if ( empty( $_FILES['vclfe_import_file'] ) || ! isset( $_FILES['vclfe_import_file']['error'] )
+		|| $_FILES['vclfe_import_file']['error'] !== UPLOAD_ERR_OK
+		|| ! is_uploaded_file( $_FILES['vclfe_import_file']['tmp_name'] ) ) {
+		vcl_fee_editor_redirect( array( 'vclfe_status' => 'import_error' ) );
+	}
+
+	$raw = file_get_contents( $_FILES['vclfe_import_file']['tmp_name'] );
+	if ( $raw === false || strlen( $raw ) > VCL_FEE_IMPORT_MAX_BYTES ) {
+		vcl_fee_editor_redirect( array( 'vclfe_status' => 'import_error' ) );
+	}
+
+	$payload = json_decode( $raw, true );
+	if ( ! is_array( $payload ) || ! isset( $payload['format'] )
+		|| (int) $payload['format'] !== VCL_FEE_EXPORT_FORMAT ) {
+		vcl_fee_editor_redirect( array( 'vclfe_status' => 'import_format' ) );
+	}
+
+	list( $clean, $dropped ) = vcl_sanitize_fee_overrides( $payload );
+
+	$previous = get_option( VCL_FEE_OVERRIDES_OPTION, array() );
+	if ( is_array( $previous ) ) {
+		update_option( VCL_FEE_OVERRIDES_PREVIOUS_OPTION, $previous, false );
+	}
+
+	$user = wp_get_current_user();
+	update_option( VCL_FEE_OVERRIDES_OPTION, array(
+		'rows'    => $clean['rows'],
+		'points'  => $clean['points'],
+		'updated' => current_time( 'mysql' ),
+		'by'      => ( $user ? $user->display_name : '' ) . ' (Import)',
+	), false );
+
+	vcl_fee_editor_redirect( array(
+		'vclfe_status'  => 'imported',
+		'vclfe_count'   => vcl_count_fee_overrides( vcl_get_fee_overrides() ),
+		'vclfe_dropped' => $dropped,
+	) );
+}
+add_action( 'admin_post_vclfe_import', 'vcl_handle_import_fee_overrides' );
+
+/**
+ * Puts back whatever was saved before the last import.
+ */
+function vcl_handle_undo_import() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Keine Berechtigung.' );
+	}
+	check_admin_referer( 'vclfe_undo_action', 'vclfe_undo_nonce' );
+
+	$previous = get_option( VCL_FEE_OVERRIDES_PREVIOUS_OPTION, null );
+	if ( ! is_array( $previous ) ) {
+		vcl_fee_editor_redirect( array( 'vclfe_status' => 'import_error' ) );
+	}
+	update_option( VCL_FEE_OVERRIDES_OPTION, $previous, false );
+	delete_option( VCL_FEE_OVERRIDES_PREVIOUS_OPTION );
+
+	vcl_fee_editor_redirect( array( 'vclfe_status' => 'undone' ) );
+}
+add_action( 'admin_post_vclfe_undo_import', 'vcl_handle_undo_import' );
 
 function vcl_handle_clear_fee_overrides() {
 	if ( ! current_user_can( 'manage_options' ) ) {
