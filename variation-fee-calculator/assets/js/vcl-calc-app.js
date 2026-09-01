@@ -2192,11 +2192,15 @@ function renderStepFeeData() {
     if (!meta.currency) return fmtAmount(v);
     return fmtAmount(local ? v : v / rate);
   };
-  const cell = (row, key) => {
+  // `mark` is the footnote number of a line whose price is not this column --
+  // see the "Lines priced by another rule" block below. Only the "1st variation"
+  // column is ever marked.
+  const cell = (row, key, mark) => {
     const raw = meta.currency ? row[key + '_lc'] : row[key];
     const cls = (raw === null || raw === undefined) ? 'fd-num fd-dash'
       : (raw === 0 ? 'fd-num fd-zero' : 'fd-num');
-    return `<td class="${cls}">${fmt(raw)}</td>`;
+    const sup = mark ? `<sup class="fd-fnref">${mark}</sup>` : '';
+    return `<td class="${cls}">${fmt(raw)}${sup}</td>`;
   };
 
   // ---- Quick calculation -------------------------------------------------
@@ -2270,6 +2274,52 @@ function renderStepFeeData() {
       </div>
     </div>`;
 
+  // ---- Lines priced by another rule --------------------------------------
+  // For a few lines the "1st variation" column is not what a single variation
+  // of that line costs: the Irish RMS lines are priced off another line's rate
+  // plus a fixed addition, the Czech lines add a fixed amount on top, and the
+  // Danish "D.Sp.No." lines carry no 1st-variation rate at all and only ever
+  // charge their grouping fee. Printing that column next to a quick calculation
+  // that says something else is a contradiction the page cannot explain, so the
+  // line explains it itself.
+  //
+  // The test is deliberately NOT a country list. Every line is priced by the
+  // very engine the quick calculation and the Fee Calculator use
+  // (window.VCLCALC.computeFees -- one variation of that line's type, one
+  // strength, that line's own special case) and the result is compared with the
+  // line's own F. No fee arithmetic is added here. Any other country, and any
+  // amount changed in the fee editor, is picked up the same way.
+  const rowPriceEUR = (r) => {
+    const VC = (typeof window !== 'undefined') && window.VCLCALC;
+    if (!VC || !VC.computeFees) return null;
+    const counts = { IA: 0, IB: 0, II: 0 };
+    counts[r.type] = 1;
+    const special = { IA: null, IB: null, II: null };
+    special[r.type] = r.special || null;
+    const res = VC.computeFees({
+      countries: [{ cc: r.cc, role: r.role, strengths: 1, special: special }],
+      counts: counts
+    }).countries[0];
+    return (res && res.hasData && typeof res.total === 'number') ? res.total : null;
+  };
+  // row number -> what one variation of that line actually costs, in EUR, for
+  // the lines where that is not the line's own F.
+  const rowNote = {};
+  rows.forEach((r) => {
+    // Only lines the engine would resolve to on their own. A line hidden behind
+    // an identical special-case label is never priced alone, so a note about it
+    // could not be reproduced by anybody.
+    if (resolveRow(r.cc, r.role, r.type, r.special) !== r) return;
+    const priced = rowPriceEUR(r);
+    if (priced === null) return;
+    if (typeof r.F === 'number' && Math.abs(r.F - priced) < 0.005) return;
+    rowNote[r.row] = priced;
+  });
+  // The notes convert with the page's own rate, exactly as the quick calculation
+  // does, so the table, the notes and the quick calculation stay one arithmetic.
+  const noteLocal = !!meta.currency && local && !!rate;
+  const noteAmount = (eur) => `${fmtAmount(noteLocal ? eur * rate : eur)} ${escapeHtml(noteLocal ? meta.currency : 'EUR')}`;
+
   // ---- "In plain words" --------------------------------------------------
   // Says what the columns mean, in this country's own numbers. Deliberately a
   // RANGE over the whole role group rather than one picked row: which line
@@ -2288,7 +2338,7 @@ function renderStepFeeData() {
     const one = v => `<b>${fmt(v)} ${escapeHtml(unitTxt)}</b>`;
     return lo === hi ? one(lo) : `${one(lo)} to ${one(hi)}`;
   };
-  const plainWords = (g) => {
+  const plainWords = (g, hasNotes) => {
     const first = colRange(g.rows, 'F');
     const grouping = colRange(g.rows, 'K');
     // Most countries charge nothing per additional strength (column G is 0
@@ -2305,7 +2355,7 @@ function renderStepFeeData() {
       <div class="fd-plain">
         <h3>In plain words</h3>
         <p class="fd-sentence">
-          The first variation of a procedure is charged the <b>1st variation</b> rate${first ? ` (${first})` : ''}${eachFurther ? ';\n          every further variation of the same type is charged its own &ldquo;each further&rdquo; rate.' : '.'}
+          The first variation of a procedure is charged the <b>1st variation</b> rate${first ? ` (${first})` : ''}${hasNotes ? ' &mdash; except on the lines marked under the table' : ''}${eachFurther ? ';\n          every further variation of the same type is charged its own &ldquo;each further&rdquo; rate.' : '.'}
           ${strengthFlat
             ? `The number of strengths does not change these amounts in ${escapeHtml(COUNTRY_NAMES[cc] || cc)}.`
             : `Each strength beyond the first adds ${colRange(g.rows, 'G')} to a rate.`}
@@ -2323,7 +2373,26 @@ function renderStepFeeData() {
 
   const anySpecial = rows.some(r => r.special && r.special !== 'standard');
 
-  const tables = roleGroups.map((g, gi) => `
+  const tables = roleGroups.map((g, gi) => {
+    // Footnote numbers run per role group, so a reader never has to look past
+    // the table in front of them.
+    const marks = {};
+    g.rows.forEach((r) => { if (rowNote[r.row] !== undefined) marks[r.row] = Object.keys(marks).length + 1; });
+    const marked = g.rows.filter(r => rowNote[r.row] !== undefined);
+    const notes = marked.length ? `
+      <p class="fd-hint fd-fnotes">
+        ${marked.map((r) => {
+          const label = `Type ${escapeHtml(r.type)}${r.special ? ' &middot; ' + escapeHtml(r.special) : ''}`;
+          const amount = noteAmount(rowNote[r.row]);
+          return `<span class="fd-fnote"><sup class="fd-fnref">${marks[r.row]}</sup> ${label}: ${
+            typeof r.F === 'number'
+              ? `one variation of this line is charged <b>${amount}</b>, not the &ldquo;1st variation&rdquo; amount shown.`
+              : `this line has no &ldquo;1st variation&rdquo; rate; one variation of it is charged <b>${amount}</b>.`
+          }</span>`;
+        }).join('')}
+        <span class="fd-fnote">Marked lines are charged by a rule that arrives at a different amount than their &ldquo;1st variation&rdquo; column. The quick calculation above and the Fee Calculator apply that rule, not the column.</span>
+      </p>` : '';
+    return `
     <div class="fd-group">
       <div class="fd-grouphead">
         <h2>${g.role === 'national' ? 'National procedure' : 'As ' + escapeHtml(g.role)}</h2>
@@ -2345,13 +2414,15 @@ function renderStepFeeData() {
                 <td><span class="fd-tname">Type ${escapeHtml(r.type)}</span></td>
                 ${anySpecial ? `<td class="fd-sc">${escapeHtml(r.special || 'standard')}</td>` : ''}
                 <td class="fd-code">${r.fee_code ? escapeHtml(String(r.fee_code)) : '&ndash;'}</td>
-                ${FEE_COLS.map(c => cell(r, c.key)).join('')}
+                ${FEE_COLS.map(c => cell(r, c.key, c.key === 'F' ? marks[r.row] : null)).join('')}
               </tr>`).join('')}
           </tbody>
         </table>
       </div></div>
-      ${gi === 0 ? plainWords(g) : ''}
-    </div>`).join('');
+      ${notes}
+      ${gi === 0 ? plainWords(g, marked.length > 0) : ''}
+    </div>`;
+  }).join('');
 
   contentEl.innerHTML = `
     <div class="fd-picker">

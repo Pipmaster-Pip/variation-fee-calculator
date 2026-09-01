@@ -1432,3 +1432,17 @@
   margin:0; font-size:13.5px; line-height:1.65; color:var(--ink-soft); max-width:70ch;
 }
 .vclcalc-app .fd-sentence b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* ---- Lines priced by another rule ----------------------------------------
+   A footnote marker in the "1st variation" cell plus a note under the table,
+   for the lines whose price is not that column (Ireland, Czechia, the Danish
+   "D.Sp.No." lines). Same faint .fd-hint voice as the cap and grouping-fee
+   hints in the quick calculation, so it reads as an aside, not as a warning. */
+.vclcalc-app .fd-fnref{
+  font-size:9.5px; font-weight:600; color:var(--accent);
+  vertical-align:super; line-height:0; margin-left:2px;
+}
+.vclcalc-app .fd-fnotes{ display:flex; flex-direction:column; gap:4px; max-width:80ch; }
+.vclcalc-app .fd-fnote{ line-height:1.55; }
+.vclcalc-app .fd-fnote .fd-fnref{ margin:0 3px 0 0; }
+.vclcalc-app .fd-fnote b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
