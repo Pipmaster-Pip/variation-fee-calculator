@@ -41,7 +41,7 @@ ok(it && it.tariffs[0].addStrength === null, "IT does not scale by strength (add
 
 var eu = byCc("EU");
 ok(eu && eu.tariffs.length === 3, "EU has 3 legal-basis tariffs");
-ok(eu && eu.tariffs.filter(function (t){return t.id==="biosimilar";})[0].base === 118100, "EU biosimilar 118100 EUR");
+ok(eu && (eu.tariffs.filter(function (t){return t.id==="art_10_4_biosimilar";})[0] || {}).base === 118100, "EU biosimilar 118100 EUR");
 
 var de = byCc("DE");
 ok(de && de.hasAnnual === false, "DE has no annual fee");
@@ -50,7 +50,7 @@ var be = byCc("BE");
 ok(be && be.turnoverBased === true, "BE is turnover-based (uncomputable)");
 
 var uk = byCc("UK");
-ok(uk && uk.tariffs.filter(function (t){return t.id==="reduced";})[0].ccy === "GBP", "UK tariffs in GBP");
+ok(uk && (uk.tariffs.filter(function (t){return t.id==="pom_reduced";})[0] || {}).ccy === "GBP", "UK tariffs in GBP");
 
 // FALLBACK_FX: covers every non-EUR currency the annual dataset uses (STATIC_FX_RATES in
 // vcl-calc-data.js only covers a few of these -- see the annual-fees blocker fix).
