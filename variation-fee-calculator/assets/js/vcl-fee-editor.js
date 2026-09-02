@@ -158,8 +158,18 @@
   var ANNUAL = (window.VCL_ANNUAL_DATA && window.VCL_ANNUAL_DATA.COUNTRIES) || [];
   var ANNUAL_FX = (window.VCL_ANNUAL_DATA && window.VCL_ANNUAL_DATA.FALLBACK_FX) || {};
 
+  // COUNTRIES (built from COUNTRY_NAMES, the calculator's data) spells Germany
+  // "DE - BfArM"; vcl-annual-data.js, generated straight from the Excel sheet's
+  // plain "DE", has never heard of that suffix. Normalize away everything from
+  // " - " onward before comparing so the two country-code spaces line up.
+  function normalizeCc(cc) {
+    var i = (cc || '').indexOf(' - ');
+    return i === -1 ? cc : cc.slice(0, i);
+  }
+
   function annualFor(cc) {
-    return ANNUAL.filter(function (c) { return c.cc === cc; })[0] || null;
+    var code = normalizeCc(cc);
+    return ANNUAL.filter(function (c) { return c.cc === code; })[0] || null;
   }
 
   /** The shipped amount of a tariff, i.e. what "unchanged" means here. */
@@ -352,6 +362,11 @@
     var wasPoints = saved.points || {};
     Object.keys(pointEdits).concat(Object.keys(wasPoints)).forEach(function (cc) {
       if (String(pointEdits[cc]) !== String(wasPoints[cc])) { amounts[cc] = true; }
+    });
+
+    Object.keys(annualEdits).concat(Object.keys(savedAnnual)).forEach(function (cc) {
+      if (JSON.stringify(annualEdits[cc] || {}) === JSON.stringify(savedAnnual[cc] || {})) { return; }
+      amounts[cc] = true;
     });
 
     Object.keys(countryOverrides).concat(Object.keys(savedCountries)).forEach(function (cc) {
