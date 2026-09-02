@@ -247,13 +247,25 @@ function vcl_register_assets() {
 		true
 	);
 
+	// Lays the fee editor's annual amounts over the generated data above. Depends
+	// on vcl-calc-data as well, because that is the handle window.VCLCALC_OVERRIDES
+	// is printed after -- without it this could run before the overlay exists.
+	$annual_ov_file = VFC_PLUGIN_DIR . 'assets/js/vcl-annual-overrides.js';
+	wp_register_script(
+		'vcl-annual-overrides',
+		VFC_PLUGIN_URL . 'assets/js/vcl-annual-overrides.js',
+		array( 'vcl-annual-data', 'vcl-calc-data' ),
+		file_exists( $annual_ov_file ) ? filemtime( $annual_ov_file ) : VFC_VERSION,
+		true
+	);
+
 	$budget_engine_file = VFC_PLUGIN_DIR . 'assets/js/vcl-budget-engine.js';
 	$budget_engine_ver  = file_exists( $budget_engine_file ) ? filemtime( $budget_engine_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-budget-engine',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget-engine.js',
-		array( 'vcl-annual-data' ),
+		array( 'vcl-annual-data', 'vcl-annual-overrides' ),
 		$budget_engine_ver,
 		true
 	);
@@ -264,7 +276,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-budget',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget.js',
-		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic' ),
+		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-annual-overrides', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic' ),
 		$budget_app_ver,
 		true
 	);
@@ -318,7 +330,8 @@ function vcl_register_assets() {
 	// while nobody has edited anything.
 	$vcl_fee_overrides = vcl_get_fee_overrides();
 	if ( $vcl_fee_overrides['rows'] || $vcl_fee_overrides['points']
-		|| $vcl_fee_overrides['countries'] || $vcl_fee_overrides['imprint'] ) {
+		|| $vcl_fee_overrides['countries'] || $vcl_fee_overrides['imprint']
+		|| $vcl_fee_overrides['annual'] ) {
 		wp_add_inline_script(
 			'vcl-calc-data',
 			'window.VCLCALC_OVERRIDES = ' . wp_json_encode( array(
@@ -326,6 +339,7 @@ function vcl_register_assets() {
 				'points'    => (object) $vcl_fee_overrides['points'],
 				'countries' => (object) $vcl_fee_overrides['countries'],
 				'imprint'   => array_values( $vcl_fee_overrides['imprint'] ),
+				'annual'    => (object) $vcl_fee_overrides['annual'],
 			) ) . ';',
 			'after'
 		);
