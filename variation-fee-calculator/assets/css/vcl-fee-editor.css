@@ -444,3 +444,21 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   background:var(--panel); color:var(--accent-deep);
   padding:2px 6px; border-radius:3px;
 }
+
+/* Annual maintenance fees: same card as the variation-fee tables, but only two
+   amount columns, so the table is left-aligned rather than stretched. */
+.vclfe-annual table { width: auto; min-width: 32rem; }
+
+.vclfe-annual__note {
+  padding: 0.9rem 1.1rem;
+  color: #5b6470;
+  font-style: italic;
+}
+
+.vclfe-annual__eur {
+  display: block;
+  margin-top: 0.2rem;
+  color: #7a828c;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
