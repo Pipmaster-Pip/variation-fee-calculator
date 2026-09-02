@@ -131,14 +131,17 @@ function vcl_get_fee_overrides() {
 }
 
 /**
- * Validates a posted payload down to "row number => field => finite number".
- * Anything unrecognised is dropped rather than rejected: a stray key from an
- * older plugin build should not block a save of the values that are still
- * valid. Returns array( $clean, $dropped ).
+ * Validates a posted payload down to "row number => field => finite number",
+ * plus the per-country provenance, the imprint history, and the annual-fee
+ * amounts (validated against vcl_annual_fee_structure(); its key is left out
+ * of $clean entirely when that structure is unavailable -- see the comment
+ * below). Anything unrecognised is dropped rather than rejected: a stray key
+ * from an older plugin build should not block a save of the values that are
+ * still valid. Returns array( $clean, $dropped ).
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array(), 'annual' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -259,45 +262,59 @@ function vcl_sanitize_fee_overrides( $payload ) {
 	// would change the structure rather than a value.
 	if ( isset( $payload['annual'] ) && is_array( $payload['annual'] ) ) {
 		$structure = vcl_annual_fee_structure();
-		foreach ( $payload['annual'] as $cc => $tariffs ) {
-			$code = sanitize_text_field( (string) $cc );
-			if ( ! isset( $structure[ $code ] ) || ! is_array( $tariffs ) ) {
-				$dropped++;
-				continue;
-			}
-			$cc_clean = array();
-			foreach ( $tariffs as $tariff_id => $fields ) {
-				$tid = sanitize_text_field( (string) $tariff_id );
-				if ( ! isset( $structure[ $code ][ $tid ] ) || ! is_array( $fields ) ) {
+		if ( empty( $structure ) ) {
+			// assets/data/annual-fees.json is missing or unreadable (a plugin ZIP
+			// that shipped incomplete has happened before). There is then nothing
+			// to validate the incoming annual amounts against, so $clean['annual']
+			// is left unset rather than written as an empty array: the callers
+			// that persist $clean fall back to the stored 'annual' branch in that
+			// case, instead of a save that cannot judge annual fees erasing every
+			// annual fee maintained so far. The incoming values still can't be
+			// trusted, so they count toward $dropped exactly as an unknown
+			// country would.
+			$dropped += count( $payload['annual'] );
+		} else {
+			$clean['annual'] = array();
+			foreach ( $payload['annual'] as $cc => $tariffs ) {
+				$code = sanitize_text_field( (string) $cc );
+				if ( ! isset( $structure[ $code ] ) || ! is_array( $tariffs ) ) {
 					$dropped++;
 					continue;
 				}
-				$entry = array();
-				foreach ( array( 'base', 'addStrength' ) as $key ) {
-					if ( ! isset( $fields[ $key ] ) ) {
-						continue;
-					}
-					if ( 'addStrength' === $key && ! $structure[ $code ][ $tid ] ) {
+				$cc_clean = array();
+				foreach ( $tariffs as $tariff_id => $fields ) {
+					$tid = sanitize_text_field( (string) $tariff_id );
+					if ( ! isset( $structure[ $code ][ $tid ] ) || ! is_array( $fields ) ) {
 						$dropped++;
 						continue;
 					}
-					if ( ! is_numeric( $fields[ $key ] ) ) {
-						$dropped++;
-						continue;
+					$entry = array();
+					foreach ( array( 'base', 'addStrength' ) as $key ) {
+						if ( ! isset( $fields[ $key ] ) ) {
+							continue;
+						}
+						if ( 'addStrength' === $key && ! $structure[ $code ][ $tid ] ) {
+							$dropped++;
+							continue;
+						}
+						if ( ! is_numeric( $fields[ $key ] ) ) {
+							$dropped++;
+							continue;
+						}
+						$num = (float) $fields[ $key ];
+						if ( ! is_finite( $num ) || $num < 0 ) {
+							$dropped++;
+							continue;
+						}
+						$entry[ $key ] = $num;
 					}
-					$num = (float) $fields[ $key ];
-					if ( ! is_finite( $num ) || $num < 0 ) {
-						$dropped++;
-						continue;
+					if ( $entry ) {
+						$cc_clean[ $tid ] = $entry;
 					}
-					$entry[ $key ] = $num;
 				}
-				if ( $entry ) {
-					$cc_clean[ $tid ] = $entry;
+				if ( $cc_clean ) {
+					$clean['annual'][ $code ] = $cc_clean;
 				}
-			}
-			if ( $cc_clean ) {
-				$clean['annual'][ $code ] = $cc_clean;
 			}
 		}
 	}
@@ -635,7 +652,10 @@ function vcl_handle_save_fee_overrides() {
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
-		'annual'    => $clean['annual'],
+		// Unset when the shipped tariff structure could not be read (see
+		// vcl_sanitize_fee_overrides()) -- keep whatever annual fees are already
+		// stored rather than let an unrelated save wipe them out.
+		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : vcl_get_fee_overrides()['annual'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
@@ -731,7 +751,11 @@ function vcl_handle_import_fee_overrides() {
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
-		'annual'    => $clean['annual'],
+		// Unset when the shipped tariff structure could not be read (see
+		// vcl_sanitize_fee_overrides()) -- an import that cannot judge the
+		// annual fees in the file should not erase the annual fees already
+		// stored, so keep what $previous had.
+		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $previous ) && isset( $previous['annual'] ) ? $previous['annual'] : array() ),
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );
