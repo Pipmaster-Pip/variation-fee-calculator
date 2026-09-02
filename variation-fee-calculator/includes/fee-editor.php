@@ -682,6 +682,10 @@ function vcl_handle_save_fee_overrides() {
 	// clears the branch sends 'annual' as {}, which decodes to an array and lands
 	// in $clean['annual'] as array() -- that case does not hit this fallback.)
 	$stored_annual = vcl_get_fee_overrides()['annual'];
+	// Read above, done with -- drop it so a future generic pass of $clean into
+	// the option (this file has lost a key that way before) can't write this
+	// internal-only flag into vcl_fee_overrides.
+	unset( $clean['annual_unverifiable'] );
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
@@ -795,6 +799,10 @@ function vcl_handle_import_fee_overrides() {
 	} else {
 		$annual = array();
 	}
+	// Read above, done with -- drop it so a future generic pass of $clean into
+	// the option (this file has lost a key that way before) can't write this
+	// internal-only flag into vcl_fee_overrides.
+	unset( $clean['annual_unverifiable'] );
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
