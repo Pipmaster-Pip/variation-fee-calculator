@@ -267,12 +267,31 @@ function vcl_sanitize_fee_overrides( $payload ) {
 			// that shipped incomplete has happened before). There is then nothing
 			// to validate the incoming annual amounts against, so $clean['annual']
 			// is left unset rather than written as an empty array: the callers
-			// that persist $clean fall back to the stored 'annual' branch in that
-			// case, instead of a save that cannot judge annual fees erasing every
-			// annual fee maintained so far. The incoming values still can't be
-			// trusted, so they count toward $dropped exactly as an unknown
-			// country would.
-			$dropped += count( $payload['annual'] );
+			// that persist $clean fall back to the stored/previous 'annual' branch
+			// in that case, instead of a save or import that cannot judge annual
+			// fees erasing every annual fee maintained so far.
+			//
+			// 'annual_unverifiable' tells the callers *why* $clean['annual'] is
+			// unset: the structure could not be read, as opposed to the payload
+			// simply not carrying an 'annual' key at all (an export from before
+			// this feature existed). Save and import react differently to that
+			// distinction -- see the comments where each reads this flag. The key
+			// is consumed by the callers only; it is never written to the option
+			// and never counted by vcl_count_fee_overrides().
+			$clean['annual_unverifiable'] = true;
+			// The incoming values still can't be trusted, so they count toward
+			// $dropped per amount (base/addStrength), the same unit the branch
+			// below drops values in -- not per country, which would undercount
+			// whenever a country carries more than one tariff or field.
+			foreach ( $payload['annual'] as $tariffs ) {
+				if ( ! is_array( $tariffs ) ) {
+					$dropped++;
+					continue;
+				}
+				foreach ( $tariffs as $fields ) {
+					$dropped += is_array( $fields ) ? count( $fields ) : 1;
+				}
+			}
 		} else {
 			$clean['annual'] = array();
 			foreach ( $payload['annual'] as $cc => $tariffs ) {
@@ -647,15 +666,20 @@ function vcl_handle_save_fee_overrides() {
 	list( $clean, $dropped ) = vcl_sanitize_fee_overrides( $payload );
 
 	$user = wp_get_current_user();
+	// $clean['annual'] is unset in two situations (see vcl_sanitize_fee_overrides()):
+	// the shipped tariff structure could not be read, or the posted payload never
+	// carried an 'annual' key at all. Either way, this save could not judge the
+	// annual fees, so it must not touch them -- keep whatever is already stored
+	// rather than let an unrelated save wipe them out. (A client that deliberately
+	// clears the branch sends 'annual' as {}, which decodes to an array and lands
+	// in $clean['annual'] as array() -- that case does not hit this fallback.)
+	$stored_annual = vcl_get_fee_overrides()['annual'];
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
-		// Unset when the shipped tariff structure could not be read (see
-		// vcl_sanitize_fee_overrides()) -- keep whatever annual fees are already
-		// stored rather than let an unrelated save wipe them out.
-		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : vcl_get_fee_overrides()['annual'],
+		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $stored_annual ) ? $stored_annual : array() ),
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
@@ -746,16 +770,29 @@ function vcl_handle_import_fee_overrides() {
 	}
 
 	$user = wp_get_current_user();
+	// $clean['annual'] is unset in two situations (see vcl_sanitize_fee_overrides()),
+	// and import -- unlike save -- must tell them apart, because import replaces
+	// rather than merges (see the doc comment above this function):
+	// - the shipped tariff structure could not be read ('annual_unverifiable' is
+	//   set): this import cannot judge the annual fees in the file, so it must not
+	//   erase the annual fees already stored -- keep what $previous had.
+	// - the file simply has no 'annual' key at all (an export from before this
+	//   feature existed): that is a real answer, not a gap, and a replacing import
+	//   must carry it through -- the branch is cleared.
+	if ( isset( $clean['annual'] ) ) {
+		$annual = $clean['annual'];
+	} elseif ( ! empty( $clean['annual_unverifiable'] ) ) {
+		$annual = ( is_array( $previous ) && isset( $previous['annual'] ) && is_array( $previous['annual'] ) )
+			? $previous['annual'] : array();
+	} else {
+		$annual = array();
+	}
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
-		// Unset when the shipped tariff structure could not be read (see
-		// vcl_sanitize_fee_overrides()) -- an import that cannot judge the
-		// annual fees in the file should not erase the annual fees already
-		// stored, so keep what $previous had.
-		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $previous ) && isset( $previous['annual'] ) ? $previous['annual'] : array() ),
+		'annual'    => $annual,
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );
