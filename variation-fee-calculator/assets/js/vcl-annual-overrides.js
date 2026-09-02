@@ -34,7 +34,7 @@
   }
 
   function shipped() {
-    if (!SHIPPED) SHIPPED = takeSnapshot();
+    if (!SHIPPED || !Object.keys(SHIPPED).length) SHIPPED = takeSnapshot();
     return SHIPPED;
   }
 
