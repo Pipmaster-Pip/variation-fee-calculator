@@ -172,25 +172,36 @@
     return ANNUAL.filter(function (c) { return c.cc === code; })[0] || null;
   }
 
-  /** The shipped amount of a tariff, i.e. what "unchanged" means here. */
+  /** The shipped amount of a tariff, i.e. what "unchanged" means here.
+   *
+   *  Every function below normalises the country code the same way annualFor()
+   *  does. The picker hands out the calculator's own codes, one of which carries
+   *  an authority suffix ("DE - BfArM"), while the annual dataset, the stored
+   *  overlay and the front end all key on the bare code. Normalising only where
+   *  the data is looked up would store edits under a code PHP then rejects as
+   *  unknown, and the front end would never find them. */
   function shippedAnnual(cc, tariffId) {
     var all = (window.VCL_ANNUAL_OVERRIDES && window.VCL_ANNUAL_OVERRIDES.shipped()) || {};
-    return (all[cc] && all[cc][tariffId]) || {};
+    var code = normalizeCc(cc);
+    return (all[code] && all[code][tariffId]) || {};
   }
 
   function annualValue(cc, tariffId, key) {
-    var edit = annualEdits[cc] && annualEdits[cc][tariffId];
+    var code = normalizeCc(cc);
+    var edit = annualEdits[code] && annualEdits[code][tariffId];
     if (edit && typeof edit[key] === 'number') return edit[key];
-    var was = shippedAnnual(cc, tariffId);
+    var was = shippedAnnual(code, tariffId);
     return was[key] === undefined ? null : was[key];
   }
 
   function annualEdited(cc, tariffId, key) {
-    var edit = annualEdits[cc] && annualEdits[cc][tariffId];
+    var code = normalizeCc(cc);
+    var edit = annualEdits[code] && annualEdits[code][tariffId];
     return !!(edit && typeof edit[key] === 'number');
   }
 
-  function setAnnualEdit(cc, tariffId, key, value) {
+  function setAnnualEdit(rawCc, tariffId, key, value) {
+    var cc = normalizeCc(rawCc);
     var was = shippedAnnual(cc, tariffId);
     if (value === null || nearlyEqual(value, was[key] === undefined ? null : was[key])) {
       if (annualEdits[cc] && annualEdits[cc][tariffId]) {
@@ -208,8 +219,9 @@
 
   function annualEditCount(cc) {
     var n = 0;
+    var want = cc ? normalizeCc(cc) : null;
     Object.keys(annualEdits).forEach(function (code) {
-      if (cc && code !== cc) return;
+      if (want && code !== want) return;
       Object.keys(annualEdits[code]).forEach(function (tid) {
         n += Object.keys(annualEdits[code][tid]).length;
       });
