@@ -53,12 +53,65 @@ function vcl_fee_editable_fields() {
 }
 
 /**
+ * Which annual-fee tariffs the plugin ships, as
+ * array( '<CC>' => array( '<tariffId>' => bool ) ) where the bool says whether
+ * that tariff scales with the number of strengths (addStrength !== null).
+ *
+ * Read from assets/data/annual-fees.json, written by the same converter run as
+ * assets/js/vcl-annual-data.js -- PHP cannot read the generated .js, and a second
+ * hand-maintained list here would drift from it within a release or two.
+ *
+ * Cached per request only. The file changes with a plugin update, and a longer
+ * cache would then validate against tariffs that no longer exist; reading a
+ * ~30 KB file once per request is cheaper than getting that wrong.
+ */
+function vcl_annual_fee_structure() {
+	static $structure = null;
+	if ( $structure !== null ) {
+		return $structure;
+	}
+
+	$structure = array();
+	$path      = VFC_PLUGIN_DIR . 'assets/data/annual-fees.json';
+	if ( ! file_exists( $path ) ) {
+		return $structure;
+	}
+
+	$raw  = file_get_contents( $path );
+	$data = json_decode( (string) $raw, true );
+	if ( ! is_array( $data ) || empty( $data['countries'] ) || ! is_array( $data['countries'] ) ) {
+		return $structure;
+	}
+
+	foreach ( $data['countries'] as $country ) {
+		if ( ! is_array( $country ) || empty( $country['cc'] ) ) {
+			continue;
+		}
+		$tariffs = array();
+		if ( ! empty( $country['tariffs'] ) && is_array( $country['tariffs'] ) ) {
+			foreach ( $country['tariffs'] as $tariff ) {
+				if ( ! is_array( $tariff ) || ! isset( $tariff['id'] ) ) {
+					continue;
+				}
+				$tariffs[ (string) $tariff['id'] ] =
+					array_key_exists( 'addStrength', $tariff ) && $tariff['addStrength'] !== null;
+			}
+		}
+		$structure[ (string) $country['cc'] ] = $tariffs;
+	}
+
+	return $structure;
+}
+
+/**
  * The saved overrides, always in the shape
  * array( 'rows' => array( '<rowNo>' => array( '<field>' => float ) ),
  *        'points' => array( '<cc>' => float ),
  *        'countries' => array( '<CC>' => array( 'checked' => 'Y-m-d',
  *                                               'source' => string,
  *                                               'updated' => 'Y-m-d' ) ),
+ *        'annual' => array( '<CC>' => array( '<tariffId>' => array( 'base' => float,
+ *                                                                   'addStrength' => float ) ) ),
  *        'updated' => ..., 'by' => ... ).
  */
 function vcl_get_fee_overrides() {
@@ -71,16 +124,20 @@ function vcl_get_fee_overrides() {
 		'points'    => array(),
 		'countries' => array(),
 		'imprint'   => array(),
+		'annual'    => array(),
 		'updated'   => '',
 		'by'        => '',
 	) );
 }
 
 /**
- * Validates a posted payload down to "row number => field => finite number".
- * Anything unrecognised is dropped rather than rejected: a stray key from an
- * older plugin build should not block a save of the values that are still
- * valid. Returns array( $clean, $dropped ).
+ * Validates a posted payload down to "row number => field => finite number",
+ * plus the per-country provenance, the imprint history, and the annual-fee
+ * amounts (validated against vcl_annual_fee_structure(); its key is left out
+ * of $clean entirely when that structure is unavailable -- see the comment
+ * below). Anything unrecognised is dropped rather than rejected: a stray key
+ * from an older plugin build should not block a save of the values that are
+ * still valid. Returns array( $clean, $dropped ).
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
@@ -199,6 +256,88 @@ function vcl_sanitize_fee_overrides( $payload ) {
 		} );
 	}
 
+	// Annual maintenance fees. Only amounts are editable, and only for tariffs the
+	// plugin actually ships: an unknown country or tariff id is a leftover from an
+	// older build, and addStrength on a tariff that does not scale with strengths
+	// would change the structure rather than a value.
+	if ( isset( $payload['annual'] ) && is_array( $payload['annual'] ) ) {
+		$structure = vcl_annual_fee_structure();
+		if ( empty( $structure ) ) {
+			// assets/data/annual-fees.json is missing or unreadable (a plugin ZIP
+			// that shipped incomplete has happened before). There is then nothing
+			// to validate the incoming annual amounts against, so $clean['annual']
+			// is left unset rather than written as an empty array: the callers
+			// that persist $clean fall back to the stored/previous 'annual' branch
+			// in that case, instead of a save or import that cannot judge annual
+			// fees erasing every annual fee maintained so far.
+			//
+			// 'annual_unverifiable' tells the callers *why* $clean['annual'] is
+			// unset: the structure could not be read, as opposed to the payload
+			// simply not carrying an 'annual' key at all (an export from before
+			// this feature existed). Save and import react differently to that
+			// distinction -- see the comments where each reads this flag. The key
+			// is consumed by the callers only; it is never written to the option
+			// and never counted by vcl_count_fee_overrides().
+			$clean['annual_unverifiable'] = true;
+			// The incoming values still can't be trusted, so they count toward
+			// $dropped per amount (base/addStrength), the same unit the branch
+			// below drops values in -- not per country, which would undercount
+			// whenever a country carries more than one tariff or field.
+			foreach ( $payload['annual'] as $tariffs ) {
+				if ( ! is_array( $tariffs ) ) {
+					$dropped++;
+					continue;
+				}
+				foreach ( $tariffs as $fields ) {
+					$dropped += is_array( $fields ) ? count( $fields ) : 1;
+				}
+			}
+		} else {
+			$clean['annual'] = array();
+			foreach ( $payload['annual'] as $cc => $tariffs ) {
+				$code = sanitize_text_field( (string) $cc );
+				if ( ! isset( $structure[ $code ] ) || ! is_array( $tariffs ) ) {
+					$dropped++;
+					continue;
+				}
+				$cc_clean = array();
+				foreach ( $tariffs as $tariff_id => $fields ) {
+					$tid = sanitize_text_field( (string) $tariff_id );
+					if ( ! isset( $structure[ $code ][ $tid ] ) || ! is_array( $fields ) ) {
+						$dropped++;
+						continue;
+					}
+					$entry = array();
+					foreach ( array( 'base', 'addStrength' ) as $key ) {
+						if ( ! isset( $fields[ $key ] ) ) {
+							continue;
+						}
+						if ( 'addStrength' === $key && ! $structure[ $code ][ $tid ] ) {
+							$dropped++;
+							continue;
+						}
+						if ( ! is_numeric( $fields[ $key ] ) ) {
+							$dropped++;
+							continue;
+						}
+						$num = (float) $fields[ $key ];
+						if ( ! is_finite( $num ) || $num < 0 ) {
+							$dropped++;
+							continue;
+						}
+						$entry[ $key ] = $num;
+					}
+					if ( $entry ) {
+						$cc_clean[ $tid ] = $entry;
+					}
+				}
+				if ( $cc_clean ) {
+					$clean['annual'][ $code ] = $cc_clean;
+				}
+			}
+		}
+	}
+
 	return array( $clean, $dropped );
 }
 
@@ -218,6 +357,15 @@ function vcl_count_fee_overrides( $overrides ) {
 				if ( ! empty( $fields[ $key ] ) ) {
 					$n++;
 				}
+			}
+		}
+	}
+	// Annual fees count like any other maintained amount: an installation whose
+	// only edit is a Danish annual fee still has something to export and to clear.
+	if ( ! empty( $overrides['annual'] ) && is_array( $overrides['annual'] ) ) {
+		foreach ( $overrides['annual'] as $tariffs ) {
+			foreach ( (array) $tariffs as $fields ) {
+				$n += count( (array) $fields );
 			}
 		}
 	}
@@ -310,8 +458,14 @@ function vcl_fee_editor_assets( $hook ) {
 		array(), $ver( 'js/vcl-calc-data.js' ), true );
 	wp_enqueue_script( 'vcl-calc-app', $url . 'js/vcl-calc-app.js',
 		array( 'vcl-calc-data' ), $ver( 'js/vcl-calc-app.js' ), true );
+	// The annual fees are maintained on this page too, so the editor needs the
+	// reference data and the overlay that lays the saved amounts over it.
+	wp_enqueue_script( 'vcl-annual-data', $url . 'js/vcl-annual-data.js',
+		array(), $ver( 'js/vcl-annual-data.js' ), true );
+	wp_enqueue_script( 'vcl-annual-overrides', $url . 'js/vcl-annual-overrides.js',
+		array( 'vcl-annual-data', 'vcl-calc-data' ), $ver( 'js/vcl-annual-overrides.js' ), true );
 	wp_enqueue_script( 'vcl-fee-editor', $url . 'js/vcl-fee-editor.js',
-		array( 'vcl-calc-app' ), $ver( 'js/vcl-fee-editor.js' ), true );
+		array( 'vcl-calc-app', 'vcl-annual-overrides' ), $ver( 'js/vcl-fee-editor.js' ), true );
 
 	$overrides = vcl_get_fee_overrides();
 	// Hand the saved overrides to the engine before it boots, so the page opens
@@ -322,6 +476,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
 			'imprint'   => array_values( $overrides['imprint'] ),
+			'annual'    => (object) $overrides['annual'],
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
@@ -329,6 +484,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
 			'imprint'   => array_values( $overrides['imprint'] ),
+			'annual'    => (object) $overrides['annual'],
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
@@ -518,11 +674,24 @@ function vcl_handle_save_fee_overrides() {
 	list( $clean, $dropped ) = vcl_sanitize_fee_overrides( $payload );
 
 	$user = wp_get_current_user();
+	// $clean['annual'] is unset in two situations (see vcl_sanitize_fee_overrides()):
+	// the shipped tariff structure could not be read, or the posted payload never
+	// carried an 'annual' key at all. Either way, this save could not judge the
+	// annual fees, so it must not touch them -- keep whatever is already stored
+	// rather than let an unrelated save wipe them out. (A client that deliberately
+	// clears the branch sends 'annual' as {}, which decodes to an array and lands
+	// in $clean['annual'] as array() -- that case does not hit this fallback.)
+	$stored_annual = vcl_get_fee_overrides()['annual'];
+	// Read above, done with -- drop it so a future generic pass of $clean into
+	// the option (this file has lost a key that way before) can't write this
+	// internal-only flag into vcl_fee_overrides.
+	unset( $clean['annual_unverifiable'] );
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
+		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $stored_annual ) ? $stored_annual : array() ),
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
@@ -558,6 +727,7 @@ function vcl_handle_export_fee_overrides() {
 		'points'    => (object) $overrides['points'],
 		'countries' => (object) $overrides['countries'],
 		'imprint'   => array_values( $overrides['imprint'] ),
+		'annual'    => (object) $overrides['annual'],
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -612,11 +782,33 @@ function vcl_handle_import_fee_overrides() {
 	}
 
 	$user = wp_get_current_user();
+	// $clean['annual'] is unset in two situations (see vcl_sanitize_fee_overrides()),
+	// and import -- unlike save -- must tell them apart, because import replaces
+	// rather than merges (see the doc comment above this function):
+	// - the shipped tariff structure could not be read ('annual_unverifiable' is
+	//   set): this import cannot judge the annual fees in the file, so it must not
+	//   erase the annual fees already stored -- keep what $previous had.
+	// - the file simply has no 'annual' key at all (an export from before this
+	//   feature existed): that is a real answer, not a gap, and a replacing import
+	//   must carry it through -- the branch is cleared.
+	if ( isset( $clean['annual'] ) ) {
+		$annual = $clean['annual'];
+	} elseif ( ! empty( $clean['annual_unverifiable'] ) ) {
+		$annual = ( is_array( $previous ) && isset( $previous['annual'] ) && is_array( $previous['annual'] ) )
+			? $previous['annual'] : array();
+	} else {
+		$annual = array();
+	}
+	// Read above, done with -- drop it so a future generic pass of $clean into
+	// the option (this file has lost a key that way before) can't write this
+	// internal-only flag into vcl_fee_overrides.
+	unset( $clean['annual_unverifiable'] );
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
+		'annual'    => $annual,
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );

@@ -440,6 +440,22 @@ def render_js(countries, fallback_fx, generated_date):
     return "\n".join(lines)
 
 
+def render_json(countries, fallback_fx, generated_date):
+    """The same structure as render_js(), as JSON.
+
+    PHP cannot read the generated .js, but the fee editor has to validate what is
+    typed against the shipped tariffs -- which country codes exist, which tariff
+    ids a country has, and whether a tariff scales with the number of strengths.
+    Written by the same run as the .js so the two cannot drift apart.
+    """
+    payload = {
+        "updated": generated_date,
+        "countries": countries,
+        "fallbackFx": fallback_fx,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
 def load_existing_countries(output_path):
     """Best-effort: shells out to Node to require() the CURRENT output file and
     return its COUNTRIES array as plain data, for the diff report. Returns None
@@ -475,6 +491,7 @@ def print_diff(old_countries, new_countries):
 
     changed_flags = []
     changed_fees = []
+    orphaned_tariffs = []
     for cc in sorted(set(old_by_cc) & set(new_by_cc)):
         old, new = old_by_cc[cc], new_by_cc[cc]
         if old.get("hasAnnual") != new.get("hasAnnual") or old.get("turnoverBased") != new.get("turnoverBased"):
@@ -483,6 +500,7 @@ def print_diff(old_countries, new_countries):
         new_t = {t["id"]: t for t in new.get("tariffs", [])}
         for tid in sorted(set(old_t) - set(new_t)):
             changed_fees.append(f"{cc}/{tid}: removed (was {old_t[tid].get('base')})")
+            orphaned_tariffs.append(f"{cc}/{tid}")
         for tid in sorted(set(new_t) - set(old_t)):
             changed_fees.append(f"{cc}/{tid}: new tariff, base={new_t[tid].get('base')}")
         for tid in sorted(set(old_t) & set(new_t)):
@@ -490,6 +508,14 @@ def print_diff(old_countries, new_countries):
                 changed_fees.append(f"{cc}/{tid}: base {old_t[tid].get('base')} -> {new_t[tid].get('base')}")
             if old_t[tid].get("addStrength") != new_t[tid].get("addStrength"):
                 changed_fees.append(f"{cc}/{tid}: addStrength {old_t[tid].get('addStrength')} -> {new_t[tid].get('addStrength')}")
+
+    # A tariff id disappearing for a country still present (whether it was
+    # dropped outright or just relabelled -- the diff can't tell those apart,
+    # since the id is a slug of the Excel label) orphans any amount saved for
+    # it in the fee editor's overlay: the id no longer exists to look it up by.
+    for cc in sorted(set(old_by_cc) - set(new_by_cc)):
+        for t in old_by_cc[cc].get("tariffs", []):
+            orphaned_tariffs.append(f"{cc}/{t['id']}")
 
     if changed_flags:
         print("  hasAnnual/turnoverBased changes:")
@@ -499,6 +525,15 @@ def print_diff(old_countries, new_countries):
         print("  fee amount changes:")
         for line in changed_fees:
             print(f"    {line}")
+    if orphaned_tariffs:
+        print("  [!] tariff ids gone (removed or renamed in the Excel label):")
+        for line in orphaned_tariffs:
+            print(f"    {line}")
+        print(
+            "      Any annual fee saved for these ids in the fee editor's overlay "
+            "(vcl_fee_overrides) is now orphaned and silently falls back to the "
+            "shipped amount. Re-enter it under the new id if the tariff still exists."
+        )
     if not (added or removed or changed_flags or changed_fees):
         print("  no changes vs. the current file.")
 
@@ -551,11 +586,33 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(js, encoding="utf-8")
 
+    # The JSON is the shipped data file the fee editor validates against -- it
+    # must only ever be regenerated together with the real vcl-annual-data.js,
+    # never as a side effect of a preview run to some other -o path (that class
+    # of bug has bitten this repo before: a converter overwrote a shipped file
+    # it had no business touching).
+    default_output = parser.get_default("output")
+    is_default_output = args.output == default_output
+
     with_annual = sum(1 for c in countries if c["hasAnnual"] and not c["turnoverBased"])
     turnover = sum(1 for c in countries if c["turnoverBased"])
     no_fee = sum(1 for c in countries if not c["hasAnnual"])
+
+    if is_default_output:
+        json_path = output_path.parent.parent / "data" / "annual-fees.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(render_json(countries, fallback_fx, generated_date), encoding="utf-8")
+        json_line = f"    + {json_path} (structure for the fee editor)\n"
+    else:
+        json_line = (
+            f"    (skipped: annual-fees.json is only written for the default -o "
+            f"{default_output}; this was a preview run to {output_path}, so the "
+            f"shipped JSON was left untouched)\n"
+        )
+
     print(
         f"\nOK  {output_path}\n"
+        f"{json_line}"
         f"    {len(countries)} countries: {with_annual} priced, {turnover} turnover-based, {no_fee} no annual fee.\n"
         f"    FALLBACK_FX: {', '.join(fallback_fx.keys()) or '(none)'}\n"
         f"    updated: {generated_date}"

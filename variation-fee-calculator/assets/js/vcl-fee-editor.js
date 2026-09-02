@@ -59,6 +59,12 @@
   var saved = CFG.overrides || {};
   var edits = deepCopy(saved.rows || {});
   var pointEdits = deepCopy(saved.points || {});
+  // Annual maintenance fees. Same sparse shape as `edits` above, one level
+  // deeper: annualEdits[cc][tariffId] = { base, addStrength }. The structure --
+  // which tariffs a country has, what they are called, in which currency -- stays
+  // with vcl-annual-data.js; only the two amounts are editable here.
+  var annualEdits = deepCopy(saved.annual || {});
+  var savedAnnual = deepCopy(saved.annual || {});
   // Per-country provenance (checked date + source): keyed by country code,
   // independent of the amount edits above so a country switch shows the
   // right values without touching edits/pointEdits.
@@ -147,6 +153,91 @@
     .filter(function (cc) { return rowsFor(cc).length > 0; })
     .map(function (cc) { return { cc: cc, name: COUNTRY_NAMES[cc], n: rowsFor(cc).length }; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, 'de'); });
+
+  // ---- annual fees -------------------------------------------------------
+  var ANNUAL = (window.VCL_ANNUAL_DATA && window.VCL_ANNUAL_DATA.COUNTRIES) || [];
+  var ANNUAL_FX = (window.VCL_ANNUAL_DATA && window.VCL_ANNUAL_DATA.FALLBACK_FX) || {};
+
+  // COUNTRIES (built from COUNTRY_NAMES, the calculator's data) spells Germany
+  // "DE - BfArM"; vcl-annual-data.js, generated straight from the Excel sheet's
+  // plain "DE", has never heard of that suffix. Normalize away everything from
+  // " - " onward before comparing so the two country-code spaces line up.
+  function normalizeCc(cc) {
+    var i = (cc || '').indexOf(' - ');
+    return i === -1 ? cc : cc.slice(0, i);
+  }
+
+  function annualFor(cc) {
+    var code = normalizeCc(cc);
+    return ANNUAL.filter(function (c) { return c.cc === code; })[0] || null;
+  }
+
+  /** The shipped amount of a tariff, i.e. what "unchanged" means here.
+   *
+   *  Every function below normalises the country code the same way annualFor()
+   *  does. The picker hands out the calculator's own codes, one of which carries
+   *  an authority suffix ("DE - BfArM"), while the annual dataset, the stored
+   *  overlay and the front end all key on the bare code. Normalising only where
+   *  the data is looked up would store edits under a code PHP then rejects as
+   *  unknown, and the front end would never find them. */
+  function shippedAnnual(cc, tariffId) {
+    var all = (window.VCL_ANNUAL_OVERRIDES && window.VCL_ANNUAL_OVERRIDES.shipped()) || {};
+    var code = normalizeCc(cc);
+    return (all[code] && all[code][tariffId]) || {};
+  }
+
+  function annualValue(cc, tariffId, key) {
+    var code = normalizeCc(cc);
+    var edit = annualEdits[code] && annualEdits[code][tariffId];
+    if (edit && typeof edit[key] === 'number') return edit[key];
+    var was = shippedAnnual(code, tariffId);
+    return was[key] === undefined ? null : was[key];
+  }
+
+  function annualEdited(cc, tariffId, key) {
+    var code = normalizeCc(cc);
+    var edit = annualEdits[code] && annualEdits[code][tariffId];
+    return !!(edit && typeof edit[key] === 'number');
+  }
+
+  function setAnnualEdit(rawCc, tariffId, key, value) {
+    var cc = normalizeCc(rawCc);
+    var was = shippedAnnual(cc, tariffId);
+    if (value === null || nearlyEqual(value, was[key] === undefined ? null : was[key])) {
+      if (annualEdits[cc] && annualEdits[cc][tariffId]) {
+        delete annualEdits[cc][tariffId][key];
+        if (!Object.keys(annualEdits[cc][tariffId]).length) delete annualEdits[cc][tariffId];
+        if (!Object.keys(annualEdits[cc]).length) delete annualEdits[cc];
+      }
+    } else {
+      if (!annualEdits[cc]) annualEdits[cc] = {};
+      if (!annualEdits[cc][tariffId]) annualEdits[cc][tariffId] = {};
+      annualEdits[cc][tariffId][key] = value;
+    }
+    applyToEngine();
+  }
+
+  function annualEditCount(cc) {
+    var n = 0;
+    var want = cc ? normalizeCc(cc) : null;
+    Object.keys(annualEdits).forEach(function (code) {
+      if (want && code !== want) return;
+      Object.keys(annualEdits[code]).forEach(function (tid) {
+        n += Object.keys(annualEdits[code][tid]).length;
+      });
+    });
+    return n;
+  }
+
+  /** Rough euro equivalent for a non-euro annual amount, using the fallback rates
+   *  the converter lifted out of the workbook's 'Exchange rates' sheet. Shown as an
+   *  orientation next to the field, never as the maintained value. */
+  function annualEuroHint(amount, ccy) {
+    if (!ccy || ccy === 'EUR' || amount === null || amount === undefined) return null;
+    var rate = ANNUAL_FX[ccy];
+    if (!rate) return null;
+    return 'ca. ' + euro.format(amount / rate);
+  }
 
   // ---- values ------------------------------------------------------------
   // Caps and the fixed surcharge (T/U/V) were lifted out of formulas that work
@@ -238,12 +329,13 @@
   }
   function countryEdited(cc) {
     if (pointEdits[cc] !== undefined) return true;
+    if (annualEditCount(cc) > 0) return true;
     return rowsFor(cc).some(function (r) { return edits[r.row] && Object.keys(edits[r.row]).length; });
   }
   function editCount() {
     var n = Object.keys(pointEdits).length;
     Object.keys(edits).forEach(function (k) { n += Object.keys(edits[k]).length; });
-    return n;
+    return n + annualEditCount(null);
   }
 
   /** Maintained provenance fields, counted the same way vcl_count_fee_overrides()
@@ -282,6 +374,11 @@
     var wasPoints = saved.points || {};
     Object.keys(pointEdits).concat(Object.keys(wasPoints)).forEach(function (cc) {
       if (String(pointEdits[cc]) !== String(wasPoints[cc])) { amounts[cc] = true; }
+    });
+
+    Object.keys(annualEdits).concat(Object.keys(savedAnnual)).forEach(function (cc) {
+      if (JSON.stringify(annualEdits[cc] || {}) === JSON.stringify(savedAnnual[cc] || {})) { return; }
+      amounts[cc] = true;
     });
 
     Object.keys(countryOverrides).concat(Object.keys(savedCountries)).forEach(function (cc) {
@@ -433,7 +530,10 @@
   // The example is priced by the real calculator, so the edits have to reach
   // the row objects it reads. Same shape the front end receives from PHP.
   function applyToEngine() {
-    window.VCLCALC_OVERRIDES = { rows: edits, points: pointEdits, countries: countryOverrides };
+    window.VCLCALC_OVERRIDES = {
+      rows: edits, points: pointEdits, countries: countryOverrides, annual: annualEdits
+    };
+    if (window.VCL_ANNUAL_OVERRIDES) window.VCL_ANNUAL_OVERRIDES.apply();
     if (window.VCLCALC && typeof window.VCLCALC.applyOverrides === 'function') {
       window.VCLCALC.applyOverrides();
     }
@@ -602,7 +702,158 @@
       main.appendChild(roleSection(role, roleRows, mode, unit));
     });
 
+    main.appendChild(annualSection(activeCc));
     main.appendChild(rulesSection(rows));
+  }
+
+  // ---- annual fees -------------------------------------------------------
+  // Sits below the per-role tables of the one-off variation fees and above the
+  // rules box. Same country, same page: the recurring fee of a registration is
+  // maintained where its variation fees are, not on a screen of its own.
+  //
+  // Rendered even where there is nothing to type. A country without an annual fee
+  // and a country whose annual fee nobody entered look identical if the block is
+  // simply left out -- and that ambiguity is what let these fees be forgotten in
+  // the first place.
+  function annualSection(cc) {
+    var entry = annualFor(cc);
+    var sec = document.createElement('section');
+    sec.className = 'vclfe-group vclfe-annual';
+
+    var head = document.createElement('div');
+    head.className = 'vclfe-group__head';
+    var h = document.createElement('h3');
+    h.textContent = 'Jahresgebühr';
+    head.appendChild(h);
+    var p = document.createElement('p');
+    p.textContent = 'Wiederkehrende Gebühr je Zulassung — nicht die einmalige Variation-Gebühr oben.';
+    head.appendChild(p);
+    sec.appendChild(head);
+
+    if (!entry) {
+      sec.appendChild(annualNote('Für dieses Land liegen keine Jahresgebühr-Daten vor.'));
+      return sec;
+    }
+    if (!entry.hasAnnual) {
+      sec.appendChild(annualNote('Keine Jahresgebühr.'));
+      return sec;
+    }
+    if (!entry.tariffs || !entry.tariffs.length) {
+      sec.appendChild(annualNote(
+        (entry.note ? entry.note + '. ' : '')
+        + 'Umsatz- bzw. mengenabhängig — lässt sich nicht als fester Betrag pflegen.'));
+      return sec;
+    }
+
+    var card = document.createElement('div');
+    card.className = 'vclfe-card';
+    var scroll = document.createElement('div');
+    scroll.className = 'vclfe-scroll';
+    var table = document.createElement('table');
+
+    var thead = document.createElement('thead');
+    var htr = document.createElement('tr');
+    htr.appendChild(th('Tarif'));
+    [['Grundbetrag', 'base'], ['Je weitere Stärke', 'addStrength']].forEach(function (pair) {
+      var cell = th('', 'num');
+      var name = document.createElement('span');
+      name.className = 'vclfe-th__label';
+      name.textContent = pair[0];
+      var unitEl = document.createElement('span');
+      unitEl.className = 'vclfe-th__unit';
+      unitEl.textContent = entry.tariffs[0].ccy || 'EUR';
+      cell.appendChild(name);
+      cell.appendChild(unitEl);
+      htr.appendChild(cell);
+    });
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    entry.tariffs.forEach(function (t) {
+      tbody.appendChild(annualRow(cc, t));
+    });
+    table.appendChild(tbody);
+
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+    sec.appendChild(card);
+
+    if (entry.note) {
+      var note = document.createElement('p');
+      note.className = 'vclfe-legend';
+      note.textContent = entry.note;
+      sec.appendChild(note);
+    }
+    return sec;
+  }
+
+  function annualNote(text) {
+    var box = document.createElement('div');
+    box.className = 'vclfe-card vclfe-annual__note';
+    box.textContent = text;
+    return box;
+  }
+
+  function annualRow(cc, tariff) {
+    var tr = document.createElement('tr');
+
+    var tdLabel = document.createElement('td');
+    tdLabel.className = 'vclfe-type';
+    tdLabel.textContent = tariff.label;
+    tr.appendChild(tdLabel);
+
+    tr.appendChild(annualCell(cc, tariff, 'base'));
+    tr.appendChild(annualCell(cc, tariff, 'addStrength'));
+    return tr;
+  }
+
+  function annualCell(cc, tariff, key) {
+    var td = document.createElement('td');
+    td.className = 'num';
+
+    // A tariff whose shipped addStrength is null does not scale with the number
+    // of strengths. Offering an input there would invite a number that changes the
+    // structure rather than an amount -- so the cell stays closed.
+    if (key === 'addStrength' && shippedAnnual(cc, tariff.id).addStrength === null) {
+      var dash = document.createElement('span');
+      dash.className = 'vclfe-empty';
+      dash.textContent = '—';
+      dash.title = 'Skaliert nicht mit der Zahl der Stärken.';
+      td.appendChild(dash);
+      return td;
+    }
+
+    var value = annualValue(cc, tariff.id, key);
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'vclfe-amount'
+      + (value === 0 ? ' is-zero' : '')
+      + (annualEdited(cc, tariff.id, key) ? ' is-edited' : '');
+    inp.value = fmt(value);
+    inp.setAttribute('aria-label', tariff.label + ' — Jahresgebühr, '
+      + (key === 'base' ? 'Grundbetrag' : 'je weitere Stärke'));
+    inp.addEventListener('change', function () {
+      var v = parseAmount(String(inp.value).trim());
+      if (v === undefined || v === null || v < 0) {
+        inp.classList.add('is-bad');
+        return;
+      }
+      inp.classList.remove('is-bad');
+      setAnnualEdit(cc, tariff.id, key, v);
+      renderCountry();
+      renderPicker();
+    });
+    td.appendChild(inp);
+
+    var hint = annualEuroHint(value, tariff.ccy);
+    if (hint) {
+      var eurEl = document.createElement('span');
+      eurEl.className = 'vclfe-annual__eur';
+      eurEl.textContent = hint;
+      td.appendChild(eurEl);
+    }
+    return td;
   }
 
   function metaBit(parent, text, cls) {
@@ -1575,6 +1826,7 @@
       JSON.stringify({
         rows: edits,
         points: pointEdits,
+        annual: annualEdits,
         // One new line at most, in front of what was saved before. An empty box
         // is a decision, not an omission: this save then adds nothing.
         imprint: (function () {
@@ -1611,6 +1863,7 @@
     if (!window.confirm('Alle ungespeicherten Änderungen verwerfen?')) return;
     edits = deepCopy(saved.rows || {});
     pointEdits = deepCopy(saved.points || {});
+    annualEdits = deepCopy(savedAnnual);
     // Provenance is part of what this page maintains, so it is part of what
     // "Verwerfen" throws away -- otherwise the next save would write the very
     // dates and sources the user just discarded.

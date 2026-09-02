@@ -112,7 +112,7 @@
   // convert-annual-fees.py from the 'Exchange rates' sheet alongside the fee data above.
   var FALLBACK_FX = { CZK: 24.2, DKK: 7.47, GBP: 0.857, HUF: 395, ISK: 144, PLN: 4.28, SEK: 11 };
 
-  var api = { updated: "2026-08-15", COUNTRIES: COUNTRIES, FALLBACK_FX: FALLBACK_FX };
+  var api = { updated: "2026-09-02", COUNTRIES: COUNTRIES, FALLBACK_FX: FALLBACK_FX };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.VCL_ANNUAL_DATA = api;
 })(typeof window !== "undefined" ? window : this);

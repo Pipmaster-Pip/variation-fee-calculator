@@ -68,7 +68,7 @@ approx(BUD.computeAnnualRow(row({ strengths: 3, procedure: { kind: "national", r
   1879, "IT does not scale by strengths");
 
 // UK reduced pick, 1 strength: 1450 GBP / 0.8 = 1812.5 EUR
-approx(BUD.computeAnnualRow(row({ procedure: { kind: "national", rms: null, countries: ["UK"] }, tariffPicks: { UK: "reduced" } }), CC, FX).total,
+approx(BUD.computeAnnualRow(row({ procedure: { kind: "national", rms: null, countries: ["UK"] }, tariffPicks: { UK: "pom_reduced" } }), CC, FX).total,
   1812.5, "UK reduced pick converted via GBP");
 
 // DE => no annual fee
