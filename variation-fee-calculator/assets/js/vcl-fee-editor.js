@@ -69,6 +69,16 @@
     (window.VCLCALC_OVERRIDES && window.VCLCALC_OVERRIDES.countries) || saved.countries || {}
   );
   var countryOverrides = deepCopy(savedCountries);
+
+  // Change-history entries already saved in the overlay. The bar below adds at
+  // most one more per save; these ride along unchanged so a save never drops
+  // what an earlier one wrote.
+  var savedImprint = Array.isArray(saved.imprint) ? deepCopy(saved.imprint) : [];
+  // What the user typed into the bar this session. `null` means "not touched
+  // yet, keep following the suggestion"; a string -- including an empty one --
+  // means the user has taken over, and an empty one means "no entry, thanks".
+  var imprintText = null;
+  var imprintDate = new Date().toISOString().slice(0, 10);
   var activeCc = null;
   var openRow = null;
   var example = { strengths: 1, IA: 0, IB: 0, II: 1 };
@@ -85,10 +95,36 @@
   // Which amount a country is actually maintained in decides what the fields
   // mean. Non-euro countries keep the local amount as the authoritative one
   // (the euro columns are FX snapshots); point countries keep point counts.
+  // Which unit a non-euro country is shown and edited in. Local currency leads --
+  // it is what the authority publishes -- but both columns (F_lc and F) are
+  // maintained data, so the switch moves the editing, not just the display.
+  var curOverride = {};
   function modeFor(cc) {
     if (POINT_VALUES[cc] || pointEdits[cc]) return 'pt';
-    if (CC_TO_CURRENCY[cc]) return 'lc';
+    if (CC_TO_CURRENCY[cc]) return curOverride[cc] === 'eur' ? 'eur' : 'lc';
     return 'eur';
+  }
+  // The same segmented pair as on the public fee-data page, on the heading of
+  // the table it governs. Point-system countries have no second unit to offer.
+  function currencyToggle(cc) {
+    if (!CC_TO_CURRENCY[cc] || POINT_VALUES[cc] || pointEdits[cc]) return null;
+    var eur = curOverride[cc] === 'eur';
+    var wrap = document.createElement('div');
+    wrap.className = 'vclfe-curtoggle';
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', 'Währung');
+    [[CC_TO_CURRENCY[cc], 'lc', !eur], ['EUR', 'eur', eur]].forEach(function (o) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'vclfe-curbtn' + (o[2] ? ' on' : '');
+      b.textContent = o[0];
+      b.addEventListener('click', function () {
+        curOverride[cc] = o[1];
+        renderCountry();
+      });
+      wrap.appendChild(b);
+    });
+    return wrap;
   }
   function suffixFor(mode) { return mode === 'pt' ? '_pt' : (mode === 'lc' ? '_lc' : ''); }
   function unitFor(cc, mode) {
@@ -227,6 +263,129 @@
    *  sources were entered is not "unchanged". */
   function overrideCount() { return editCount() + provCount(); }
 
+  // ---- change history ----------------------------------------------------
+  // overrideCount() answers "does an overlay exist at all", which is true from
+  // the moment anything was ever saved. The history bar needs a different
+  // question -- "what did THIS session change" -- so it diffs against the state
+  // the page was loaded with.
+  function changedSinceLoad() {
+    var amounts = {};   // country code -> true, for a changed fee or point value
+    var prov = {};      // country code -> true, for a changed checked date or source
+
+    var was = saved.rows || {};
+    Object.keys(edits).concat(Object.keys(was)).forEach(function (row) {
+      if (JSON.stringify(edits[row] || {}) === JSON.stringify(was[row] || {})) { return; }
+      var r = FEE_ROWS.filter(function (x) { return String(x.row) === String(row); })[0];
+      if (r) { amounts[r.cc] = true; }
+    });
+
+    var wasPoints = saved.points || {};
+    Object.keys(pointEdits).concat(Object.keys(wasPoints)).forEach(function (cc) {
+      if (String(pointEdits[cc]) !== String(wasPoints[cc])) { amounts[cc] = true; }
+    });
+
+    Object.keys(countryOverrides).concat(Object.keys(savedCountries)).forEach(function (cc) {
+      var now = countryOverrides[cc] || {};
+      var old = savedCountries[cc] || {};
+      if ((now.checked || '') !== (old.checked || '') || (now.source || '') !== (old.source || '')) {
+        prov[cc] = true;
+      }
+    });
+
+    return { amounts: Object.keys(amounts).sort(), prov: Object.keys(prov).sort() };
+  }
+
+  /** The house style of the 75 lines the workbook ships: one country spelled out,
+   *  two joined with "&", three or more separated by commas. Both forms occur
+   *  there ("to update DK & NO fees", "to update HR, HU fees"). */
+  function imprintSuggestion() {
+    var ch = changedSinceLoad();
+    if (ch.amounts.length) {
+      var list = ch.amounts.length === 2 ? ch.amounts.join(' & ') : ch.amounts.join(', ');
+      return 'to update ' + list + ' fees';
+    }
+    if (ch.prov.length) { return 'to check fees on HA websites'; }
+    return '';
+  }
+
+  function imprintValue() {
+    return imprintText === null ? imprintSuggestion() : imprintText;
+  }
+
+  function renderSaveBar() {
+    var host = document.getElementById('vclfe-savebar');
+    if (!host) { return; }
+    var ch = changedSinceLoad();
+    var active = ch.amounts.length > 0 || ch.prov.length > 0;
+    // Nothing changed in this session: no bar, and nothing carried into the
+    // payload beyond the entries that were already saved.
+    if (!active) { host.textContent = ''; return; }
+
+    // Rebuilding the bar under the cursor would eat every second keystroke, so
+    // it is built once and only its value follows the suggestion afterwards.
+    var input = document.getElementById('vclfe-imprint');
+    if (input) {
+      if (imprintText === null) { input.value = imprintSuggestion(); }
+      var why = document.getElementById('vclfe-imprint-why');
+      if (why) { why.textContent = suggestionReason(ch); }
+      return;
+    }
+
+    host.textContent = '';
+    var bar = document.createElement('div');
+    bar.className = 'vclfe-savebar';
+
+    var lab = document.createElement('label');
+    lab.className = 'vclfe-f vclfe-f--grow';
+    var lspan = document.createElement('span');
+    lspan.textContent = 'Eintrag für die Änderungshistorie';
+    var text = document.createElement('input');
+    text.type = 'text';
+    text.id = 'vclfe-imprint';
+    text.className = 'vclfe-imprint';
+    text.value = imprintSuggestion();
+    text.addEventListener('input', function () { imprintText = text.value; });
+    lab.appendChild(lspan);
+    lab.appendChild(text);
+    bar.appendChild(lab);
+
+    var dlab = document.createElement('label');
+    dlab.className = 'vclfe-f';
+    var dspan = document.createElement('span');
+    dspan.textContent = 'Datum';
+    var date = document.createElement('input');
+    date.type = 'date';
+    date.value = imprintDate;
+    date.addEventListener('input', function () { imprintDate = date.value; });
+    dlab.appendChild(dspan);
+    dlab.appendChild(date);
+    bar.appendChild(dlab);
+
+    var why = document.createElement('p');
+    why.className = 'vclfe-savebar__why';
+    var tag = document.createElement('b');
+    tag.textContent = 'Vorschlag';
+    var whyText = document.createElement('span');
+    whyText.id = 'vclfe-imprint-why';
+    whyText.textContent = suggestionReason(ch);
+    why.appendChild(tag);
+    why.appendChild(whyText);
+    bar.appendChild(why);
+
+    host.appendChild(bar);
+  }
+
+  function suggestionReason(ch) {
+    var names = (ch.amounts.length ? ch.amounts : ch.prov)
+      .map(function (cc) { return COUNTRY_NAMES[cc] || cc; });
+    var listed = names.length > 2
+      ? names.slice(0, -1).join(', ') + ' und ' + names[names.length - 1]
+      : names.join(' und ');
+    var what = ch.amounts.length ? 'geänderten Beträgen' : 'geänderten Angaben zur Quelle';
+    return ' aus den ' + what + ' in ' + listed
+      + '. Überschreib ihn mit allem, was besser passt. Leer lassen heißt: kein Eintrag.';
+  }
+
   function setEdit(row, col, mode, value) {
     var f = fieldName(col, mode);
     // What "unchanged" means differs: a free cell is unchanged when it matches
@@ -281,6 +440,7 @@
     root.classList.toggle('is-dirty', overrideCount() > 0);
     var badge = document.getElementById('vclfe-editcount');
     if (badge) badge.textContent = overrideCount() ? overrideCount() + ' geändert' : '';
+    renderSaveBar();
   }
 
   // ========================================================================
@@ -512,6 +672,8 @@
     var p = document.createElement('p');
     p.textContent = labels[1];
     head.appendChild(p);
+    var cur = currencyToggle(activeCc);
+    if (cur) head.appendChild(cur);
     sec.appendChild(head);
 
     var cols = activeColumns(rows, mode);
@@ -1413,6 +1575,13 @@
       JSON.stringify({
         rows: edits,
         points: pointEdits,
+        // One new line at most, in front of what was saved before. An empty box
+        // is a decision, not an omission: this save then adds nothing.
+        imprint: (function () {
+          var topic = (imprintValue() || '').trim();
+          if (!topic || !imprintDate) { return savedImprint; }
+          return [{ date: imprintDate, topic: topic }].concat(savedImprint);
+        }()),
         countries: (function () {
           var out = {};
           var today = new Date().toISOString().slice(0, 10);
@@ -1446,6 +1615,7 @@
     // "Verwerfen" throws away -- otherwise the next save would write the very
     // dates and sources the user just discarded.
     countryOverrides = deepCopy(savedCountries);
+    imprintText = null;
     applyToEngine();
     render();
   });

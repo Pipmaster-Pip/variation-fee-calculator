@@ -145,10 +145,34 @@ const SHIPPED_AMOUNTS = FEE_ROWS.map(r => {
   return snap;
 });
 const SHIPPED_POINT_VALUES = Object.assign({}, POINT_VALUES);
+// The change history the workbook ships. Entries written in the fee editor go in
+// front of these, so the snapshot is what applyOverrides() rebuilds from -- same
+// discipline as the amounts above, and for the same reason: this runs again after
+// every edit in the editor's live preview.
+const SHIPPED_IMPRINT = (typeof IMPRINT !== 'undefined' && Array.isArray(IMPRINT))
+  ? IMPRINT.slice() : null;
 
 function applyOverrides() {
   const ov = window.VCLCALC_OVERRIDES;
   let touched = false;
+
+  if (SHIPPED_IMPRINT) {
+    const added = (ov && Array.isArray(ov.imprint)) ? ov.imprint.filter(
+      e => e && typeof e.date === 'string' && typeof e.topic === 'string' && e.topic !== ''
+    ) : [];
+    // Newest first, the order the history is rendered and read in. A stable sort
+    // keeps two entries that share a date in the order they were written -- the
+    // workbook has three lines dated 2021-10-17, so this is not hypothetical.
+    const merged = added.concat(SHIPPED_IMPRINT)
+      .map((e, i) => ({ e: e, i: i }))
+      .sort((a, b) => (a.e.date < b.e.date ? 1 : a.e.date > b.e.date ? -1 : a.i - b.i))
+      .map(x => x.e);
+    IMPRINT.length = 0;
+    Array.prototype.push.apply(IMPRINT, merged);
+    // Deliberately not `touched`: that flag gates applyLiveRatesToRows(), and a
+    // history line changes no amount. Flipping it here would re-derive every euro
+    // column on an install whose only override is a sentence.
+  }
 
   // Start from the shipped state every time, so this is idempotent.
   FEE_ROWS.forEach((r, i) => {
@@ -685,12 +709,19 @@ window.VCLCALC = {
   // foot of every step: the entry point now lives in the calculator's view heading, which is
   // rendered by the host guide (vcl-app.js, a different IIFE) and therefore needs a public door
   // into this one. Same behaviour as the retired button, verbatim.
-  openFeeData() {
-    appState.feeDataCc = appState.selectedCountries[0] || 'IT';
-    // Non-euro countries always open in their own currency -- the same reset
-    // the country chips do. Without it a country left in EUR earlier came
-    // back in EUR on the next visit.
-    appState.feeDataCur = 'local';
+  // `cc` is optional. Without it -- the button above the calculator -- the page opens on
+  // the country picker alone: landing straight on a country (Italy, or whichever happened
+  // to be first in the selection) read as a claim that this was the country asked for, and
+  // it never was. With it -- a link inside a result card -- the country is the whole point
+  // of the click, so the page opens on it.
+  openFeeData(cc) {
+    appState.feeDataCc = cc || null;
+    appState.feeDataSearch = '';
+    // Non-euro countries otherwise always open in their own currency -- the same reset the
+    // country chips do; without it a country left in EUR came back in EUR on the next visit.
+    // A link out of a result card is the exception: the reader is already looking at that
+    // country in a chosen currency, and switching units under them would be a small betrayal.
+    appState.feeDataCur = cc ? (appState.resultCurrencyMode || 'eur') : 'local';
     // The button sits above all four steps, so remember where the reader came
     // from; "Back to the calculator" returns there instead of to step 0.
     if (typeof appState.step === 'number') appState.feeDataReturnStep = appState.step;
@@ -1316,7 +1347,7 @@ function renderChangelogList() {
   const rows = IMPRINT.map(entry => `
     <div class="breakdown-row">
       <div class="bd-left">
-        <span class="bd-meta" style="font-family:var(--mono); color:var(--ink-soft);">${formatImprintDate(entry.date)}</span>
+        <span class="bd-meta" style="font-family:var(--figure); color:var(--ink-soft);">${formatImprintDate(entry.date)}</span>
         <span class="bd-name" style="font-weight:400; font-size:13px;">${escapeHtml(entry.topic)}</span>
       </div>
     </div>
@@ -1731,7 +1762,7 @@ function renderStepResult() {
         <div class="vres-top">
           <div>
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
-            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b></div>
+            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b> &middot; <button type="button" class="vres-fdlink" data-fdjump="${escapeAttr(cr.cc)}">Fee data for ${escapeHtml(COUNTRY_NAMES[cr.cc] || cr.cc)} &#8599;</button></div>
           </div>
           <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(cr.total)}</span></div>
         </div>
@@ -1781,7 +1812,7 @@ function renderStepResult() {
               <td><span class="vres-ovname"><span class="badge vres-ovcode">${ccShort(cr.cc)}</span>${COUNTRY_NAMES[cr.cc]}</span></td>
               <td>${roleLabel(cr.role)}</td>
               <td>${cr.hasData ? cr.strengths : '&ndash;'}</td>
-              <td>${varTotal}</td>
+              <td>${varBreakdown || varTotal}</td>
               <td>${mechChipHTML(bd)}</td>
               <td class="vres-ovmoney${zero ? ' vres-ovmoney--zero' : ''}">${amount}</td>
             </tr>`;
@@ -1889,6 +1920,15 @@ function renderStepResult() {
     row.addEventListener('click', jump);
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); }
+    });
+  });
+
+  // "Fee data for <country>" in a card's meta line: the same page the button above the
+  // calculator opens, but already on that country and in the currency shown here.
+  contentEl.querySelectorAll('[data-fdjump]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.VCLCALC.openFeeData(btn.getAttribute('data-fdjump'));
     });
   });
 
@@ -2150,12 +2190,15 @@ function exportExcel(res) {
 // Column meanings straight from the workbook's header row: F is the first
 // variation of the first strength, G every further strength, H/I/J every
 // further variation of type IA/IB/II, and K the flat grouping fee.
+// `sub` splits a heading over two lines: the four "each further" columns differ only in what
+// comes second, so the shared half heads the line and the difference sits under it. It also
+// keeps the longest of them from running into the neighbouring cell.
 const FEE_COLS = [
   { key: 'F', label: '1st variation' },
-  { key: 'H', label: 'Each further IA' },
-  { key: 'I', label: 'Each further IB' },
-  { key: 'J', label: 'Each further II' },
-  { key: 'G', label: 'Each further strength' },
+  { key: 'H', label: 'Each further', sub: 'Type IA' },
+  { key: 'I', label: 'Each further', sub: 'Type IB' },
+  { key: 'J', label: 'Each further', sub: 'Type II' },
+  { key: 'G', label: 'Each further', sub: 'Strength' },
   { key: 'K', label: 'Grouping fee' }
 ];
 const ROLE_CAPTION = {
@@ -2176,7 +2219,68 @@ function renderStepFeeData() {
     return;
   }
 
-  const cc = appState.feeDataCc || 'IT';
+  // Focus and chip wiring is shared by the picker-only view and the full page,
+  // so it lives in one place and both entry points call it.
+  const refocus = (attr, value) => {
+    const again = contentEl.querySelector('[' + attr + '="' + String(value).replace(/"/g, '\\"') + '"]');
+    if (again) again.focus();
+  };
+  const wirePicker = () => {
+    contentEl.querySelectorAll('[data-fdcc]').forEach((b) => {
+      b.addEventListener('click', () => {
+        appState.feeDataCc = b.getAttribute('data-fdcc');
+        appState.feeDataCur = 'local';
+        render();
+        refocus('data-fdcc', appState.feeDataCc);
+      });
+    });
+    const searchEl = document.getElementById('vclcalc-fdSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        appState.feeDataSearch = searchEl.value;
+        render();
+        const again = document.getElementById('vclcalc-fdSearch');
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      });
+    }
+    const backEl = document.getElementById('vclcalc-fdBack');
+    if (backEl) {
+      backEl.addEventListener('click', () => {
+        appState.step = appState.feeDataReturnStep;
+        render();
+        if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+      });
+    }
+  };
+
+  const chips = FD.chipList(COUNTRY_NAMES, FEE_ROWS);
+  const q = appState.feeDataSearch.trim().toLowerCase();
+  const shown = chips.filter(c => !q || c.name.toLowerCase().includes(q) || c.cc.toLowerCase().includes(q));
+  const pickerHtml = `
+    <div class="fd-picker">
+      <div class="fd-pillbar">
+        <input type="search" class="fd-search" id="vclcalc-fdSearch" placeholder="Find a country"
+               aria-label="Find a country" value="${escapeAttr(appState.feeDataSearch)}">
+        <span class="fd-pillcount">${q ? `${shown.length} of ${chips.length}` : `${chips.length} countries`}</span>
+      </div>
+      <div class="fd-pills">
+        ${shown.length ? shown.map(c => `
+          <button type="button" class="fd-pill${c.cc === appState.feeDataCc ? ' is-active' : ''}" data-fdcc="${escapeAttr(c.cc)}">
+            ${escapeHtml(c.name)}<span class="n">${c.n}</span>
+          </button>`).join('') : '<p class="fd-pillnone">No country with that name.</p>'}
+      </div>
+    </div>`;
+
+  if (!appState.feeDataCc) {
+    contentEl.innerHTML = `
+      ${pickerHtml}
+      <p class="fd-pickhint">Choose a country to see its fee table, where the amounts come from and when they were last checked.</p>
+      <p class="fd-pickback"><button type="button" class="btn fd-backbtn" id="vclcalc-fdBack">Back to the calculator</button></p>`;
+    wirePicker();
+    return;
+  }
+
+  const cc = appState.feeDataCc;
   const rows = FEE_ROWS.filter(r => r.cc === cc);
   const meta = FD.countryMeta(cc, HA_WEBSITES, CC_TO_CURRENCY, feeDataOverrides());
   const rate = meta.currency ? FD.deriveRate(rows) : null;
@@ -2339,9 +2443,14 @@ function renderStepFeeData() {
   // 29.357 EUR as a standard Type II, Denmark's spans four Type II rows.
   const unitTxt = meta.currency ? (local ? meta.currency : 'EUR') : 'EUR';
   const colRange = (grows, key) => {
+    // Zeros are not rates -- a "0" on a line means that line carries no charge
+    // (Iceland's "if CMS is not affected" rows), and letting one into the range
+    // made the sentence open at "0 ISK", which says the opposite of what the
+    // table shows. Now that this block speaks for the whole country rather than
+    // for the RMS table alone, every role's zero rows would land in here.
     const vals = grows
       .map(r => (meta.currency ? r[key + '_lc'] : r[key]))
-      .filter(v => typeof v === 'number');
+      .filter(v => typeof v === 'number' && v !== 0);
     if (!vals.length) return null;
     const lo = Math.min.apply(null, vals);
     const hi = Math.max.apply(null, vals);
@@ -2377,11 +2486,16 @@ function renderStepFeeData() {
       </div>`;
   };
 
-  const chips = FD.chipList(COUNTRY_NAMES, FEE_ROWS);
-  const q = appState.feeDataSearch.trim().toLowerCase();
-  const shown = chips.filter(c => !q || c.name.toLowerCase().includes(q) || c.cc.toLowerCase().includes(q));
-
   const anySpecial = rows.some(r => r.special && r.special !== 'standard');
+
+  // One currency switch per role section, sitting on the heading of the table it
+  // governs. They all drive the same appState.feeDataCur, so switching any of
+  // them switches the whole page; the index only keeps the focus restore honest.
+  const curToggle = (gi) => (meta.currency && rate) ? `
+    <div class="fd-curtoggle" role="group" aria-label="Currency">
+      <button type="button" class="fd-curbtn${local ? ' on' : ''}" data-fdcur="local" data-fdcurgi="${gi}">${escapeHtml(meta.currency)}</button>
+      <button type="button" class="fd-curbtn${local ? '' : ' on'}" data-fdcur="eur" data-fdcurgi="${gi}">EUR</button>
+    </div>` : '';
 
   const tables = roleGroups.map((g, gi) => {
     // Footnote numbers run per role group, so a reader never has to look past
@@ -2407,6 +2521,7 @@ function renderStepFeeData() {
       <div class="fd-grouphead">
         <h2>${g.role === 'national' ? 'National procedure' : 'As ' + escapeHtml(g.role)}</h2>
         <p>${escapeHtml(ROLE_CAPTION[g.role] || '')}</p>
+        ${curToggle(gi)}
       </div>
       <div class="fd-card"><div class="fd-scroll">
         <table class="fd-tbl">
@@ -2415,13 +2530,15 @@ function renderStepFeeData() {
             ${anySpecial ? '<th>Special case</th>' : ''}
             <th>Fee code</th>
             ${FEE_COLS.map(c => `<th class="fd-num">${escapeHtml(c.label)}${
+              c.sub ? `<span class="fd-sub">${escapeHtml(c.sub)}</span>` : ''
+            }${
               meta.currency ? `<span class="fd-cur">${escapeHtml(local ? meta.currency : 'EUR')}</span>` : ''
             }</th>`).join('')}
           </tr></thead>
           <tbody>
             ${g.rows.map(r => `
               <tr>
-                <td><span class="fd-tname">Type ${escapeHtml(r.type)}</span></td>
+                <td><span class="fd-type"><span class="fd-tname">Type ${escapeHtml(r.type)}</span>${typePillHTML(r.type)}</span></td>
                 ${anySpecial ? `<td class="fd-sc">${escapeHtml(r.special || 'standard')}</td>` : ''}
                 <td class="fd-code">${r.fee_code ? escapeHtml(String(r.fee_code)) : '&ndash;'}</td>
                 ${FEE_COLS.map(c => cell(r, c.key, c.key === 'F' ? marks[r.row] : null)).join('')}
@@ -2430,24 +2547,11 @@ function renderStepFeeData() {
         </table>
       </div></div>
       ${notes}
-      ${gi === 0 ? plainWords(g, marked.length > 0) : ''}
     </div>`;
   }).join('');
 
   contentEl.innerHTML = `
-    <div class="fd-picker">
-      <div class="fd-pillbar">
-        <input type="search" class="fd-search" id="vclcalc-fdSearch" placeholder="Find a country"
-               aria-label="Find a country" value="${escapeAttr(appState.feeDataSearch)}">
-        <span class="fd-pillcount">${q ? `${shown.length} of ${chips.length}` : `${chips.length} countries`}</span>
-      </div>
-      <div class="fd-pills">
-        ${shown.length ? shown.map(c => `
-          <button type="button" class="fd-pill${c.cc === cc ? ' is-active' : ''}" data-fdcc="${escapeAttr(c.cc)}">
-            ${escapeHtml(c.name)}<span class="n">${c.n}</span>
-          </button>`).join('') : '<p class="fd-pillnone">No country with that name.</p>'}
-      </div>
-    </div>
+    ${pickerHtml}
 
     <header class="fd-masthead">
       <div>
@@ -2469,54 +2573,31 @@ function renderStepFeeData() {
         ${(meta.currency && rate) ? `<p class="fd-src fd-fx">Published in <b>${escapeHtml(meta.currency)}</b> by the authority &mdash; euro amounts are converted at <b>1 EUR = ${rate.toLocaleString('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 })} ${escapeHtml(meta.currency)}</b>.</p>` : ''}
       </div>
       <div class="fd-headright" id="vclcalc-fdHeadRight">
-        <button type="button" class="btn" id="vclcalc-fdBack">Back to the calculator</button>
+        <button type="button" class="btn fd-backbtn" id="vclcalc-fdBack">Back to the calculator</button>
         <button type="button" class="btn fd-openbtn" id="vclcalc-fdOpen"
                 aria-expanded="${appState.feeDataOpen ? 'true' : 'false'}" aria-controls="vclcalc-fdCalc">
           <span class="fd-caret" aria-hidden="true">&#9654;</span> Quick calculation
         </button>
-        ${(meta.currency && rate) ? `
-        <div class="fd-curtoggle" role="group" aria-label="Currency">
-          <button type="button" class="fd-curbtn${local ? ' on' : ''}" data-fdcur="local">${escapeHtml(meta.currency)}</button>
-          <button type="button" class="fd-curbtn${local ? '' : ' on'}" data-fdcur="eur">EUR</button>
-        </div>` : ''}
       </div>
     </header>
     ${quickCalc}
-    <div id="vclcalc-fdBody">${tables}</div>
+    <div id="vclcalc-fdBody">${tables}${
+      roleGroups.length ? plainWords({ rows: rows }, rows.some(r => rowNote[r.row] !== undefined)) : ''
+    }</div>
   `;
 
-  // Every control on this page that triggers a full render() replaces itself,
-  // which drops focus to <body> and strands anyone using the keyboard. The
-  // search field and the fold-out button already put it back; do the same for
-  // the rest by focusing the replacement of the control that was just used.
-  const refocus = (attr, value) => {
-    const again = contentEl.querySelector('[' + attr + '="' + String(value).replace(/"/g, '\\"') + '"]');
-    if (again) again.focus();
-  };
-  contentEl.querySelectorAll('[data-fdcc]').forEach((b) => {
-    b.addEventListener('click', () => {
-      appState.feeDataCc = b.getAttribute('data-fdcc');
-      appState.feeDataCur = 'local';
-      render();
-      refocus('data-fdcc', appState.feeDataCc);
-    });
-  });
+  // Chips, search field and "Back to the calculator" behave the same here as on
+  // the picker-only view, so they are wired by the one shared helper.
+  wirePicker();
   contentEl.querySelectorAll('[data-fdcur]').forEach((b) => {
     b.addEventListener('click', () => {
       appState.feeDataCur = b.getAttribute('data-fdcur');
+      const gi = b.getAttribute('data-fdcurgi');
       render();
-      refocus('data-fdcur', appState.feeDataCur);
+      const again = contentEl.querySelector('[data-fdcur="' + appState.feeDataCur + '"][data-fdcurgi="' + gi + '"]');
+      if (again) again.focus();
     });
   });
-  const searchEl = document.getElementById('vclcalc-fdSearch');
-  if (searchEl) {
-    searchEl.addEventListener('input', () => {
-      appState.feeDataSearch = searchEl.value;
-      render();
-      const again = document.getElementById('vclcalc-fdSearch');
-      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
-    });
-  }
 
   // ---- Quick calculation: wiring and output ------------------------------
   const fdQuickNum = (v) => {
@@ -2574,14 +2655,6 @@ function renderStepFeeData() {
       ${groupingFired ? '<p class="fd-hint">A grouping fee applies to this combination.</p>' : ''}`;
   }
 
-  const backBtn = document.getElementById('vclcalc-fdBack');
-  if (backBtn) {
-    backBtn.addEventListener('click', () => {
-      appState.step = appState.feeDataReturnStep;
-      render();
-      if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
-    });
-  }
   const openBtn = document.getElementById('vclcalc-fdOpen');
   if (openBtn) {
     openBtn.addEventListener('click', () => {

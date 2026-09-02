@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function vcl_register_assets() {
 	wp_register_style(
 		'vcl-fonts',
-		'https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap',
+		'https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap',
 		array(),
 		null
 	);
@@ -317,13 +317,15 @@ function vcl_register_assets() {
 	// over the shipped table before it resolves a single cell. Nothing is printed
 	// while nobody has edited anything.
 	$vcl_fee_overrides = vcl_get_fee_overrides();
-	if ( $vcl_fee_overrides['rows'] || $vcl_fee_overrides['points'] || $vcl_fee_overrides['countries'] ) {
+	if ( $vcl_fee_overrides['rows'] || $vcl_fee_overrides['points']
+		|| $vcl_fee_overrides['countries'] || $vcl_fee_overrides['imprint'] ) {
 		wp_add_inline_script(
 			'vcl-calc-data',
 			'window.VCLCALC_OVERRIDES = ' . wp_json_encode( array(
 				'rows'      => (object) $vcl_fee_overrides['rows'],
 				'points'    => (object) $vcl_fee_overrides['points'],
 				'countries' => (object) $vcl_fee_overrides['countries'],
+				'imprint'   => array_values( $vcl_fee_overrides['imprint'] ),
 			) ) . ';',
 			'after'
 		);
@@ -523,7 +525,7 @@ function vcl_shortcode( $atts ) {
 	      <div id="vclcalc-stepContent"></div>
 	      <div class="src">
 	        <div class="fx-status-row">
-	          <span id="vclcalc-fxStatus" style="font-family:var(--mono); font-size:11px; color:var(--ink-faint);"></span>
+	          <span id="vclcalc-fxStatus" style="font-family:var(--figure); font-size:11px; color:var(--ink-faint);"></span>
 	        </div>
 	      </div>
 	    </div>

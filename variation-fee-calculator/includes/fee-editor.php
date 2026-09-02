@@ -27,6 +27,10 @@ const VCL_FEE_OVERRIDES_OPTION = 'vcl_fee_overrides';
 
 /** The set replaced by the last import, so a wrong file can be undone. */
 const VCL_FEE_OVERRIDES_PREVIOUS_OPTION = 'vcl_fee_overrides_previous';
+/** A history line is one sentence; the workbook's longest runs to ~150 characters. */
+const VCL_FEE_IMPRINT_MAX_CHARS = 300;
+/** The workbook ships 75 lines; this many again is far more than anyone will add by hand. */
+const VCL_FEE_IMPRINT_MAX_ENTRIES = 200;
 
 /** Bumped only when the exported shape changes in a way an older import
  * could not read correctly. */
@@ -66,6 +70,7 @@ function vcl_get_fee_overrides() {
 		'rows'      => array(),
 		'points'    => array(),
 		'countries' => array(),
+		'imprint'   => array(),
 		'updated'   => '',
 		'by'        => '',
 	) );
@@ -79,7 +84,7 @@ function vcl_get_fee_overrides() {
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -161,6 +166,37 @@ function vcl_sanitize_fee_overrides( $payload ) {
 				$clean['countries'][ $code ] = $entry;
 			}
 		}
+	}
+
+	// Change-history entries added in this editor. They sit in front of the lines
+	// the workbook ships, so the newest one also drives "Last updated in Variation
+	// Toolbox" above the calculator. A list, not a map: two entries may share a
+	// date, and the workbook's own history does exactly that (three lines dated
+	// 2021-10-17). Newest first, same order the front end renders.
+	if ( isset( $payload['imprint'] ) && is_array( $payload['imprint'] ) ) {
+		foreach ( $payload['imprint'] as $entry ) {
+			if ( ! is_array( $entry ) || empty( $entry['date'] ) || empty( $entry['topic'] )
+				|| ! is_scalar( $entry['date'] ) || ! is_scalar( $entry['topic'] ) ) {
+				$dropped++;
+				continue;
+			}
+			$date  = sanitize_text_field( (string) $entry['date'] );
+			$topic = sanitize_text_field( (string) $entry['topic'] );
+			if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) || $topic === '' ) {
+				$dropped++;
+				continue;
+			}
+			$clean['imprint'][] = array(
+				'date'  => $date,
+				'topic' => mb_substr( $topic, 0, VCL_FEE_IMPRINT_MAX_CHARS ),
+			);
+			if ( count( $clean['imprint'] ) >= VCL_FEE_IMPRINT_MAX_ENTRIES ) {
+				break;
+			}
+		}
+		usort( $clean['imprint'], function ( $a, $b ) {
+			return strcmp( $b['date'], $a['date'] );
+		} );
 	}
 
 	return array( $clean, $dropped );
@@ -285,12 +321,14 @@ function vcl_fee_editor_assets( $hook ) {
 			'rows'      => (object) $overrides['rows'],
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
+			'imprint'   => array_values( $overrides['imprint'] ),
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
 			'rows'      => (object) $overrides['rows'],
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
+			'imprint'   => array_values( $overrides['imprint'] ),
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
@@ -369,6 +407,10 @@ function vcl_render_fee_editor() {
 						<button type="submit" class="vclfe-btn vclfe-btn--primary">Speichern</button>
 					</div>
 				</header>
+
+				<!-- Filled by vcl-fee-editor.js as soon as this session has changed
+				     something, and empty otherwise. -->
+				<div id="vclfe-savebar"></div>
 
 				<div class="vclfe-layout">
 					<main id="vclfe-main"></main>
@@ -480,6 +522,7 @@ function vcl_handle_save_fee_overrides() {
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
+		'imprint'   => $clean['imprint'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
@@ -514,6 +557,7 @@ function vcl_handle_export_fee_overrides() {
 		'rows'      => (object) $overrides['rows'],
 		'points'    => (object) $overrides['points'],
 		'countries' => (object) $overrides['countries'],
+		'imprint'   => array_values( $overrides['imprint'] ),
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -572,6 +616,7 @@ function vcl_handle_import_fee_overrides() {
 		'rows'      => $clean['rows'],
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
+		'imprint'   => $clean['imprint'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );

@@ -22,7 +22,9 @@
   --accent-deep:#5f4a1e;
   --amber:#a8651a;
   --amber-soft:#fbf0e2;
-  --mono: "IBM Plex Mono","SF Mono",Consolas,monospace;
+  /* Retired in v1.16.0 -- see --figure in vcl-style.css. Kept as an alias only so an
+     inline style outside this file cannot fall back to the browser default. */
+  --mono: var(--figure);
   --serif: "Source Serif 4","Georgia",serif;
   --sans: "Libre Franklin","Helvetica Neue",Arial,sans-serif;
   --radius: 3px;
@@ -62,7 +64,7 @@
   color:var(--ink);
 }
 .vclcalc-app .app-head .tag{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:11px;
   letter-spacing:0.06em;
   text-transform:uppercase;
@@ -101,7 +103,7 @@
   flex:1;
   padding:10px 12px;
   font-size:11.5px;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   letter-spacing:0.02em;
   color:var(--ink-faint);
   border-right:1px solid var(--line);
@@ -131,7 +133,7 @@
 .vclcalc-app button.rail-step{
   background:var(--panel);
   border:none;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   text-align:left;
   width:100%;
   padding:10px 12px;
@@ -197,7 +199,7 @@
 .vclcalc-app .country-tile:hover{ border-color:var(--accent); background:var(--accent-soft); }
 .vclcalc-app .country-tile.selected{ border-color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); }
 .vclcalc-app .country-tile .cc{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:11px;
   color:var(--accent-deep);
   letter-spacing:0.04em;
@@ -302,7 +304,7 @@
   border-right:1px solid var(--line-strong);
   height:34px;
   font-size:14px;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   color:var(--ink);
 }
 .vclcalc-app .num-stepper input:focus{ outline:none; }
@@ -325,6 +327,8 @@
   justify-content:space-between;
   align-items:center;
   margin-top:6px;
+  /* The change-history panel follows straight after and was sitting on the button. */
+  margin-bottom:26px;
 }
 /* The "N countries selected" line. .hint is only sized inside .panel, and this one sits in the
    nav row instead -- so it was inheriting the base body size and shouting next to the button
@@ -449,7 +453,7 @@
   margin-bottom:8px;
 }
 .vclcalc-app .result-panel .rp-label{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:11px;
   letter-spacing:0.08em;
   text-transform:uppercase;
@@ -457,7 +461,7 @@
   margin-bottom:0;
 }
 .vclcalc-app .result-panel .rp-updated{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:11px;
   color:#ad9256;
   white-space:nowrap;
@@ -502,7 +506,7 @@
 .vclcalc-app .fee-note b{ font-weight:600; }
 .vclcalc-app .fee-note .fn-label{ flex:1; }
 .vclcalc-app .fee-note .fn-amount{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-weight:700;
   white-space:nowrap;
   flex-shrink:0;
@@ -531,7 +535,7 @@
   color:var(--ink-soft);
 }
 .vclcalc-app .local-currency-row .lc-rate{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:10.5px;
   color:var(--ink-faint);
   white-space:nowrap;
@@ -556,7 +560,7 @@
   color:var(--ink-soft);
 }
 .vclcalc-app .local-currency-row .lc-amount{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:13px;
   font-weight:700;
   color:var(--accent-deep);
@@ -588,7 +592,7 @@
 }
 .vclcalc-app .breakdown-row .bd-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .vclcalc-app .breakdown-row .bd-name{ font-size:13.5px; font-weight:600; color:var(--ink); }
-.vclcalc-app .breakdown-row .bd-meta{ font-size:11.5px; color:var(--ink-faint); font-family:var(--mono); }
+.vclcalc-app .breakdown-row .bd-meta{ font-size:11.5px; color:var(--ink-faint); font-family:var(--figure); font-variant-numeric:tabular-nums; }
 .vclcalc-app .breakdown-row .bd-meta b{ color:var(--ink-soft); font-weight:700; }
 .vclcalc-app .breakdown-row .bd-items{ display:flex; flex-direction:column; gap:2px; margin-top:6px; }
 .vclcalc-app .bd-item-line{
@@ -604,7 +608,7 @@
 }
 .vclcalc-app .breakdown-row .bd-amount-col{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0; }
 .vclcalc-app .breakdown-row .bd-amount{
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:15px;
   font-weight:600;
   color:var(--ink);
@@ -619,7 +623,7 @@
   font-size:17px;
   font-weight:700;
   color:var(--accent-deep);
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
 }
 .vclcalc-app .breakdown-row.total-row .bd-amount{
   font-size:17px;
@@ -643,7 +647,7 @@
   border:1px solid var(--line-strong);
   background:var(--panel);
   font-size:12px;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   color:var(--ink-soft);
   cursor:pointer;
   transition:background .12s, border-color .12s;
@@ -669,7 +673,7 @@
 
 .vclcalc-app .badge{
   display:inline-block;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:10px;
   padding:2px 6px;
   border-radius:3px;
@@ -683,7 +687,7 @@
    standalone, without colliding with the calculator's own gold .badge above. */
 .vclcalc-app .type-pill{
   display:inline-block;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:11px;
   font-weight:600;
   padding:2px 8px;
@@ -802,8 +806,8 @@
 .vclcalc-app .result-panel .rp-label{ color:var(--accent-deep); }
 .vclcalc-app .result-panel .rp-updated{ color:var(--accent); }
 .vclcalc-app .result-panel .rp-total{ font-size:34px; color:var(--accent-deep); }
-.vclcalc-app .result-panel .rp-total .cur{ font-family:var(--mono); font-size:16px; color:var(--accent); }
-.vclcalc-app .result-panel .rp-sub{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); }
+.vclcalc-app .result-panel .rp-total .cur{ font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:16px; color:var(--accent); }
+.vclcalc-app .result-panel .rp-sub{ font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:11px; color:var(--ink-faint); }
 
 /* Fees-by-country: bare heading + cards on the page ground (no enclosing box) */
 /* The white .panel box around Fees-by-country stays (2026-07-23c): the cream country
@@ -815,7 +819,7 @@
 .vclcalc-app .breakdown .breakdown-row .bd-name{ font-size:15px; }
 .vclcalc-app .breakdown .breakdown-row .bd-items{ margin-top:10px; padding-top:9px; border-top:1px solid var(--line); gap:4px; }
 .vclcalc-app .breakdown .breakdown-row .bd-item-line{ font-family:var(--sans); font-size:12.5px; color:var(--ink-soft); }
-.vclcalc-app .breakdown .breakdown-row .bd-item-line .bd-item-amount{ font-family:var(--mono); }
+.vclcalc-app .breakdown .breakdown-row .bd-item-line .bd-item-amount{ font-family:var(--figure); font-variant-numeric:tabular-nums; }
 .vclcalc-app .breakdown .breakdown-row .bd-amount{ font-size:17px; }
 /* grand-total row -> accent card */
 .vclcalc-app .breakdown .breakdown-row.total-row{ border:1.5px solid var(--accent); border-radius:12px; background:var(--accent-soft); }
@@ -888,7 +892,7 @@
 }
 .vclcalc-app .exm-row:first-of-type { border-top: none; }
 .vclcalc-app .exm-code {
-  font-family: var(--mono, Consolas, monospace);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--accent, #8f6e2e);
@@ -934,7 +938,7 @@
   display:inline-flex;
   align-items:center;
   gap:6px;
-  font-family:var(--mono);
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size:10.5px;
   font-weight:600;
   padding:3px 10px;
@@ -974,34 +978,44 @@
 .vclcalc-app .vres-cty{ border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:12px; background:#fff; }
 .vclcalc-app .vres-top{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 15px; background:var(--paper); border-bottom:1px solid var(--line); }
 .vclcalc-app .vres-name{ font-size:14.5px; font-weight:600; color:var(--ink); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.vclcalc-app .vres-meta{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:2px; }
+.vclcalc-app .vres-meta{ font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:11px; color:var(--ink-faint); margin-top:2px; }
+/* "Fee data for <country>" closes the meta line: that line already answers "what was this
+   calculated from", and where the rates come from is the same question one step on. A button
+   styled as a link -- it changes the view rather than following a URL. */
+.vclcalc-app .vres-fdlink{
+  font:inherit; font-weight:600; padding:0; border:0; background:none; cursor:pointer;
+  color:var(--accent-deep); text-decoration:underline; text-decoration-color:#d8c69c;
+  text-underline-offset:2px;
+}
+.vclcalc-app .vres-fdlink:hover{ text-decoration-color:var(--accent); }
+.vclcalc-app .vres-fdlink:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
 .vclcalc-app .vres-meta b{ color:var(--ink-soft); font-weight:700; }
 .vclcalc-app .vres-total{ text-align:right; flex-shrink:0; }
-.vclcalc-app .vres-eq{ display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); }
+.vclcalc-app .vres-eq{ display:block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; color:var(--ink-faint); }
 .vclcalc-app .vres-amt{ font-family:var(--serif); font-size:18px; font-weight:600; color:var(--accent-deep); }
 
-.vclcalc-app .vres-mtag{ display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.03em; padding:2px 6px; border-radius:5px; border:1px solid; }
+.vclcalc-app .vres-mtag{ display:inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; font-weight:600; letter-spacing:.03em; padding:2px 6px; border-radius:5px; border:1px solid; }
 .vclcalc-app .vres-mtag--grp{ background:var(--accent-soft); color:var(--accent-deep); border-color:#e7d9b6; }
 .vclcalc-app .vres-mtag--cap{ background:var(--amber-soft); color:var(--amber); border-color:#f0dcc4; }
 
 .vclcalc-app .vres-tbl{ width:100%; border-collapse:collapse; font-size:12px; }
 .vclcalc-app .vres-tbl th, .vclcalc-app .vres-tbl td{ border-left:0; border-right:0; }
-.vclcalc-app .vres-tbl thead th{ font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--accent-deep); background:var(--accent-soft); text-align:right; padding:7px 15px; border-top:0; }
+.vclcalc-app .vres-tbl thead th{ font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--accent-deep); background:var(--accent-soft); text-align:right; padding:7px 15px; border-top:0; }
 .vclcalc-app .vres-tbl thead th:first-child{ text-align:left; }
 .vclcalc-app .vres-tbl tbody td{ padding:8px 15px; border-bottom:1px solid #f0ece3; border-top:0; color:var(--ink-soft); text-align:right; vertical-align:top; }
 .vclcalc-app .vres-tbl tbody td:first-child{ text-align:left; color:var(--ink); }
 /* Numeric columns get a fixed width so the first (Variation) column keeps the rest --
    enough room for "Type IB … · included in grouped fee" to stay on one line. */
 .vclcalc-app .vres-tbl th:not(:first-child), .vclcalc-app .vres-tbl td:not(:first-child){ width:150px; white-space:nowrap; }
-.vclcalc-app .vres-num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.vclcalc-app .vres-num{ font-family:var(--figure); font-variant-numeric:tabular-nums; }
 /* When a grouping or cap fee applies, the per-variation amounts are only indicative --
    the binding number is the country subtotal below -- so grey them out. */
 .vclcalc-app .vres-tbl--indicative tbody td.vres-num{ color:var(--ink-faint); }
 .vclcalc-app .vres-var{ display:flex; align-items:center; gap:7px; flex-wrap:nowrap; white-space:nowrap; }
-.vclcalc-app .vres-cnt{ font-family:var(--mono); font-weight:600; color:var(--ink-soft); }
+.vclcalc-app .vres-cnt{ font-family:var(--figure); font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink-soft); }
 .vclcalc-app .vres-var small{ color:var(--ink-faint); font-size:11px; }
 .vclcalc-app .vres-vno{ display:inline-block; min-width:46px; color:var(--ink-soft); }
-.vclcalc-app .vres-subnote{ color:var(--ink-faint); font-size:10.5px; font-family:var(--mono); }
+.vclcalc-app .vres-subnote{ color:var(--ink-faint); font-size:10.5px; font-family:var(--figure); font-variant-numeric:tabular-nums; }
 
 /* expand caret (bigger, easy to hit) + expandable/detail rows */
 .vclcalc-app .vres-caret{ display:inline-block; width:16px; text-align:center; font-size:13px; line-height:1; color:var(--accent); flex-shrink:0; }
@@ -1013,12 +1027,12 @@
 
 .vclcalc-app .vres-tbl tfoot td{ padding:9px 15px; font-weight:600; color:var(--ink); border-top:1px solid var(--line-strong); text-align:right; background:#fff; }
 .vclcalc-app .vres-tbl tfoot td:first-child{ text-align:left; }
-.vclcalc-app .vres-fnote{ font-weight:400; font-family:var(--mono); font-size:10.5px; }
+.vclcalc-app .vres-fnote{ font-weight:400; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10.5px; }
 .vclcalc-app .vres-fnote--grp{ color:var(--accent-deep); }
 .vclcalc-app .vres-fnote--cap{ color:var(--amber); }
 /* Cap footer: raw sum struck through, stacked above the capped total so it stays
    right-aligned inside the column and never overflows past the table edge. */
-.vclcalc-app .vres-capraw{ display:block; text-align:right; text-decoration:line-through; color:var(--ink-faint); font-weight:400; font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px; margin-bottom:1px; }
+.vclcalc-app .vres-capraw{ display:block; text-align:right; text-decoration:line-through; color:var(--ink-faint); font-weight:400; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:11px; margin-bottom:1px; }
 
 .vclcalc-app .vres-grand{ display:flex; justify-content:space-between; align-items:center; border:1.5px solid var(--accent); background:var(--accent-soft); border-radius:12px; padding:13px 16px; }
 .vclcalc-app .vres-grand-l{ font-size:15px; font-weight:600; color:var(--accent-deep); }
@@ -1123,9 +1137,8 @@
 .vclcalc-app .sp-tbl select.field-select{ width:auto; background:var(--panel); }
 
 /* ---- Result step: quieter tables, sans-serif money ----
-   IBM Plex Mono draws a slashed zero, which the rest of the toolbox does not use for
-   amounts -- money moves to the body face with tabular figures, and mono stays where it
-   means code (country codes, type pills, classification codes). */
+   Money in the body face with tabular figures. Since v1.16.0 the whole toolbox is on that
+   face -- these rules stay because they also set the figure variant. */
 .vclcalc-app .vres-num,
 .vclcalc-app .vres-capraw,
 .vclcalc-app .vres-cnt,
@@ -1158,7 +1171,7 @@
 
 /* Mechanic chip in the card head, matching the overview table's column. */
 .vclcalc-app .vres-chip{
-  display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600;
+  display:inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; font-weight:600;
   padding:1px 7px; border-radius:999px; margin-right:8px;
   background:var(--accent-soft); color:var(--accent-deep);
 }
@@ -1166,15 +1179,21 @@
 .vclcalc-app .vres-chip--none{ background:transparent; color:var(--ink-faint); }
 
 /* ---- Result step: country overview above the detail cards ---- */
-.vclcalc-app .vres-ovwrap{ border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); }
+/* overflow-x:auto, not hidden: the columns below are fixed measures adding up to ~940px, and
+   in a narrower column the free one (Variations) would otherwise collapse and wrap its
+   breakdown over four lines. Scrolling sideways beats a table that grows downwards. */
+.vclcalc-app .vres-ovwrap{ border:1px solid var(--line); border-radius:12px; overflow:hidden; overflow-x:auto; background:var(--panel); }
 /* separate, not collapse: a collapsing table ignores border-radius on its cells, and the
    filled head/foot rows have to round themselves -- see the radii further down. */
-.vclcalc-app .vres-ov{ width:100%; border-collapse:separate; border-spacing:0; font-size:13px; table-layout:fixed; }
-/* Fixed measures for every column but the country name: switching EUR to a local currency
-   makes the amounts longer, and an auto layout would re-measure and shove all columns left. */
+.vclcalc-app .vres-ov{ width:100%; min-width:940px; border-collapse:separate; border-spacing:0; font-size:13px; table-layout:fixed; }
+/* Fixed measures for every column but one: switching EUR to a local currency makes the
+   amounts longer, and an auto layout would re-measure and shove all columns left. The free
+   column used to be the country name, which left it far wider than any name needs while
+   Variations was squeezed to a bare count. Country is pinned now and Variations takes the
+   slack, so "1 x IA, 3 x IB, 6 x II" fits on one line. */
+.vclcalc-app .vres-ov th:first-child, .vclcalc-app .vres-ov td:first-child{ width:210px; }
 .vclcalc-app .vres-ov th:nth-child(2), .vclcalc-app .vres-ov td:nth-child(2){ width:150px; }
 .vclcalc-app .vres-ov th:nth-child(3), .vclcalc-app .vres-ov td:nth-child(3){ width:110px; }
-.vclcalc-app .vres-ov th:nth-child(4), .vclcalc-app .vres-ov td:nth-child(4){ width:110px; }
 .vclcalc-app .vres-ov th:nth-child(5), .vclcalc-app .vres-ov td:nth-child(5){ width:120px; }
 .vclcalc-app .vres-ov th:nth-child(6), .vclcalc-app .vres-ov td:nth-child(6){ width:190px; }
 .vclcalc-app .vres-ov td{ overflow:hidden; text-overflow:ellipsis; }
@@ -1276,6 +1295,10 @@
 .vclcalc-app .fd-pill.is-active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
 .vclcalc-app .fd-pill.is-active .n{color:rgba(255,255,255,.78)}
 .vclcalc-app .fd-pillnone{margin:2px 0; font-size:13px; color:var(--ink-faint)}
+/* The page as it opens: chips and nothing else, with one line saying what a
+   choice will bring and the way back out. */
+.vclcalc-app .fd-pickhint{margin:0 0 18px; font-size:13.5px; line-height:1.6; color:var(--ink-soft)}
+.vclcalc-app .fd-pickback{margin:0}
 
 .vclcalc-app .fd-masthead{
   display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;
@@ -1295,40 +1318,72 @@
 .vclcalc-app .fd-src{margin:8px 0 0; font-size:12px; color:var(--ink-faint)}
 .vclcalc-app .fd-src b{font-weight:500; color:var(--ink-soft)}
 .vclcalc-app .fd-fx b{font-variant-numeric:tabular-nums; color:var(--ink)}
-.vclcalc-app .fd-headright{display:flex; gap:8px; align-items:center}
+/* stretch, not center: the two buttons carry different padding and font sizes, and a
+   centred row let them end up 33px and 38px tall side by side. */
+.vclcalc-app .fd-headright{display:flex; gap:8px; align-items:stretch}
+/* "Back to the calculator" is the way out, not the thing to do here: it stays the quieter
+   of the two in width and type size, but matches its neighbour's height. */
+.vclcalc-app .fd-backbtn{padding:5px 11px; font-size:12px}
 
 .vclcalc-app .fd-group{margin:24px 0}
 .vclcalc-app .fd-grouphead{
   display:flex; align-items:baseline; gap:10px; margin:0 0 10px; padding-bottom:7px;
   border-bottom:1px solid var(--accent-soft);
 }
+/* The currency switch belongs to the table it governs, not to the page header,
+   so each role section carries its own -- pushed to the right-hand edge, on the
+   baseline of the role heading. */
+.vclcalc-app .fd-grouphead .fd-curtoggle{margin-left:auto; align-self:center}
 .vclcalc-app .fd-grouphead h2{font-family:var(--serif); font-size:18px; font-weight:600; margin:0}
 .vclcalc-app .fd-grouphead p{margin:0; font-size:12.5px; color:var(--ink-soft)}
 .vclcalc-app .fd-card{
+  /* A discreet brown for every rule in the fee tables, of a piece with the
+     tinted heading row and the entry button rather than the neutral grey. */
+  --fd-rule:#E7DDC7;
   background:var(--panel); border:1px solid var(--line);
   border-radius:12px; box-shadow:var(--shadow); overflow:hidden;
 }
 .vclcalc-app .fd-scroll{overflow-x:auto}
-.vclcalc-app .fd-tbl{border-collapse:collapse; width:100%; min-width:700px; font-size:13.5px}
+/* margin:0 is not cosmetic: the WordPress theme sets `table{margin-bottom:20.25px}`, and
+   inside a border-radius card with no padding that margin shows up as a white strip under
+   the last row. */
+.vclcalc-app .fd-tbl{border-collapse:collapse; width:100%; min-width:700px; font-size:13.5px; margin:0}
 .vclcalc-app .fd-tbl th{
   text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
-  font-weight:600; color:var(--ink-faint); padding:9px; white-space:nowrap;
-  border-bottom:1px solid var(--line); background:#fbfcfd; vertical-align:bottom;
+  font-weight:600; color:#5F4A1E; padding:9px; vertical-align:top;
+  /* The heading sits on the same first line in every column: the currency unit
+     under a numeric label is a block below it, so bottom alignment pushed
+     "Procedure" and "Fee code" a line lower than "1st variation". */
+  background:var(--accent-soft); border-bottom:1px solid var(--fd-rule);
+  /* "Each further strength" is wider than its column; nowrap made it run into
+     the neighbouring cell instead of breaking. */
+  white-space:normal; hyphens:auto;
 }
 .vclcalc-app .fd-tbl th.fd-num, .vclcalc-app .fd-tbl td.fd-num{text-align:right}
 .vclcalc-app .fd-tbl td{
-  padding:0 9px; height:44px; vertical-align:middle; border-bottom:1px solid var(--line);
+  padding:0 9px; height:44px; vertical-align:middle;
+  background:#fff; border-bottom:1px solid var(--fd-rule);
 }
-.vclcalc-app .fd-tbl tbody tr:last-child td{border-bottom:none}
+/* Every column rule ends on a row rule instead of in mid-air: the last body row
+   keeps its bottom border, so the verticals stop on it. */
+.vclcalc-app .fd-tbl th + th, .vclcalc-app .fd-tbl td + td{border-left:1px solid var(--fd-rule)}
 .vclcalc-app .fd-tbl td.fd-num{font-variant-numeric:tabular-nums; color:var(--ink)}
 .vclcalc-app .fd-tbl td.fd-zero, .vclcalc-app .fd-tbl td.fd-dash{color:var(--ink-faint)}
+/* Every word in the table reads at the size of the amounts (13.5px, inherited from
+   .fd-tbl): a special case and a fee code are content, not captions. Only the coloured
+   type pill keeps its badge size, as it does everywhere else in the calculator. */
 .vclcalc-app .fd-tname{font-weight:600; white-space:nowrap}
-.vclcalc-app .fd-sc{font-size:12px; color:var(--ink-soft)}
-.vclcalc-app .fd-tbl td.fd-code, .vclcalc-app .fd-code{font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
+.vclcalc-app .fd-type{display:inline-flex; align-items:center; gap:7px}
+.vclcalc-app .fd-sc{color:var(--ink-soft)}
+.vclcalc-app .fd-tbl td.fd-code{font-size:inherit; color:var(--ink-soft); white-space:nowrap}
+.vclcalc-app .fd-code{font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
 .vclcalc-app .fd-cur{
   display:block; margin-top:2px; font-size:9.5px; letter-spacing:.06em;
   color:var(--accent); text-transform:none;
 }
+/* "Each further" heads three columns that differ only in the variation type, so the shared
+   half stays on the first line and the type sits under it. */
+.vclcalc-app .fd-sub{display:block; margin-top:1px}
 
 /* Currency pill for one country's own fee-data tables -- the same segmented
    toggle the calculator result view uses (.vres-curtoggle), reused here.
@@ -1419,9 +1474,9 @@
 }
 .vclcalc-app .fd-hint{ margin:10px 0 0; font-size:11.5px; color:var(--ink-faint); }
 
-/* ---- "In plain words" under the first role table ---- */
+/* ---- "In plain words", once, below the last role table ---- */
 .vclcalc-app .fd-plain{
-  margin-top:12px; padding:13px 15px 14px;
+  margin-top:24px; padding:13px 15px 14px;
   background:var(--paper); border:1px solid var(--line); border-radius:8px;
 }
 .vclcalc-app .fd-plain h3{
@@ -1429,7 +1484,7 @@
   text-transform:uppercase; color:var(--ink-faint);
 }
 .vclcalc-app .fd-sentence{
-  margin:0; font-size:13.5px; line-height:1.65; color:var(--ink-soft); max-width:70ch;
+  margin:0; font-size:13.5px; line-height:1.65; color:var(--ink-soft);
 }
 .vclcalc-app .fd-sentence b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
 

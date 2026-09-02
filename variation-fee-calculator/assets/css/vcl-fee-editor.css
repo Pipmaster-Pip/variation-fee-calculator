@@ -271,7 +271,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 .vclfe-maintain h3{
   font-family:var(--serif); font-size:17px; font-weight:600; margin:0 0 6px; padding:0;
 }
-.vclfe-maintain > p{margin:0 0 16px; font-size:13.5px; color:var(--ink-soft); max-width:70ch}
+.vclfe-maintain > p{margin:0 0 16px; font-size:13.5px; color:var(--ink-soft)}
 .vclfe-maintain code{
   font-family:var(--figure); font-size:12px; color:var(--accent-deep);
   background:var(--accent-soft); padding:1px 4px; border-radius:2px;
@@ -290,7 +290,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 /* ---- Rechenwege -------------------------------------------------------- */
 .vclfe-rules{margin-top:34px}
 .vclfe-rules__intro{
-  margin:0 0 14px; max-width:72ch; font-size:13px; color:var(--ink-soft);
+  margin:0 0 14px; font-size:13px; color:var(--ink-soft);
 }
 .vclfe-rule{
   background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
@@ -362,7 +362,7 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 }
 .vclfe-legend{
   display:flex; align-items:flex-start; gap:9px;
-  margin:9px 2px 0; font-size:12.5px; color:var(--ink-soft); max-width:88ch;
+  margin:9px 2px 0; font-size:12.5px; color:var(--ink-soft);
 }
 .vclfe-legend__swatch{
   flex:none; width:26px; height:17px; margin-top:1px;
@@ -398,3 +398,49 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
 .vclfe-prov__f input[type="text"]{min-width:320px}
 .vclfe-prov__f input:hover{border-color:var(--accent)}
 .vclfe-prov__note{flex:1 1 100%; margin:0; font-size:11.5px; color:var(--ink-faint)}
+
+/* ---- Währungsumschalter -------------------------------------------------
+   Dasselbe segmentierte Paar wie auf der öffentlichen Gebührenseite. Es
+   schaltet nicht nur die Anzeige um: bearbeitet wird die Spalte der gewählten
+   Einheit (F_lc oder F), beide sind gepflegte Daten. */
+.vclfe-curtoggle{display:inline-flex; border:1.5px solid var(--accent); border-radius:999px; overflow:hidden}
+#vclfe-root .vclfe-curbtn{
+  min-height:0; font-family:var(--sans); font-size:11.5px; font-weight:600;
+  padding:5px 14px; border:none; border-radius:0; box-shadow:none;
+  background:#fff; color:var(--accent-deep); cursor:pointer;
+}
+#vclfe-root .vclfe-curbtn:hover{background:var(--accent-soft)}
+#vclfe-root .vclfe-curbtn:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+#vclfe-root .vclfe-curbtn.on{background:var(--accent); color:#fff}
+.vclfe-group__head .vclfe-curtoggle{margin-left:auto; align-self:center}
+
+/* ---- Eintrag für die Änderungshistorie ----------------------------------
+   Erscheint zwischen Kopfzeile und Tabellen, sobald in dieser Sitzung etwas
+   geändert wurde, und verschwindet wieder, wenn man alles verwirft. Getönt,
+   damit er als Teil des Speicherns gelesen wird und nicht als weiteres Feld
+   der Gebührenpflege. */
+.vclfe-savebar{
+  display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+  margin:16px 0 4px; padding:14px 16px;
+  background:var(--accent-soft); border:1px solid #e7d9b6; border-radius:6px;
+}
+.vclfe-savebar .vclfe-f{display:flex; flex-direction:column; gap:5px; font-size:12.5px;}
+.vclfe-savebar .vclfe-f--grow{flex:1 1 380px;}
+.vclfe-savebar .vclfe-f > span{color:var(--accent-deep); font-weight:600;}
+#vclfe-root .vclfe-savebar input{
+  min-height:0; padding:6px 10px;
+  font-family:var(--sans); font-size:13px;
+  border:1px solid #d8c69c; border-radius:6px;
+  background:var(--panel); color:var(--ink); box-shadow:none;
+}
+#vclfe-root .vclfe-savebar input.vclfe-imprint{width:100%; font-weight:600; color:var(--accent-deep);}
+#vclfe-root .vclfe-savebar input:focus{border-color:var(--accent);}
+.vclfe-savebar__why{
+  flex:1 1 100%; margin:0; font-size:11.5px; line-height:1.5; color:var(--accent-deep);
+}
+.vclfe-savebar__why b{
+  display:inline-block; margin-right:2px;
+  font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  background:var(--panel); color:var(--accent-deep);
+  padding:2px 6px; border-radius:3px;
+}

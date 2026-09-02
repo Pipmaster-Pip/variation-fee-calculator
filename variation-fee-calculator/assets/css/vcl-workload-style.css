@@ -114,7 +114,7 @@
 .vcl-app .vcl-wl-result:hover { background: var(--workload-tint); border-color: var(--workload); }
 
 .vcl-app .vcl-wl-result__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--workload);
@@ -142,7 +142,7 @@
 }
 
 .vcl-app .vcl-wl-picked__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-weight: 600;
   color: var(--workload);
 }
@@ -578,12 +578,14 @@
   font-weight: 600;
   color: #5F4A1E;
   background: #F5EEDD;
-  border: 1px solid transparent;
+  /* Outlined in the calculator's gold like the other buttons on the page --
+     a tint with no edge read as a highlighted label rather than a control. */
+  border: 1px solid #8F6E2E;
   border-radius: 8px;
   cursor: pointer;
   transition: border-color .12s, background .12s;
 }
-.vcl-app #vcl-calcHead .calc-feedata-btn:hover { border-color: #8F6E2E; }
+.vcl-app #vcl-calcHead .calc-feedata-btn:hover { background: #EFE4CB; }
 .vcl-app #vcl-calcHead .calc-feedata-btn:focus-visible { outline: 2px solid #8F6E2E; outline-offset: 2px; }
 
 /* Sub-lines read as normal body text, not bold: the nav card's subtitle only turns
@@ -705,7 +707,7 @@
   margin-bottom: 5px;
 }
 .vcl-app .vcl-wl-method-formula .fx {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   line-height: 1.75;
   color: var(--ink);
@@ -761,7 +763,7 @@
   font-weight: 500;
 }
 .vcl-app .vcl-wl-mt-row .l { flex: 1; }
-.vcl-app .vcl-wl-mt-row .v { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; white-space: nowrap; }
+.vcl-app .vcl-wl-mt-row .v { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 11.5px; white-space: nowrap; }
 .vcl-app .vcl-wl-mt-row.is-active .v { color: var(--workload); font-weight: 600; }
 .vcl-app .vcl-wl-mt-row .prov {
   display: inline-block;
