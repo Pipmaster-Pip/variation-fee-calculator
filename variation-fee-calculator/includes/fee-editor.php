@@ -27,6 +27,10 @@ const VCL_FEE_OVERRIDES_OPTION = 'vcl_fee_overrides';
 
 /** The set replaced by the last import, so a wrong file can be undone. */
 const VCL_FEE_OVERRIDES_PREVIOUS_OPTION = 'vcl_fee_overrides_previous';
+/** A history line is one sentence; the workbook's longest runs to ~150 characters. */
+const VCL_FEE_IMPRINT_MAX_CHARS = 300;
+/** The workbook ships 75 lines; this many again is far more than anyone will add by hand. */
+const VCL_FEE_IMPRINT_MAX_ENTRIES = 200;
 
 /** Bumped only when the exported shape changes in a way an older import
  * could not read correctly. */
@@ -51,7 +55,11 @@ function vcl_fee_editable_fields() {
 /**
  * The saved overrides, always in the shape
  * array( 'rows' => array( '<rowNo>' => array( '<field>' => float ) ),
- *        'points' => array( '<cc>' => float ), 'updated' => ..., 'by' => ... ).
+ *        'points' => array( '<cc>' => float ),
+ *        'countries' => array( '<CC>' => array( 'checked' => 'Y-m-d',
+ *                                               'source' => string,
+ *                                               'updated' => 'Y-m-d' ) ),
+ *        'updated' => ..., 'by' => ... ).
  */
 function vcl_get_fee_overrides() {
 	$saved = get_option( VCL_FEE_OVERRIDES_OPTION, array() );
@@ -59,10 +67,12 @@ function vcl_get_fee_overrides() {
 		$saved = array();
 	}
 	return wp_parse_args( $saved, array(
-		'rows'    => array(),
-		'points'  => array(),
-		'updated' => '',
-		'by'      => '',
+		'rows'      => array(),
+		'points'    => array(),
+		'countries' => array(),
+		'imprint'   => array(),
+		'updated'   => '',
+		'by'        => '',
 	) );
 }
 
@@ -74,7 +84,7 @@ function vcl_get_fee_overrides() {
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -118,6 +128,77 @@ function vcl_sanitize_fee_overrides( $payload ) {
 		}
 	}
 
+	// Per-country provenance: a checked date the user maintains by hand, the
+	// free-text source reference, and an edited date we stamp on save. Anything
+	// that is not a date or a string is dropped, like everywhere else here.
+	if ( isset( $payload['countries'] ) && is_array( $payload['countries'] ) ) {
+		foreach ( $payload['countries'] as $cc => $fields ) {
+			if ( ! is_array( $fields ) ) {
+				$dropped++;
+				continue;
+			}
+			$code  = sanitize_text_field( (string) $cc );
+			$entry = array();
+
+			foreach ( array( 'checked', 'updated' ) as $key ) {
+				if ( empty( $fields[ $key ] ) ) {
+					continue;
+				}
+				if ( ! is_scalar( $fields[ $key ] ) ) {
+					$dropped++;
+					continue;
+				}
+				$date = sanitize_text_field( (string) $fields[ $key ] );
+				if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+					$entry[ $key ] = $date;
+				} else {
+					$dropped++;
+				}
+			}
+			if ( ! empty( $fields['source'] ) ) {
+				if ( is_scalar( $fields['source'] ) ) {
+					$entry['source'] = sanitize_text_field( (string) $fields['source'] );
+				} else {
+					$dropped++;
+				}
+			}
+			if ( $entry ) {
+				$clean['countries'][ $code ] = $entry;
+			}
+		}
+	}
+
+	// Change-history entries added in this editor. They sit in front of the lines
+	// the workbook ships, so the newest one also drives "Last updated in Variation
+	// Toolbox" above the calculator. A list, not a map: two entries may share a
+	// date, and the workbook's own history does exactly that (three lines dated
+	// 2021-10-17). Newest first, same order the front end renders.
+	if ( isset( $payload['imprint'] ) && is_array( $payload['imprint'] ) ) {
+		foreach ( $payload['imprint'] as $entry ) {
+			if ( ! is_array( $entry ) || empty( $entry['date'] ) || empty( $entry['topic'] )
+				|| ! is_scalar( $entry['date'] ) || ! is_scalar( $entry['topic'] ) ) {
+				$dropped++;
+				continue;
+			}
+			$date  = sanitize_text_field( (string) $entry['date'] );
+			$topic = sanitize_text_field( (string) $entry['topic'] );
+			if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) || $topic === '' ) {
+				$dropped++;
+				continue;
+			}
+			$clean['imprint'][] = array(
+				'date'  => $date,
+				'topic' => mb_substr( $topic, 0, VCL_FEE_IMPRINT_MAX_CHARS ),
+			);
+			if ( count( $clean['imprint'] ) >= VCL_FEE_IMPRINT_MAX_ENTRIES ) {
+				break;
+			}
+		}
+		usort( $clean['imprint'], function ( $a, $b ) {
+			return strcmp( $b['date'], $a['date'] );
+		} );
+	}
+
 	return array( $clean, $dropped );
 }
 
@@ -127,6 +208,19 @@ function vcl_count_fee_overrides( $overrides ) {
 	foreach ( $overrides['rows'] as $fields ) {
 		$n += count( $fields );
 	}
+	// The per-country provenance counts too: on an installation where only
+	// checked dates and sources were maintained there is still something to
+	// export, to clear and to report. The 'updated' stamp is written by the
+	// save rather than typed, so it is not a maintained value.
+	if ( ! empty( $overrides['countries'] ) && is_array( $overrides['countries'] ) ) {
+		foreach ( $overrides['countries'] as $fields ) {
+			foreach ( array( 'checked', 'source' ) as $key ) {
+				if ( ! empty( $fields[ $key ] ) ) {
+					$n++;
+				}
+			}
+		}
+	}
 	return $n;
 }
 
@@ -134,16 +228,55 @@ function vcl_count_fee_overrides( $overrides ) {
 // Admin page
 // ---------------------------------------------------------------------------
 
+/**
+ * Top-level menu entry, not a Settings submenu: the fee maintenance is the most
+ * frequently used admin screen of this plugin, so it gets its own icon in the
+ * sidebar instead of hiding two clicks deep under Settings. The page slug is
+ * deliberately unchanged ('vcl-fee-editor') so saved bookmarks that carry it,
+ * and the post-save redirect, keep pointing at the same page. Capability is
+ * unchanged as well ('manage_options').
+ *
+ * Position 58 puts it just below Settings and above the plugin-added block at
+ * 60+, i.e. in the tools/settings neighbourhood rather than among the content
+ * menus.
+ */
 function vcl_fee_editor_menu() {
-	add_options_page(
+	add_menu_page(
 		'Variation Toolbox — Gebühren',
-		'Variation Toolbox — Gebühren',
+		'Toolbox-Gebühren',
 		'manage_options',
 		'vcl-fee-editor',
-		'vcl_render_fee_editor'
+		'vcl_render_fee_editor',
+		'dashicons-money-alt',
+		58
 	);
 }
 add_action( 'admin_menu', 'vcl_fee_editor_menu' );
+
+/**
+ * Compatibility for the old location (Settings -> Variation Toolbox — Gebühren):
+ * bookmarks and any stale redirect still requesting
+ * options-general.php?page=vcl-fee-editor are forwarded to the new top-level
+ * page, query string intact, instead of running into WordPress' "not allowed to
+ * access this page" screen.
+ */
+function vcl_fee_editor_legacy_redirect() {
+	global $pagenow;
+	if ( 'options-general.php' !== $pagenow ) {
+		return;
+	}
+	if ( ! isset( $_GET['page'] ) || 'vcl-fee-editor' !== $_GET['page'] ) {
+		return;
+	}
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$args = $_GET;
+	unset( $args['page'] );
+	wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php?page=vcl-fee-editor' ) ) );
+	exit;
+}
+add_action( 'admin_init', 'vcl_fee_editor_legacy_redirect' );
 
 /**
  * The editor drives the real calculator: it loads vcl-calc-data.js and
@@ -154,7 +287,9 @@ add_action( 'admin_menu', 'vcl_fee_editor_menu' );
  * drift from the one the site actually runs.
  */
 function vcl_fee_editor_assets( $hook ) {
-	if ( $hook !== 'settings_page_vcl-fee-editor' ) {
+	// Top-level menu page, so the hook suffix is 'toplevel_page_...', not
+	// 'settings_page_...' as it was while the editor lived under Settings.
+	if ( $hook !== 'toplevel_page_vcl-fee-editor' ) {
 		return;
 	}
 
@@ -183,13 +318,17 @@ function vcl_fee_editor_assets( $hook ) {
 	// showing the amounts that are actually live.
 	wp_add_inline_script( 'vcl-calc-data',
 		'window.VCLCALC_OVERRIDES = ' . wp_json_encode( array(
-			'rows'   => (object) $overrides['rows'],
-			'points' => (object) $overrides['points'],
+			'rows'      => (object) $overrides['rows'],
+			'points'    => (object) $overrides['points'],
+			'countries' => (object) $overrides['countries'],
+			'imprint'   => array_values( $overrides['imprint'] ),
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
-			'rows'   => (object) $overrides['rows'],
-			'points' => (object) $overrides['points'],
+			'rows'      => (object) $overrides['rows'],
+			'points'    => (object) $overrides['points'],
+			'countries' => (object) $overrides['countries'],
+			'imprint'   => array_values( $overrides['imprint'] ),
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
@@ -268,6 +407,10 @@ function vcl_render_fee_editor() {
 						<button type="submit" class="vclfe-btn vclfe-btn--primary">Speichern</button>
 					</div>
 				</header>
+
+				<!-- Filled by vcl-fee-editor.js as soon as this session has changed
+				     something, and empty otherwise. -->
+				<div id="vclfe-savebar"></div>
 
 				<div class="vclfe-layout">
 					<main id="vclfe-main"></main>
@@ -355,7 +498,8 @@ function vcl_render_fee_editor() {
 // ---------------------------------------------------------------------------
 
 function vcl_fee_editor_redirect( $args ) {
-	wp_safe_redirect( add_query_arg( $args, admin_url( 'options-general.php?page=vcl-fee-editor' ) ) );
+	// Follows the menu move: the editor is a top-level page now (same slug).
+	wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php?page=vcl-fee-editor' ) ) );
 	exit;
 }
 
@@ -375,10 +519,12 @@ function vcl_handle_save_fee_overrides() {
 
 	$user = wp_get_current_user();
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
-		'rows'    => $clean['rows'],
-		'points'  => $clean['points'],
-		'updated' => current_time( 'mysql' ),
-		'by'      => $user ? $user->display_name : '',
+		'rows'      => $clean['rows'],
+		'points'    => $clean['points'],
+		'countries' => $clean['countries'],
+		'imprint'   => $clean['imprint'],
+		'updated'   => current_time( 'mysql' ),
+		'by'        => $user ? $user->display_name : '',
 	), false );
 
 	vcl_fee_editor_redirect( array( 'vclfe_status' => 'saved', 'vclfe_dropped' => $dropped ) );
@@ -402,14 +548,16 @@ function vcl_handle_export_fee_overrides() {
 
 	$overrides = vcl_get_fee_overrides();
 	$payload   = array(
-		'format'  => VCL_FEE_EXPORT_FORMAT,
-		'plugin'  => VFC_VERSION,
-		'site'    => home_url(),
-		'exported'=> current_time( 'mysql' ),
-		'updated' => $overrides['updated'],
-		'by'      => $overrides['by'],
-		'rows'    => (object) $overrides['rows'],
-		'points'  => (object) $overrides['points'],
+		'format'    => VCL_FEE_EXPORT_FORMAT,
+		'plugin'    => VFC_VERSION,
+		'site'      => home_url(),
+		'exported'  => current_time( 'mysql' ),
+		'updated'   => $overrides['updated'],
+		'by'        => $overrides['by'],
+		'rows'      => (object) $overrides['rows'],
+		'points'    => (object) $overrides['points'],
+		'countries' => (object) $overrides['countries'],
+		'imprint'   => array_values( $overrides['imprint'] ),
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -465,10 +613,12 @@ function vcl_handle_import_fee_overrides() {
 
 	$user = wp_get_current_user();
 	update_option( VCL_FEE_OVERRIDES_OPTION, array(
-		'rows'    => $clean['rows'],
-		'points'  => $clean['points'],
-		'updated' => current_time( 'mysql' ),
-		'by'      => ( $user ? $user->display_name : '' ) . ' (Import)',
+		'rows'      => $clean['rows'],
+		'points'    => $clean['points'],
+		'countries' => $clean['countries'],
+		'imprint'   => $clean['imprint'],
+		'updated'   => current_time( 'mysql' ),
+		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );
 
 	vcl_fee_editor_redirect( array(

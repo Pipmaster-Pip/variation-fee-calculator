@@ -48,14 +48,14 @@
 .vcl-app .vcl-bud-tile__value { font-family: "Source Serif 4", serif; font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 0; line-height: 1.15; }
 .vcl-app .vcl-bud-tile__sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-tile--fte .vcl-bud-tile__value { color: var(--budget); }
-.vcl-app .vcl-bud-fte-input { width: 62px; font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-fte-input { width: 62px; font-family:var(--figure); font-size: 12px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--paper); color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* Agency fees card (Proposal 2) -- replaces the old single-value "Variation fees" tile with three
    stacked rows (Variations / Annual fee / Total this year), so this tile reads as the "combined
    agency spend" summary rather than just another stat tile. */
 .vcl-app .vcl-bud-agency__rows { display: flex; flex-direction: column; gap: 6px; }
 .vcl-app .vcl-bud-agency__row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--ink); }
-.vcl-app .vcl-bud-agency__val { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vcl-app .vcl-bud-agency__val { font-family:var(--figure); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .vcl-app .vcl-bud-agency__divider { border-top: 1px solid var(--border-soft); margin: 2px 0; }
 .vcl-app .vcl-bud-agency__row--total { font-size: 15px; font-weight: 600; color: var(--budget); }
 .vcl-app .vcl-bud-agency__row--total .vcl-bud-agency__val { font-size: 16px; }
@@ -109,7 +109,7 @@
 .vcl-app .vcl-bud-table-wrap table.vcl-bud-table { margin: 0; }
 /* White box, all rows white -- the plum/red tint is reserved for hover only. */
 .vcl-app table.vcl-bud-table tbody tr:hover { background: var(--budget-tint); }
-.vcl-app .vcl-bud-cc-chip { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--border-soft); color: var(--muted); margin: 1px 2px 1px 0; }
+.vcl-app .vcl-bud-cc-chip { display: inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--border-soft); color: var(--muted); margin: 1px 2px 1px 0; }
 /* Mode pill (table "Mode" column) -- shared budget tint/text, with a per-mode accent border so
    Single/Grouping/Worksharing/Super-Grouping/Annual-Update stay visually distinct at a glance. */
 /* Mode cell can hold two pills (e.g. Grouping + Worksharing) -- stack/wrap them with a small gap. */
@@ -128,17 +128,17 @@
 .vcl-app .vcl-bud-var-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .vcl-app .vcl-bud-var-agg { font-size: 12px; color: var(--ink); line-height: 1.5; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-var-pill { display: inline-flex; align-items: center; gap: 4px; }
-.vcl-app .vcl-bud-var-cell__code { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink); }
+.vcl-app .vcl-bud-var-cell__code { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 12px; color: var(--ink); }
 .vcl-app .vcl-bud-var-cell__muted { color: var(--muted); font-style: italic; font-size: 12px; }
 /* Procedures cell -- procedures grouped by kind and stacked, one line per kind ("3 × nat. (HU, DE,
    IT)" / "3 × CP" / "RMS DE (+ 5 CMS), RMS LT (+ 10 CMS)"). RMS codes highlighted. */
 .vcl-app .vcl-bud-proc-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .vcl-app .vcl-bud-proc-line { font-size: 12px; color: var(--ink); line-height: 1.5; }
 .vcl-app .vcl-bud-proc-k { color: var(--muted); }
-.vcl-app .vcl-bud-cc { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--border-soft); color: var(--muted); }
+.vcl-app .vcl-bud-cc { display: inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--border-soft); color: var(--muted); }
 .vcl-app .vcl-bud-cc--rms { background: var(--budget-tint); border: 1px solid var(--budget); color: var(--budget); padding: 0 5px; }
 .vcl-app .vcl-bud-cc--cp { background: var(--budget-tint); color: var(--budget); }
-.vcl-app .vcl-bud-cc-empty { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--ib); }
+.vcl-app .vcl-bud-cc-empty { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 10.5px; color: var(--ib); }
 .vcl-app .vcl-bud-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .vcl-app .vcl-bud-hours-band { color: var(--ink-faint); font-size: 11.5px; font-weight: 400; }
 /* Keep this a real table-cell (not flex) so the cell's vertical-align:middle centers the icons in
@@ -189,7 +189,7 @@
 .vcl-app .vcl-bud-detail__grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 26px; }
 .vcl-app .vcl-bud-detail__sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; margin: 12px 0 4px; }
 .vcl-app .vcl-bud-detail__item { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid var(--border-soft); }
-.vcl-app .vcl-bud-detail__h { font-family: "IBM Plex Mono", monospace; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-detail__h { font-family:var(--figure); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-detail__sub { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; font-weight: 600; color: var(--budget); padding: 5px 0 2px; }
 .vcl-app .vcl-bud-detail__total { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-top: 10px; padding-top: 8px; border-top: 1.5px solid var(--budget); font-variant-numeric: tabular-nums; }
 
@@ -294,7 +294,7 @@
 }
 
 /* --- Station A: variation rows --- */
-.vcl-app .vcl-bud-var-row__code { font-family: "IBM Plex Mono", monospace; font-weight: 600; margin-right: 4px; }
+.vcl-app .vcl-bud-var-row__code { font-family:var(--figure); font-variant-numeric:tabular-nums; font-weight: 600; margin-right: 4px; }
 .vcl-app .vcl-bud-var-row__types { display: flex; gap: 4px; flex: none; }
 .vcl-app .vcl-bud-field-label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 5px; }
 /* Fixed height + border-box so the text input and the two selects are exactly the same height
@@ -308,13 +308,13 @@
 /* CMS country-code chip grid (Station B, MRP/DCP) -- GW-style toggle chips, not checkboxes.
    Composite codes show a tiny authority suffix (vcl-bud-cc__sfx) after the 2-letter base. */
 .vcl-app .vcl-bud-cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 5px; }
-.vcl-app .vcl-bud-cc-chip-btn { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; padding: 5px 4px; border-radius: 6px; border: 0.5px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; display: inline-flex; align-items: baseline; justify-content: center; gap: 3px; }
+.vcl-app .vcl-bud-cc-chip-btn { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 12px; font-weight: 600; padding: 5px 4px; border-radius: 6px; border: 0.5px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; display: inline-flex; align-items: baseline; justify-content: center; gap: 3px; }
 .vcl-app .vcl-bud-cc-chip-btn:hover { border-color: var(--budget); }
 /* Selected = soft budget tint (not a solid fill), mirroring the Guided Workflow's .vcl-wf-cc.is-on
    geometry -- only the accent colour differs (budget red vs. the GW's green). */
 .vcl-app .vcl-bud-cc-chip-btn.is-on { background: var(--budget-bg); border-color: var(--budget); color: var(--budget); }
 .vcl-app .vcl-bud-cc__sfx { font-size: 9px; font-weight: 500; opacity: 0.7; }
-.vcl-app .vcl-bud-type-badge { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; }
+.vcl-app .vcl-bud-type-badge { display: inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; }
 .vcl-app .vcl-bud-type-badge--ia { color: var(--ia); background: var(--ia-bg); }
 .vcl-app .vcl-bud-type-badge--ib { color: var(--ib); background: var(--ib-bg); }
 .vcl-app .vcl-bud-type-badge--ii { color: var(--ii); background: var(--ii-bg); }
@@ -327,13 +327,13 @@
 .vcl-app .vcl-bud-quicktype__label { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
 .vcl-app .vcl-bud-chip--type { display: inline-flex; align-items: center; gap: 6px; }
 .vcl-app .vcl-bud-picked { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); font-size: 13.5px; }
-.vcl-app .vcl-bud-picked__code { font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+.vcl-app .vcl-bud-picked__code { font-family:var(--figure); font-variant-numeric:tabular-nums; font-weight: 600; }
 .vcl-app .vcl-bud-picked__muted { color: var(--muted); }
 .vcl-app .vcl-bud-change { font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--budget); background: none; border: none; cursor: pointer; padding: 4px 6px; flex: none; }
 .vcl-app .vcl-bud-change:hover { text-decoration: underline; }
 .vcl-app .vcl-bud-builder { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 16px; background: var(--panel); }
 .vcl-app .vcl-bud-builder__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.vcl-app .vcl-bud-count { font-family: "IBM Plex Mono", monospace; background: var(--border-soft); border-radius: 20px; padding: 1px 8px; font-size: 11px; }
+.vcl-app .vcl-bud-count { font-family:var(--figure); font-variant-numeric:tabular-nums; background: var(--border-soft); border-radius: 20px; padding: 1px 8px; font-size: 11px; }
 .vcl-app .vcl-bud-add { width: 100%; margin-top: 8px; font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--budget); cursor: pointer; }
 .vcl-app .vcl-bud-add:hover { border-color: var(--budget); background: var(--budget-tint); }
 /* Additional-variation (grouping) row -- GW buildGroupingRow: per-row search + "or set the type
@@ -361,7 +361,7 @@
 .vcl-app .vcl-bud-live-result { margin-top: 4px; border-top: 1px dashed var(--border); padding-top: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 18px; }
 .vcl-app .vcl-bud-live-result .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .vcl-app .vcl-bud-live-result .val { font-family: "Source Serif 4", serif; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.vcl-app .vcl-bud-live-result .val .band { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 400; color: var(--ink-faint); margin-left: 4px; }
+.vcl-app .vcl-bud-live-result .val .band { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 12px; font-weight: 400; color: var(--ink-faint); margin-left: 4px; }
 .vcl-app .vcl-bud-live-result__note { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--ink-faint); }
 
 /* --- Editor overlay: the New/Edit plan-line editor and the annual "Add product" editor now enter
@@ -527,7 +527,7 @@
 .vcl-app .vcl-bud-annual__scpick-cc {
   flex: none;
   width: 26px;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-weight: 600;
   color: var(--muted);
 }

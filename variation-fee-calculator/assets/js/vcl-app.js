@@ -176,26 +176,23 @@
   function fillCalcHead() {
     if (!el.calcHead) return;
     const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
-    // Optional: a download link to the source Excel workbook, configured in the admin page
-    // (its URL changes on every WordPress re-upload, hence an editable field there).
-    const excelUrl = (window.VCL_CONFIG && window.VCL_CONFIG.calcExcelUrl) || "";
-    const excelHtml = excelUrl
-      ? `<p class="calc-excel-dl"><a href="${excelUrl}" target="_blank" rel="noopener">&#8681; Download the Excel version of the calculator</a></p>`
-      : "";
     el.calcHead.innerHTML = `
       <h3>Variation Fee Calculator</h3>
       <p>Calculate the official regulatory fees for variation applications (Type IA / IB / II) across one or more markets &mdash; EU-27, EMA, CH, IS, NO, UK and RS. Select markets and roles, set the number of strengths, then choose the variations.</p>
       <p class="ref-line">Reference: ${referenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).")}</p>
       <p class="ref-updated">Last updated in Variation Toolbox: ${lastUpdated("calculator", calcUpdated)}</p>
-      ${excelHtml}
+      <p class="calc-head-actions"><button type="button" class="calc-feedata-btn" id="vcl-calcFeeDataBtn">Fee data &mdash; country details</button></p>
     `;
-    if (excelUrl) {
-      const excelLink = el.calcHead.querySelector(".calc-excel-dl a");
-      if (excelLink) {
-        excelLink.addEventListener("click", () => {
-          if (window.VCL_USAGE) window.VCL_USAGE.track("calculator", "download");
-        });
-      }
+    // Entry point into the public fee-data page. It replaces both the Excel download link that
+    // used to sit here (the workbook is no longer maintained) and the "Fee data by country" box
+    // at the foot of every calculator step. The page itself lives in the calculator's own IIFE,
+    // so the click goes through its public interface -- the same additive hand-off mechanism the
+    // Guided Workflow already uses to reach the calculator.
+    const feeDataBtn = el.calcHead.querySelector("#vcl-calcFeeDataBtn");
+    if (feeDataBtn) {
+      feeDataBtn.addEventListener("click", () => {
+        if (window.VCLCALC && window.VCLCALC.openFeeData) window.VCLCALC.openFeeData();
+      });
     }
   }
   fillCalcHead();
@@ -3488,6 +3485,14 @@
     state.guidanceOpen = false;
     state.treeCollapsed = false;
     state.guidanceHub = dest === "guidance";
+    // The three embedded tools keep their own inner position (wizard step, station, open
+    // editor) in their own IIFE, which the state resets above cannot reach -- so a tile click
+    // used to land on step 3 / station D / the fee-data page again instead of on the tool's
+    // first screen. Each tool exposes a narrow reset() on its public interface that rewinds
+    // the position WITHOUT discarding what the user typed; see the comments there.
+    if (dest === "calculator" && window.VCLCALC && window.VCLCALC.reset) window.VCLCALC.reset();
+    else if (dest === "workflow" && window.VCL_WORKFLOW && window.VCL_WORKFLOW.reset) window.VCL_WORKFLOW.reset();
+    else if (dest === "budget" && window.VCL_BUDGET && window.VCL_BUDGET.reset) window.VCL_BUDGET.reset();
     if (dest === "calculator") state.view = "calculator";
     else if (dest === "classification") { state.view = "browse"; state.classifyOpen = true; }
     else if (dest === "guidance") { state.view = "browse"; state.guidanceOpen = true; }

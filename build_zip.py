@@ -29,6 +29,7 @@ FILES = [
     "extract_art5.py",
     "README.md",
     "includes/admin.php",
+    "includes/fee-editor.php",
     "includes/lookup.php",
     "includes/usage-counter.php",
     "includes/usage-dashboard.php",
@@ -37,8 +38,10 @@ FILES = [
     "assets/css/vcl-workflow-style.css",
     "assets/css/vcl-guide-style.css",
     "assets/css/vcl-calc-style.css",
+    "assets/css/vcl-fee-editor.css",
     "assets/js/vcl-app.js",
     "assets/js/vcl-usage.js",
+    "assets/js/vcl-fee-editor.js",
     "assets/js/vcl-data.js",
     "assets/js/vcl-qa-data.js",
     "assets/js/vcl-art5-data.js",
@@ -54,6 +57,7 @@ FILES = [
     "assets/js/vcl-submission.js",
     "assets/js/vcl-workflow.js",
     "assets/js/vcl-guide.js",
+    "assets/js/vcl-feedata.js",
     "assets/js/vcl-calc-app.js",
     "assets/js/vcl-calc-data.js",
 ]
@@ -65,8 +69,13 @@ def main():
         raise SystemExit("ERROR missing files: " + ", ".join(missing))
 
     on_disk = set()
-    for root, _dirs, names in os.walk(SRC):
+    for root, dirs, names in os.walk(SRC):
+        # Byte-code caches are never shipped and are created by anyone who imports
+        # convert.py (the test suite does). Pruning them keeps "test, then build" working.
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
         for n in names:
+            if n.endswith((".pyc", ".pyo")):
+                continue
             rel = os.path.relpath(os.path.join(root, n), SRC).replace(os.sep, "/")
             on_disk.add(rel)
     extra = sorted(on_disk - set(FILES))

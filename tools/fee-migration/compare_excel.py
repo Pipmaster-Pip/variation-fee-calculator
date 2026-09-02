@@ -53,6 +53,16 @@ STRENGTH_SETS = [1, 3]
 QUICK_COUNTS = [(1, 0, 0), (0, 0, 1), (1, 1, 1)]
 QUICK_STRENGTHS = [1]
 
+# --wide. The default sets above stop at six variations (3,2,1), and the cap
+# fees in DE, PL and IE only start biting above that -- so the whole capped
+# branch of the engine was never held against the workbook. The strengths are
+# the same five the golden master uses, so both checks speak one vocabulary.
+WIDE_COUNTS = COUNT_SETS + [
+    (5, 0, 0), (0, 5, 0), (0, 0, 5),
+    (5, 5, 5), (10, 0, 0),
+]
+WIDE_STRENGTHS = [1, 2, 3, 5, 10]
+
 
 def build_cases(rows, counts_sets, strength_sets):
     """One case per country + role + special variant + input set.
@@ -160,6 +170,8 @@ def as_number(v):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true", help="a short smoke run")
+    ap.add_argument("--wide", action="store_true",
+                    help="higher counts and more strengths, to reach the capped rows")
     args = ap.parse_args()
 
     if not WORKBOOK.exists():
@@ -167,8 +179,12 @@ def main():
         return 2
 
     rows = load_fee_rows()
-    counts_sets = QUICK_COUNTS if args.quick else COUNT_SETS
-    strength_sets = QUICK_STRENGTHS if args.quick else STRENGTH_SETS
+    if args.quick:
+        counts_sets, strength_sets = QUICK_COUNTS, QUICK_STRENGTHS
+    elif args.wide:
+        counts_sets, strength_sets = WIDE_COUNTS, WIDE_STRENGTHS
+    else:
+        counts_sets, strength_sets = COUNT_SETS, STRENGTH_SETS
     cases = build_cases(rows, counts_sets, strength_sets)
     print(f"{len(cases)} Faelle ueber {len(rows)} Gebuehrenzeilen")
 

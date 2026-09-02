@@ -145,10 +145,34 @@ const SHIPPED_AMOUNTS = FEE_ROWS.map(r => {
   return snap;
 });
 const SHIPPED_POINT_VALUES = Object.assign({}, POINT_VALUES);
+// The change history the workbook ships. Entries written in the fee editor go in
+// front of these, so the snapshot is what applyOverrides() rebuilds from -- same
+// discipline as the amounts above, and for the same reason: this runs again after
+// every edit in the editor's live preview.
+const SHIPPED_IMPRINT = (typeof IMPRINT !== 'undefined' && Array.isArray(IMPRINT))
+  ? IMPRINT.slice() : null;
 
 function applyOverrides() {
   const ov = window.VCLCALC_OVERRIDES;
   let touched = false;
+
+  if (SHIPPED_IMPRINT) {
+    const added = (ov && Array.isArray(ov.imprint)) ? ov.imprint.filter(
+      e => e && typeof e.date === 'string' && typeof e.topic === 'string' && e.topic !== ''
+    ) : [];
+    // Newest first, the order the history is rendered and read in. A stable sort
+    // keeps two entries that share a date in the order they were written -- the
+    // workbook has three lines dated 2021-10-17, so this is not hypothetical.
+    const merged = added.concat(SHIPPED_IMPRINT)
+      .map((e, i) => ({ e: e, i: i }))
+      .sort((a, b) => (a.e.date < b.e.date ? 1 : a.e.date > b.e.date ? -1 : a.i - b.i))
+      .map(x => x.e);
+    IMPRINT.length = 0;
+    Array.prototype.push.apply(IMPRINT, merged);
+    // Deliberately not `touched`: that flag gates applyLiveRatesToRows(), and a
+    // history line changes no amount. Flipping it here would re-derive every euro
+    // column on an install whose only override is a sentence.
+  }
 
   // Start from the shipped state every time, so this is idempotent.
   FEE_ROWS.forEach((r, i) => {
@@ -504,7 +528,18 @@ const appState = {
   // those are the ones a later change of the default leaves alone. Keyed by country code.
   strengthsDefault: 1,
   strengthsManual: {},
-  results: null
+  results: null,
+  // ---- Public fee-data page (step === 'feedata') ----
+  feeDataCc: null,          // which country the public fee-data page shows
+  feeDataCur: 'local',      // 'local' or 'eur' -- only meaningful for non-euro countries
+  feeDataOpen: false,       // is the quick-calculation box unfolded
+  feeDataReturnStep: 0,     // the wizard step the fee-data page was opened from
+  // Quick calculation on that page: procedure role, number of strengths, how many
+  // variations of each type, and the special-case row chosen per type. Kept in
+  // appState so a re-render (currency switch, country change) does not throw the
+  // reader's input away.
+  feeDataQuick: { role: null, strengths: 1, IA: 0, IB: 0, II: 1, special: { IA: null, IB: null, II: null } },
+  feeDataSearch: ''
 };
 
 // ---- Classification-exception hints ----
@@ -670,6 +705,41 @@ window.VCLCALC = {
     const grandTotal = results.reduce((acc, cr) => acc + (cr.total || 0), 0);
     return { countries: results, grandTotal };
   },
+  // Open the public fee-data page. Moved here from the old "Fee data by country" box at the
+  // foot of every step: the entry point now lives in the calculator's view heading, which is
+  // rendered by the host guide (vcl-app.js, a different IIFE) and therefore needs a public door
+  // into this one. Same behaviour as the retired button, verbatim.
+  // `cc` is optional. Without it -- the button above the calculator -- the page opens on
+  // the country picker alone: landing straight on a country (Italy, or whichever happened
+  // to be first in the selection) read as a claim that this was the country asked for, and
+  // it never was. With it -- a link inside a result card -- the country is the whole point
+  // of the click, so the page opens on it.
+  openFeeData(cc) {
+    appState.feeDataCc = cc || null;
+    appState.feeDataSearch = '';
+    // Non-euro countries otherwise always open in their own currency -- the same reset the
+    // country chips do; without it a country left in EUR came back in EUR on the next visit.
+    // A link out of a result card is the exception: the reader is already looking at that
+    // country in a chosen currency, and switching units under them would be a small betrayal.
+    appState.feeDataCur = cc ? (appState.resultCurrencyMode || 'eur') : 'local';
+    // The button sits above all four steps, so remember where the reader came
+    // from; "Back to the calculator" returns there instead of to step 0.
+    if (typeof appState.step === 'number') appState.feeDataReturnStep = appState.step;
+    appState.step = 'feedata';
+    render();
+    if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+  },
+  // "Take me back to this tool's own first screen" -- called by the host guide whenever the
+  // Variation Fee Calculator tile is clicked (vcl-app.js goToDestination). Without it, clicking
+  // the tile while standing on step 3 or on the fee-data page left the reader exactly where they
+  // were, and the fee-data page had no way back to the wizard via the tile at all.
+  // Deliberately NOT a state wipe: the selected countries, their per-country configuration, the
+  // variation counts and an already computed result are the user's input and survive -- only the
+  // wizard's position is rewound to the first step.
+  reset() {
+    appState.step = 0;
+    render();
+  },
   setGlobalCounts(counts) {
     const parts = [];
     ['IA', 'IB', 'II'].forEach((type) => {
@@ -739,6 +809,9 @@ function setStep(n) {
 }
 
 function renderRail() {
+  // The public fee-data page is not one of the wizard's four steps, so the
+  // stepper would sit above it with nothing marked active. Leave it empty there.
+  if (typeof appState.step !== 'number') { railEl.innerHTML = ''; return; }
   railEl.innerHTML = STEPS.map((label, i) => {
     let cls = 'rail-step';
     const isDone = i < appState.step;
@@ -764,21 +837,18 @@ function tileName(cc) {
   return /^[A-Za-z]{2}\s*[-–]/.test(cc) ? n.replace(/\s*\([^)]*\)\s*$/, '') : n;
 }
 
-// Change history + HA-websites info panels. Shown at the bottom of every calculator step (not just
-// the result), so the fee-data provenance and the HA links are reachable from anywhere in the flow.
-// Only one step renders at a time (contentEl.innerHTML is replaced), so the fixed IDs stay unique.
+// Change-history info panel. Shown at the bottom of every calculator step (not just the result),
+// so the fee-data provenance is reachable from anywhere in the flow. Only one step renders at a
+// time (contentEl.innerHTML is replaced), so the fixed IDs stay unique.
+// The former "Fee data by country" box that lived here is gone: the fee-data page is now entered
+// from the "Fee data — country details" button in the view heading (vcl-app.js fillCalcHead(),
+// via window.VCLCALC.openFeeData) instead of from the foot of the page.
 function calcInfoPanelsHtml() {
   return `
     ${(typeof IMPRINT !== 'undefined' && IMPRINT.length > 0) ? `
     <div class="panel" style="margin-bottom:18px;">
       <button class="btn ghost" id="vclcalc-toggleChangelog" style="padding-left:0;">📋 View change history (${IMPRINT.length} entries)</button>
       <div id="vclcalc-changelogPanel" style="display:none; margin-top:14px;"></div>
-    </div>
-    ` : ''}
-    ${(typeof HA_WEBSITES !== 'undefined' && HA_WEBSITES.length > 0) ? `
-    <div class="panel" style="margin-bottom:18px;">
-      <button class="btn ghost" id="vclcalc-toggleHaWebsites" style="padding-left:0;">🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)</button>
-      <div id="vclcalc-haWebsitesPanel" style="display:none; margin-top:14px;"></div>
     </div>
     ` : ''}
   `;
@@ -798,21 +868,6 @@ function wireCalcInfoPanels() {
         panel.innerHTML = renderChangelogList();
         panel.style.display = '';
         changelogBtn.textContent = `📋 Hide change history`;
-      }
-    });
-  }
-  const haWebsitesBtn = document.getElementById('vclcalc-toggleHaWebsites');
-  if (haWebsitesBtn) {
-    haWebsitesBtn.addEventListener('click', () => {
-      const panel = document.getElementById('vclcalc-haWebsitesPanel');
-      const isOpen = panel.style.display !== 'none';
-      if (isOpen) {
-        panel.style.display = 'none';
-        haWebsitesBtn.textContent = `🔗 Update status and link to HA websites (${HA_WEBSITES.length} entries)`;
-      } else {
-        panel.innerHTML = renderHaWebsitesList();
-        panel.style.display = '';
-        haWebsitesBtn.textContent = `🔗 Hide update status and link to HA websites`;
       }
     });
   }
@@ -844,11 +899,11 @@ function renderStepCountries() {
         `).join('')}
       </div>
     </div>
-    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <span class="hint" style="margin:0;">${n} countr${n===1?'y':'ies'} selected</span>
       <button class="btn primary" id="vclcalc-toStep2" ${n===0?'disabled':''}>Continue</button>
     </div>
+    ${calcInfoPanelsHtml()}
   `;
 
   document.getElementById('vclcalc-countrySearch').addEventListener('input', (e) => {
@@ -913,11 +968,11 @@ function renderStepCountryDetails() {
       </div>
       <div id="vclcalc-countryDetailList"></div>
     </div>
-    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back1">← Back</button>
       <button class="btn primary" id="vclcalc-toStep3">Continue</button>
     </div>
+    ${calcInfoPanelsHtml()}
   `;
 
   const list = document.getElementById('vclcalc-countryDetailList');
@@ -1031,11 +1086,11 @@ function renderStepVariations() {
       <p class="hint">Some countries distinguish between several variants of the same type (e.g. "simple" vs "complex"). Where that applies, pick the variant per type below — countries without that distinction automatically use their standard fee.</p>
       <div id="vclcalc-specialBlocks"></div>
     </div>
-    ${calcInfoPanelsHtml()}
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back2">← Back</button>
       <button class="btn primary" id="vclcalc-toResult" ${totalVariationCount()===0?'disabled':''}>Calculate fees</button>
     </div>
+    ${calcInfoPanelsHtml()}
   `;
 
   const counters = document.getElementById('vclcalc-typeCounters');
@@ -1292,7 +1347,7 @@ function renderChangelogList() {
   const rows = IMPRINT.map(entry => `
     <div class="breakdown-row">
       <div class="bd-left">
-        <span class="bd-meta" style="font-family:var(--mono); color:var(--ink-soft);">${formatImprintDate(entry.date)}</span>
+        <span class="bd-meta" style="font-family:var(--figure); color:var(--ink-soft);">${formatImprintDate(entry.date)}</span>
         <span class="bd-name" style="font-weight:400; font-size:13px;">${escapeHtml(entry.topic)}</span>
       </div>
     </div>
@@ -1300,41 +1355,22 @@ function renderChangelogList() {
   return `<div class="breakdown" style="max-height:420px; overflow-y:auto;">${rows}</div>`;
 }
 
-function renderHaWebsitesList() {
-  if (typeof HA_WEBSITES === 'undefined' || HA_WEBSITES.length === 0) return '<div class="breakdown"></div>';
-  const sorted = [...HA_WEBSITES].sort((a, b) => {
-    const nameA = COUNTRY_NAMES[a.cc] || a.cc;
-    const nameB = COUNTRY_NAMES[b.cc] || b.cc;
-    return nameA.localeCompare(nameB, 'en');
-  });
-  const rows = sorted.map(entry => {
-    const countryName = COUNTRY_NAMES[entry.cc] || entry.cc;
-    const linkHtml = entry.link_url
-      ? `<a href="${escapeHtml(entry.link_url)}" target="_blank" rel="noopener">${escapeHtml(entry.link_text || entry.link_url)}</a>`
-      : escapeHtml(entry.link_text || '–');
-    const updatedCalc = formatImprintDate(entry.updated_calc) || '–';
-    const checkedHa = formatImprintDate(entry.checked_ha) || '–';
-    const payment = entry.payment ? escapeHtml(entry.payment) : '–';
-    const annual = entry.annual ? escapeHtml(entry.annual) : '–';
-    return `
-    <div class="breakdown-row">
-      <div class="bd-left">
-        <span class="bd-name" style="font-weight:600; font-size:13px;">${escapeHtml(countryName)} <span class="badge">${escapeHtml(entry.cc)}</span></span>
-        <span class="bd-meta" style="display:block;">Authority: ${linkHtml}</span>
-        <span class="bd-meta" style="display:block;">Fees last updated in calculator: <span style="font-family:var(--mono); color:var(--ink-soft);">${updatedCalc}</span></span>
-        <span class="bd-meta" style="display:block;">Fees last checked on HA website: <span style="font-family:var(--mono); color:var(--ink-soft);">${checkedHa}</span></span>
-        <span class="bd-meta" style="display:block;">Payment method: ${payment} · Annual fee: ${annual}</span>
-      </div>
-    </div>
-  `;
-  }).join('');
-  return `<div class="breakdown" style="max-height:420px; overflow-y:auto;">${rows}</div>`;
-}
-
 function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+// escapeHtml() is safe for element text content but does not escape quotes,
+// so it must not be used for values placed inside an HTML attribute (e.g.
+// value="...", href="...", data-...="..."). Use this instead for those.
+function escapeAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 // ---- Compute results across all selected countries ----
@@ -1726,7 +1762,7 @@ function renderStepResult() {
         <div class="vres-top">
           <div>
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
-            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b></div>
+            <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b> &middot; <button type="button" class="vres-fdlink" data-fdjump="${escapeAttr(cr.cc)}">Fee data for ${escapeHtml(COUNTRY_NAMES[cr.cc] || cr.cc)} &#8599;</button></div>
           </div>
           <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(cr.total)}</span></div>
         </div>
@@ -1776,7 +1812,7 @@ function renderStepResult() {
               <td><span class="vres-ovname"><span class="badge vres-ovcode">${ccShort(cr.cc)}</span>${COUNTRY_NAMES[cr.cc]}</span></td>
               <td>${roleLabel(cr.role)}</td>
               <td>${cr.hasData ? cr.strengths : '&ndash;'}</td>
-              <td>${varTotal}</td>
+              <td>${varBreakdown || varTotal}</td>
               <td>${mechChipHTML(bd)}</td>
               <td class="vres-ovmoney${zero ? ' vres-ovmoney--zero' : ''}">${amount}</td>
             </tr>`;
@@ -1839,14 +1875,14 @@ function renderStepResult() {
       </button>
     </div>
 
-    ${calcInfoPanelsHtml()}
-
     ${anyNoData ? `<div class="note-box">One or more countries did not return a fee for the selected combination. Please double-check the role/variation selection for the affected country.</div>` : ''}
 
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back3">← Edit selection</button>
       <button class="btn primary" id="vclcalc-restart">New calculation</button>
     </div>
+
+    ${calcInfoPanelsHtml()}
   `;
 
   document.getElementById('vclcalc-back3').addEventListener('click', () => setStep(2));
@@ -1884,6 +1920,15 @@ function renderStepResult() {
     row.addEventListener('click', jump);
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); }
+    });
+  });
+
+  // "Fee data for <country>" in a card's meta line: the same page the button above the
+  // calculator opens, but already on that country and in the currency shown here.
+  contentEl.querySelectorAll('[data-fdjump]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.VCLCALC.openFeeData(btn.getAttribute('data-fdjump'));
     });
   });
 
@@ -2136,9 +2181,520 @@ function exportExcel(res) {
   XLSX.writeFile(wb, `variation-fees-${dateStr}.xlsx`);
 }
 
+// ============================================================================
+// Public fee-data page: one country at a time, amounts and provenance open.
+// Reached from the calculator; the exact entry point is still to be decided, so
+// the page is addressed only through appState.step === 'feedata'.
+// ============================================================================
+
+// Column meanings straight from the workbook's header row: F is the first
+// variation of the first strength, G every further strength, H/I/J every
+// further variation of type IA/IB/II, and K the flat grouping fee.
+// `sub` splits a heading over two lines: the four "each further" columns differ only in what
+// comes second, so the shared half heads the line and the difference sits under it. It also
+// keeps the longest of them from running into the neighbouring cell.
+const FEE_COLS = [
+  { key: 'F', label: '1st variation' },
+  { key: 'H', label: 'Each further', sub: 'Type IA' },
+  { key: 'I', label: 'Each further', sub: 'Type IB' },
+  { key: 'J', label: 'Each further', sub: 'Type II' },
+  { key: 'G', label: 'Each further', sub: 'Strength' },
+  { key: 'K', label: 'Grouping fee' }
+];
+const ROLE_CAPTION = {
+  RMS: 'Reference Member State',
+  CMS: 'Concerned Member State',
+  national: 'Purely national marketing authorisation'
+};
+
+function feeDataOverrides() {
+  return (typeof window !== 'undefined' && window.VCLCALC_OVERRIDES) || null;
+}
+
+function renderStepFeeData() {
+  const FD = (typeof window !== 'undefined' && window.VCL_FEEDATA) || null;
+  if (!FD) {
+    // vcl-feedata.js failed to load: say so rather than throwing inside render().
+    contentEl.innerHTML = '<div class="panel"><p class="hint">The fee data could not be loaded. Please reload the page.</p></div>';
+    return;
+  }
+
+  // Focus and chip wiring is shared by the picker-only view and the full page,
+  // so it lives in one place and both entry points call it.
+  const refocus = (attr, value) => {
+    const again = contentEl.querySelector('[' + attr + '="' + String(value).replace(/"/g, '\\"') + '"]');
+    if (again) again.focus();
+  };
+  const wirePicker = () => {
+    contentEl.querySelectorAll('[data-fdcc]').forEach((b) => {
+      b.addEventListener('click', () => {
+        appState.feeDataCc = b.getAttribute('data-fdcc');
+        appState.feeDataCur = 'local';
+        render();
+        refocus('data-fdcc', appState.feeDataCc);
+      });
+    });
+    const searchEl = document.getElementById('vclcalc-fdSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        appState.feeDataSearch = searchEl.value;
+        render();
+        const again = document.getElementById('vclcalc-fdSearch');
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      });
+    }
+    const backEl = document.getElementById('vclcalc-fdBack');
+    if (backEl) {
+      backEl.addEventListener('click', () => {
+        appState.step = appState.feeDataReturnStep;
+        render();
+        if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+      });
+    }
+  };
+
+  const chips = FD.chipList(COUNTRY_NAMES, FEE_ROWS);
+  const q = appState.feeDataSearch.trim().toLowerCase();
+  const shown = chips.filter(c => !q || c.name.toLowerCase().includes(q) || c.cc.toLowerCase().includes(q));
+  const pickerHtml = `
+    <div class="fd-picker">
+      <div class="fd-pillbar">
+        <input type="search" class="fd-search" id="vclcalc-fdSearch" placeholder="Find a country"
+               aria-label="Find a country" value="${escapeAttr(appState.feeDataSearch)}">
+        <span class="fd-pillcount">${q ? `${shown.length} of ${chips.length}` : `${chips.length} countries`}</span>
+      </div>
+      <div class="fd-pills">
+        ${shown.length ? shown.map(c => `
+          <button type="button" class="fd-pill${c.cc === appState.feeDataCc ? ' is-active' : ''}" data-fdcc="${escapeAttr(c.cc)}">
+            ${escapeHtml(c.name)}<span class="n">${c.n}</span>
+          </button>`).join('') : '<p class="fd-pillnone">No country with that name.</p>'}
+      </div>
+    </div>`;
+
+  if (!appState.feeDataCc) {
+    contentEl.innerHTML = `
+      ${pickerHtml}
+      <p class="fd-pickhint">Choose a country to see its fee table, where the amounts come from and when they were last checked.</p>
+      <p class="fd-pickback"><button type="button" class="btn fd-backbtn" id="vclcalc-fdBack">Back to the calculator</button></p>`;
+    wirePicker();
+    return;
+  }
+
+  const cc = appState.feeDataCc;
+  const rows = FEE_ROWS.filter(r => r.cc === cc);
+  const meta = FD.countryMeta(cc, HA_WEBSITES, CC_TO_CURRENCY, feeDataOverrides());
+  const rate = meta.currency ? FD.deriveRate(rows) : null;
+  // Without a rate there is nothing to convert to, so such a country stays on
+  // its own currency whatever the (Task 6) switch is set to.
+  const local = !!meta.currency && (appState.feeDataCur === 'local' || !rate);
+
+  // One formatter for every amount on this page -- the tables, the "in plain
+  // words" ranges and the quick calculation's total alike. The page exists to
+  // show the amounts that are actually in force, so a value that carries cents
+  // (BE 1552.19 EUR, CZ 6567.50 CZK) is printed with them and a whole amount is
+  // printed without. Formatting the table differently from the quick calculation
+  // is what made the same Belgian fee read "1.552" above and "1.552,19" two
+  // centimetres below. Display only -- the engine's arithmetic is untouched.
+  const fmtAmount = (v) => {
+    const r = Math.round(v * 100) / 100;
+    const dec = Number.isInteger(r) ? 0 : 2;
+    return r.toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  };
+  const fmt = (v) => {
+    if (v === null || v === undefined) return '&ndash;';
+    if (v === 0) return '0';
+    if (!meta.currency) return fmtAmount(v);
+    return fmtAmount(local ? v : v / rate);
+  };
+  // `mark` is the footnote number of a line whose price is not this column --
+  // see the "Lines priced by another rule" block below. Only the "1st variation"
+  // column is ever marked.
+  const cell = (row, key, mark) => {
+    const raw = meta.currency ? row[key + '_lc'] : row[key];
+    const cls = (raw === null || raw === undefined) ? 'fd-num fd-dash'
+      : (raw === 0 ? 'fd-num fd-zero' : 'fd-num');
+    const sup = mark ? `<sup class="fd-fnref">${mark}</sup>` : '';
+    return `<td class="${cls}">${fmt(raw)}${sup}</td>`;
+  };
+
+  // ---- Quick calculation -------------------------------------------------
+  // The box owns no fee logic of its own. It collects a role, a strength count,
+  // a variation count and a special case per type, then hands all of it to the
+  // very same engine (window.VCLCALC.computeFees) the calculator and every other
+  // tool uses -- so caps, grouping fees, subsumption and the fee editor's
+  // overrides apply here without being re-implemented.
+  const VAR_TYPES = ['IA', 'IB', 'II'];
+  const roleGroups = FD.groupByRole(rows);
+  const qc = appState.feeDataQuick;
+  // The stored role may belong to the country looked at before this one.
+  if (!roleGroups.some(g => g.role === qc.role)) {
+    qc.role = (roleGroups[0] || {}).role || 'RMS';
+  }
+  // Per type: the rows this country/role offers, and the one the engine would
+  // actually price with the currently stored preference (resolveRow is what
+  // computeCountryResult calls internally, so the two can never diverge). Where
+  // a type offers more than one row the reader gets a selector, because the fee
+  // can differ by a factor of two -- Italy prices a Type II as "reduced" or
+  // "standard", and only the reader knows which one applies.
+  const qcRows = {};
+  VAR_TYPES.forEach((t) => {
+    qcRows[t] = {
+      candidates: rowsFor(cc, qc.role, t),
+      picked: resolveRow(cc, qc.role, t, qc.special[t])
+    };
+  });
+
+  const qcNumField = (key, label) => `
+          <label class="fd-field">
+            <span>${escapeHtml(label)}</span>
+            <input type="text" inputmode="numeric" autocomplete="off"
+                   data-fdq="${escapeAttr(key)}" value="${escapeAttr(String(qc[key]))}">
+          </label>`;
+  const qcSpecialField = (t) => {
+    const cand = qcRows[t].candidates;
+    if (cand.length < 2) return '';
+    const cur = qcRows[t].picked ? (qcRows[t].picked.special || '') : '';
+    return `
+          <label class="fd-field">
+            <span>Type ${escapeHtml(t)} &mdash; special case</span>
+            <select data-fdqspecial="${escapeAttr(t)}">
+              ${cand.map(r => `<option value="${escapeAttr(r.special || '')}"${
+                (r.special || '') === cur ? ' selected' : ''
+              }>${escapeHtml(r.special || 'standard')}</option>`).join('')}
+            </select>
+          </label>`;
+  };
+
+  const quickCalc = `
+    <div class="fd-calc" id="vclcalc-fdCalc"${appState.feeDataOpen ? '' : ' hidden'}>
+      <div class="fd-calchead">
+        <h3>Quick calculation &mdash; ${escapeHtml(COUNTRY_NAMES[cc] || cc)}</h3>
+        <div class="fd-roles" role="group" aria-label="Procedure role">
+          ${roleGroups.map(g => `
+            <button type="button" class="fd-rolebtn${g.role === qc.role ? ' on' : ''}" data-fdqrole="${escapeAttr(g.role)}">
+              ${g.role === 'national' ? 'National' : escapeHtml(g.role)}
+            </button>`).join('')}
+        </div>
+      </div>
+      <div class="fd-calcgrid">
+        <div class="fd-fields">
+          ${qcNumField('strengths', 'Strengths')}
+          ${qcNumField('IA', 'Type IA variations')}
+          ${qcNumField('IB', 'Type IB variations')}
+          ${qcNumField('II', 'Type II variations')}
+          ${VAR_TYPES.map(qcSpecialField).join('')}
+        </div>
+        <div class="fd-out" id="vclcalc-fdOut" aria-live="polite"></div>
+      </div>
+    </div>`;
+
+  // ---- Lines priced by another rule --------------------------------------
+  // For a few lines the "1st variation" column is not what a single variation
+  // of that line costs: the Irish RMS lines are priced off another line's rate
+  // plus a fixed addition, the Czech lines add a fixed amount on top, and the
+  // Danish "D.Sp.No." lines carry no 1st-variation rate at all and only ever
+  // charge their grouping fee. Printing that column next to a quick calculation
+  // that says something else is a contradiction the page cannot explain, so the
+  // line explains it itself.
+  //
+  // The test is deliberately NOT a country list. Every line is priced by the
+  // very engine the quick calculation and the Fee Calculator use
+  // (window.VCLCALC.computeFees -- one variation of that line's type, one
+  // strength, that line's own special case) and the result is compared with the
+  // line's own F. No fee arithmetic is added here. Any other country, and any
+  // amount changed in the fee editor, is picked up the same way.
+  const rowPriceEUR = (r) => {
+    const VC = (typeof window !== 'undefined') && window.VCLCALC;
+    if (!VC || !VC.computeFees) return null;
+    const counts = { IA: 0, IB: 0, II: 0 };
+    counts[r.type] = 1;
+    const special = { IA: null, IB: null, II: null };
+    special[r.type] = r.special || null;
+    const res = VC.computeFees({
+      countries: [{ cc: r.cc, role: r.role, strengths: 1, special: special }],
+      counts: counts
+    }).countries[0];
+    return (res && res.hasData && typeof res.total === 'number') ? res.total : null;
+  };
+  // row number -> what one variation of that line actually costs, in EUR, for
+  // the lines where that is not the line's own F.
+  const rowNote = {};
+  rows.forEach((r) => {
+    // Only lines the engine would resolve to on their own. A line hidden behind
+    // an identical special-case label is never priced alone, so a note about it
+    // could not be reproduced by anybody.
+    if (resolveRow(r.cc, r.role, r.type, r.special) !== r) return;
+    const priced = rowPriceEUR(r);
+    if (priced === null) return;
+    if (typeof r.F === 'number' && Math.abs(r.F - priced) < 0.005) return;
+    rowNote[r.row] = priced;
+  });
+  // The notes convert with the page's own rate, exactly as the quick calculation
+  // does, so the table, the notes and the quick calculation stay one arithmetic.
+  const noteLocal = !!meta.currency && local && !!rate;
+  const noteAmount = (eur) => `${fmtAmount(noteLocal ? eur * rate : eur)} ${escapeHtml(noteLocal ? meta.currency : 'EUR')}`;
+
+  // ---- "In plain words" --------------------------------------------------
+  // Says what the columns mean, in this country's own numbers. Deliberately a
+  // RANGE over the whole role group rather than one picked row: which line
+  // applies depends on the variation type and the special case, so naming a
+  // single amount as "the" fee would be wrong for every country that has more
+  // than one row -- Italy's first variation is 1.055 EUR as a Type IA and
+  // 29.357 EUR as a standard Type II, Denmark's spans four Type II rows.
+  const unitTxt = meta.currency ? (local ? meta.currency : 'EUR') : 'EUR';
+  const colRange = (grows, key) => {
+    // Zeros are not rates -- a "0" on a line means that line carries no charge
+    // (Iceland's "if CMS is not affected" rows), and letting one into the range
+    // made the sentence open at "0 ISK", which says the opposite of what the
+    // table shows. Now that this block speaks for the whole country rather than
+    // for the RMS table alone, every role's zero rows would land in here.
+    const vals = grows
+      .map(r => (meta.currency ? r[key + '_lc'] : r[key]))
+      .filter(v => typeof v === 'number' && v !== 0);
+    if (!vals.length) return null;
+    const lo = Math.min.apply(null, vals);
+    const hi = Math.max.apply(null, vals);
+    const one = v => `<b>${fmt(v)} ${escapeHtml(unitTxt)}</b>`;
+    return lo === hi ? one(lo) : `${one(lo)} to ${one(hi)}`;
+  };
+  const plainWords = (g, hasNotes) => {
+    const first = colRange(g.rows, 'F');
+    const grouping = colRange(g.rows, 'K');
+    // Most countries charge nothing per additional strength (column G is 0
+    // throughout), so promising a surcharge would be plain wrong there.
+    const strengthFlat = g.rows.every((r) => {
+      const v = meta.currency ? r.G_lc : r.G;
+      return v === null || v === undefined || v === 0;
+    });
+    // "Each further" rates live in columns H/I/J (IA/IB/II). Some countries
+    // (e.g. Denmark) never charge one -- those columns are null on every row --
+    // so the sentence must only appear when the table actually has a value.
+    const eachFurther = ['H', 'I', 'J'].some((key) => colRange(g.rows, key));
+    return `
+      <div class="fd-plain">
+        <h3>In plain words</h3>
+        <p class="fd-sentence">
+          The first variation of a procedure is charged the <b>1st variation</b> rate${first ? ` (${first})` : ''}${hasNotes ? ' &mdash; except on the lines marked under the table' : ''}${eachFurther ? ';\n          every further variation of the same type is charged its own &ldquo;each further&rdquo; rate.' : '.'}
+          ${strengthFlat
+            ? `The number of strengths does not change these amounts in ${escapeHtml(COUNTRY_NAMES[cc] || cc)}.`
+            : `Each strength beyond the first adds ${colRange(g.rows, 'G')} to a rate.`}
+          ${grouping
+            ? `Some lines also carry a <b>grouping fee</b> (${grouping}), charged instead of the single rates when more than one variation of that type is filed together.`
+            : ''}
+          Which line applies depends on the variation type and, where the table shows one, the special case.
+        </p>
+      </div>`;
+  };
+
+  const anySpecial = rows.some(r => r.special && r.special !== 'standard');
+
+  // One currency switch per role section, sitting on the heading of the table it
+  // governs. They all drive the same appState.feeDataCur, so switching any of
+  // them switches the whole page; the index only keeps the focus restore honest.
+  const curToggle = (gi) => (meta.currency && rate) ? `
+    <div class="fd-curtoggle" role="group" aria-label="Currency">
+      <button type="button" class="fd-curbtn${local ? ' on' : ''}" data-fdcur="local" data-fdcurgi="${gi}">${escapeHtml(meta.currency)}</button>
+      <button type="button" class="fd-curbtn${local ? '' : ' on'}" data-fdcur="eur" data-fdcurgi="${gi}">EUR</button>
+    </div>` : '';
+
+  const tables = roleGroups.map((g, gi) => {
+    // Footnote numbers run per role group, so a reader never has to look past
+    // the table in front of them.
+    const marks = {};
+    g.rows.forEach((r) => { if (rowNote[r.row] !== undefined) marks[r.row] = Object.keys(marks).length + 1; });
+    const marked = g.rows.filter(r => rowNote[r.row] !== undefined);
+    const notes = marked.length ? `
+      <p class="fd-hint fd-fnotes">
+        ${marked.map((r) => {
+          const label = `Type ${escapeHtml(r.type)}${r.special ? ' &middot; ' + escapeHtml(r.special) : ''}`;
+          const amount = noteAmount(rowNote[r.row]);
+          return `<span class="fd-fnote"><sup class="fd-fnref">${marks[r.row]}</sup> ${label}: ${
+            typeof r.F === 'number'
+              ? `one variation of this line is charged <b>${amount}</b>, not the &ldquo;1st variation&rdquo; amount shown.`
+              : `this line has no &ldquo;1st variation&rdquo; rate; one variation of it is charged <b>${amount}</b>.`
+          }</span>`;
+        }).join('')}
+        <span class="fd-fnote">Marked lines are charged by a rule that arrives at a different amount than their &ldquo;1st variation&rdquo; column. The quick calculation above and the Fee Calculator apply that rule, not the column.</span>
+      </p>` : '';
+    return `
+    <div class="fd-group">
+      <div class="fd-grouphead">
+        <h2>${g.role === 'national' ? 'National procedure' : 'As ' + escapeHtml(g.role)}</h2>
+        <p>${escapeHtml(ROLE_CAPTION[g.role] || '')}</p>
+        ${curToggle(gi)}
+      </div>
+      <div class="fd-card"><div class="fd-scroll">
+        <table class="fd-tbl">
+          <thead><tr>
+            <th>Procedure</th>
+            ${anySpecial ? '<th>Special case</th>' : ''}
+            <th>Fee code</th>
+            ${FEE_COLS.map(c => `<th class="fd-num">${escapeHtml(c.label)}${
+              c.sub ? `<span class="fd-sub">${escapeHtml(c.sub)}</span>` : ''
+            }${
+              meta.currency ? `<span class="fd-cur">${escapeHtml(local ? meta.currency : 'EUR')}</span>` : ''
+            }</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${g.rows.map(r => `
+              <tr>
+                <td><span class="fd-type"><span class="fd-tname">Type ${escapeHtml(r.type)}</span>${typePillHTML(r.type)}</span></td>
+                ${anySpecial ? `<td class="fd-sc">${escapeHtml(r.special || 'standard')}</td>` : ''}
+                <td class="fd-code">${r.fee_code ? escapeHtml(String(r.fee_code)) : '&ndash;'}</td>
+                ${FEE_COLS.map(c => cell(r, c.key, c.key === 'F' ? marks[r.row] : null)).join('')}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div></div>
+      ${notes}
+    </div>`;
+  }).join('');
+
+  contentEl.innerHTML = `
+    ${pickerHtml}
+
+    <header class="fd-masthead">
+      <div>
+        <h1>${escapeHtml(COUNTRY_NAMES[cc] || cc)}</h1>
+        <p class="fd-meta">
+          <span class="fd-code">${escapeHtml(cc)}</span><span class="fd-dot">&middot;</span>
+          <span>Currency ${escapeHtml(meta.currency || 'EUR')}</span><span class="fd-dot">&middot;</span>
+          <span>${rows.length} fee row${rows.length === 1 ? '' : 's'}</span>
+          ${meta.checked ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Checked</span> <b>${escapeHtml(formatImprintDate(meta.checked))}</b></span>` : ''}
+          ${meta.edited ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Last edited</span> <b>${escapeHtml(formatImprintDate(meta.edited))}</b></span>` : ''}
+          ${meta.linkText ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Authority</span> ${
+            meta.linkUrl
+              ? `<a href="${escapeAttr(meta.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(meta.linkText)}</a>`
+              : escapeHtml(meta.linkText)
+          }</span>` : ''}
+          ${meta.payment ? `<span class="fd-dot">&middot;</span><span><span class="fd-lbl">Payment</span> ${escapeHtml(meta.payment)}</span>` : ''}
+        </p>
+        ${meta.source ? `<p class="fd-src">Source: <b>${escapeHtml(meta.source)}</b></p>` : ''}
+        ${(meta.currency && rate) ? `<p class="fd-src fd-fx">Published in <b>${escapeHtml(meta.currency)}</b> by the authority &mdash; euro amounts are converted at <b>1 EUR = ${rate.toLocaleString('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 })} ${escapeHtml(meta.currency)}</b>.</p>` : ''}
+      </div>
+      <div class="fd-headright" id="vclcalc-fdHeadRight">
+        <button type="button" class="btn fd-backbtn" id="vclcalc-fdBack">Back to the calculator</button>
+        <button type="button" class="btn fd-openbtn" id="vclcalc-fdOpen"
+                aria-expanded="${appState.feeDataOpen ? 'true' : 'false'}" aria-controls="vclcalc-fdCalc">
+          <span class="fd-caret" aria-hidden="true">&#9654;</span> Quick calculation
+        </button>
+      </div>
+    </header>
+    ${quickCalc}
+    <div id="vclcalc-fdBody">${tables}${
+      roleGroups.length ? plainWords({ rows: rows }, rows.some(r => rowNote[r.row] !== undefined)) : ''
+    }</div>
+  `;
+
+  // Chips, search field and "Back to the calculator" behave the same here as on
+  // the picker-only view, so they are wired by the one shared helper.
+  wirePicker();
+  contentEl.querySelectorAll('[data-fdcur]').forEach((b) => {
+    b.addEventListener('click', () => {
+      appState.feeDataCur = b.getAttribute('data-fdcur');
+      const gi = b.getAttribute('data-fdcurgi');
+      render();
+      const again = contentEl.querySelector('[data-fdcur="' + appState.feeDataCur + '"][data-fdcurgi="' + gi + '"]');
+      if (again) again.focus();
+    });
+  });
+
+  // ---- Quick calculation: wiring and output ------------------------------
+  const fdQuickNum = (v) => {
+    const n = parseInt(String(v).replace(/[^\d]/g, ''), 10);
+    return (isNaN(n) || n < 0) ? 0 : n;
+  };
+
+  function fdQuickRender() {
+    const out = document.getElementById('vclcalc-fdOut');
+    if (!out) return;
+    const counts = { IA: qc.IA, IB: qc.IB, II: qc.II };
+    if (!counts.IA && !counts.IB && !counts.II) {
+      out.innerHTML = '<p class="fd-hint">Enter at least one variation to see a fee.</p>';
+      return;
+    }
+    const strengths = Math.max(1, qc.strengths);
+    const cr = window.VCLCALC.computeFees({
+      countries: [{ cc: cc, role: qc.role, strengths: strengths, special: qc.special }],
+      counts: counts
+    }).countries[0];
+    if (!cr || !cr.hasData || cr.total === null || cr.total === undefined) {
+      out.innerHTML = '<p class="fd-hint">This country has no fee line for that combination.</p>';
+      return;
+    }
+    // The tables above are converted with the rate read back off the data itself
+    // (VCL_FEEDATA.deriveRate), while cr.totalLocal uses the wizard's live/static
+    // FX rate -- and that one is null for most non-euro countries when no live
+    // rate is available. Converting the engine's euro total with the page's own
+    // rate keeps the sum, the tables and the currency pill on one arithmetic.
+    const showLocal = !!meta.currency && local && !!rate;
+    const amount = showLocal ? cr.total * rate : cr.total;
+    const unit = showLocal ? meta.currency : 'EUR';
+    // The same test computeCountryBreakdown() uses to label the mechanic. A
+    // country result carries no `mechanic` field to read it off, only the raw
+    // per-item cap/grouping values it is derived from.
+    const capFired = cr.groupCapValue !== null || cr.items.some(it => it.capValue !== null);
+    const groupingFired = cr.items.some(it => it.groupingFee !== null);
+    out.innerHTML = `
+      <div class="fd-lines">
+        ${VAR_TYPES.slice().reverse().filter(t => counts[t] > 0).map((t) => {
+          const picked = qcRows[t].picked;
+          return `<div class="fd-line"><span>${counts[t]}&times; Type ${escapeHtml(t)}</span><span>${
+            picked && picked.special ? escapeHtml(picked.special) : '&ndash;'
+          }</span></div>`;
+        }).join('')}
+        <div class="fd-line"><span>${strengths} strength${strengths === 1 ? '' : 's'}</span><span>${
+          escapeHtml(qc.role === 'national' ? 'National procedure' : 'As ' + qc.role)
+        }</span></div>
+      </div>
+      <div class="fd-total">
+        <span class="fd-total-l">Total fee</span>
+        <span class="fd-total-r">${fmtAmount(amount)} ${escapeHtml(unit)}</span>
+      </div>
+      ${capFired ? '<p class="fd-hint">A fee cap applies to this combination.</p>' : ''}
+      ${groupingFired ? '<p class="fd-hint">A grouping fee applies to this combination.</p>' : ''}`;
+  }
+
+  const openBtn = document.getElementById('vclcalc-fdOpen');
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      appState.feeDataOpen = !appState.feeDataOpen;
+      render();
+      const again = document.getElementById('vclcalc-fdOpen');
+      if (again) again.focus();
+    });
+  }
+  // Only the output is redrawn on a keystroke; a full render() here would pull
+  // the caret out of the field being typed in.
+  contentEl.querySelectorAll('[data-fdq]').forEach((el) => {
+    el.addEventListener('input', () => {
+      qc[el.getAttribute('data-fdq')] = fdQuickNum(el.value);
+      fdQuickRender();
+    });
+  });
+  // Role and special case change which rows exist, so those do re-render.
+  contentEl.querySelectorAll('[data-fdqrole]').forEach((b) => {
+    b.addEventListener('click', () => {
+      qc.role = b.getAttribute('data-fdqrole');
+      render();
+      refocus('data-fdqrole', qc.role);
+    });
+  });
+  contentEl.querySelectorAll('[data-fdqspecial]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const t = sel.getAttribute('data-fdqspecial');
+      qc.special[t] = sel.value || null;
+      render();
+      refocus('data-fdqspecial', t);
+    });
+  });
+  if (appState.feeDataOpen) fdQuickRender();
+}
+
 function render() {
   renderRail();
-  if (appState.step === 0) renderStepCountries();
+  if (appState.step === 'feedata') renderStepFeeData();
+  else if (appState.step === 0) renderStepCountries();
   else if (appState.step === 1) renderStepCountryDetails();
   else if (appState.step === 2) renderStepVariations();
   else if (appState.step === 3) renderStepResult();

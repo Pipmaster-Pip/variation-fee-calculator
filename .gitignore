@@ -6,12 +6,22 @@ variation-fee-calculator.zip
 # The scripts carry the download URLs; the data files they produce are committed, the sources
 # are not.
 *.xlsx
+# ...except the fee workbook itself. It stopped being a mere source document the
+# moment the toolbox stopped shipping it: it is the reference implementation of
+# every fee rule, and the only place the formula semantics can be read back
+# (a cap, for instance, lives in a row's Sf column, not where you first look).
+# 216 KB is a small price for keeping that readable after the tool drops it.
+!Variation-Fee-Calculator-EU.xlsx
 ~$*.xlsx
 *.xls
 *.pdf
 
 # Other non-project files in this folder
 *.docx
+
+# Python byte-code caches
+__pycache__/
+*.py[cod]
 
 # OS/editor cruft
 .DS_Store

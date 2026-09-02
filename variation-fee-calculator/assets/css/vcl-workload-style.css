@@ -114,7 +114,7 @@
 .vcl-app .vcl-wl-result:hover { background: var(--workload-tint); border-color: var(--workload); }
 
 .vcl-app .vcl-wl-result__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--workload);
@@ -142,7 +142,7 @@
 }
 
 .vcl-app .vcl-wl-picked__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-weight: 600;
   color: var(--workload);
 }
@@ -515,7 +515,10 @@
 
 /* The calculator view heading reuses .classification-head; recolour its divider
    line to the calculator's gold identity (Classification keeps its blue line). */
-.vcl-app #vcl-calcHead { border-bottom-color: #C7A653; }
+/* Equal air on both sides of that line: .classification-head pairs a 16px padding above
+   with a 20px margin below, which reads lopsided once a button sits directly over the rule.
+   Only the calculator heading is corrected -- Classification keeps its own rhythm. */
+.vcl-app #vcl-calcHead { border-bottom-color: #C7A653; padding-bottom: 20px; }
 .vcl-app #vcl-calcHead .ref-line span { color: #8F6E2E; }
 
 /* Calculator column: occupies the same grid cell as the other views, with the
@@ -560,10 +563,30 @@
 /* Search-match count, moved to the top of the detail area. */
 .vcl-app .results-meta--detail { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; font-weight: 500; }
 
-/* Excel-download link in the calculator heading. */
-.vcl-app #vcl-calcHead .calc-excel-dl { margin: 8px 0 0; font-size: 12.5px; }
-.vcl-app #vcl-calcHead .calc-excel-dl a { color: #8f6e2e; text-decoration: none; font-weight: 500; }
-.vcl-app #vcl-calcHead .calc-excel-dl a:hover { text-decoration: underline; }
+/* Entry into the public fee-data page, in the calculator heading -- it took the place of the
+   retired Excel-download link. Tinted pill in the Fee Calculator's own gold identity, using the
+   exact same shape as the masthead's Summary pill (.app-header__summary) and the same three gold
+   values the calculator tile in the tool bar carries: #8F6E2E / #F5EEDD / #5F4A1E. No icon and no
+   arrow -- the label says where it goes. */
+.vcl-app #vcl-calcHead .calc-head-actions { margin: 14px 0 0; }
+.vcl-app #vcl-calcHead .calc-feedata-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5F4A1E;
+  background: #F5EEDD;
+  /* Outlined in the calculator's gold like the other buttons on the page --
+     a tint with no edge read as a highlighted label rather than a control. */
+  border: 1px solid #8F6E2E;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.vcl-app #vcl-calcHead .calc-feedata-btn:hover { background: #EFE4CB; }
+.vcl-app #vcl-calcHead .calc-feedata-btn:focus-visible { outline: 2px solid #8F6E2E; outline-offset: 2px; }
 
 /* Sub-lines read as normal body text, not bold: the nav card's subtitle only turns
    bold once its tab is active (.tab--active sets font-weight on the whole button),
@@ -684,7 +707,7 @@
   margin-bottom: 5px;
 }
 .vcl-app .vcl-wl-method-formula .fx {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   line-height: 1.75;
   color: var(--ink);
@@ -740,7 +763,7 @@
   font-weight: 500;
 }
 .vcl-app .vcl-wl-mt-row .l { flex: 1; }
-.vcl-app .vcl-wl-mt-row .v { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; white-space: nowrap; }
+.vcl-app .vcl-wl-mt-row .v { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 11.5px; white-space: nowrap; }
 .vcl-app .vcl-wl-mt-row.is-active .v { color: var(--workload); font-weight: 600; }
 .vcl-app .vcl-wl-mt-row .prov {
   display: inline-block;

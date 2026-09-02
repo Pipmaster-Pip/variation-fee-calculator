@@ -46,6 +46,13 @@ What this script does:
        window.VFC_DATA in vfc-data.js.
 
 Important if the table structure changes in a future Excel version (new
+WARNING -- this script no longer reproduces the shipped assets/js/vcl-calc-data.js.
+Since 856712f that file has been maintained by hand as well: it carries POINT_VALUES
+(Slovenia's point value), the F_pt..V_pt point columns and the T/U/V cap/surcharge
+columns, none of which this script emits. Running it and overwriting the shipped file
+silently deletes all three and breaks Slovenia. Regenerate only into a scratch file and
+merge the parts you actually want.
+
 columns, shifted rows, new cross-sheet references): this script assumes
 the current column order and row layout (header rows 1-3, data from row 4,
 sheet name "Variation fee calculator"). If the structure has changed
@@ -347,7 +354,7 @@ def load_imprint(xlsx_path: Path):
 
 def load_ha_websites(xlsx_path: Path):
     """Reads the 'HA fee websites' sheet: column A = country code, B = link
-    text + hyperlink URL, C = comments (intentionally excluded), D/E = two
+    text + hyperlink URL, C = comments (source reference, shown on the public fee page), D/E = two
     'last updated/checked' dates, F = payment method, G = annual fee flag.
     Starts at row 2 (row 1 is the header). Stops at the first row where
     column A is empty."""
@@ -377,6 +384,7 @@ def load_ha_websites(xlsx_path: Path):
             "cc": cc,
             "link_text": link_text,
             "link_url": link_url,
+            "comments": ws_vals.cell(row=r, column=3).value,
             "updated_calc": fmt_date(ws_vals.cell(row=r, column=4).value),
             "checked_ha": fmt_date(ws_vals.cell(row=r, column=5).value),
             "payment": ws_vals.cell(row=r, column=6).value,
