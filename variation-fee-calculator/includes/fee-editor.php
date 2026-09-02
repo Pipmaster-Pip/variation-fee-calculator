@@ -458,8 +458,14 @@ function vcl_fee_editor_assets( $hook ) {
 		array(), $ver( 'js/vcl-calc-data.js' ), true );
 	wp_enqueue_script( 'vcl-calc-app', $url . 'js/vcl-calc-app.js',
 		array( 'vcl-calc-data' ), $ver( 'js/vcl-calc-app.js' ), true );
+	// The annual fees are maintained on this page too, so the editor needs the
+	// reference data and the overlay that lays the saved amounts over it.
+	wp_enqueue_script( 'vcl-annual-data', $url . 'js/vcl-annual-data.js',
+		array(), $ver( 'js/vcl-annual-data.js' ), true );
+	wp_enqueue_script( 'vcl-annual-overrides', $url . 'js/vcl-annual-overrides.js',
+		array( 'vcl-annual-data', 'vcl-calc-data' ), $ver( 'js/vcl-annual-overrides.js' ), true );
 	wp_enqueue_script( 'vcl-fee-editor', $url . 'js/vcl-fee-editor.js',
-		array( 'vcl-calc-app' ), $ver( 'js/vcl-fee-editor.js' ), true );
+		array( 'vcl-calc-app', 'vcl-annual-overrides' ), $ver( 'js/vcl-fee-editor.js' ), true );
 
 	$overrides = vcl_get_fee_overrides();
 	// Hand the saved overrides to the engine before it boots, so the page opens
@@ -470,6 +476,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
 			'imprint'   => array_values( $overrides['imprint'] ),
+			'annual'    => (object) $overrides['annual'],
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
@@ -477,6 +484,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
 			'imprint'   => array_values( $overrides['imprint'] ),
+			'annual'    => (object) $overrides['annual'],
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
