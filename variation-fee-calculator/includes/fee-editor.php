@@ -53,12 +53,65 @@ function vcl_fee_editable_fields() {
 }
 
 /**
+ * Which annual-fee tariffs the plugin ships, as
+ * array( '<CC>' => array( '<tariffId>' => bool ) ) where the bool says whether
+ * that tariff scales with the number of strengths (addStrength !== null).
+ *
+ * Read from assets/data/annual-fees.json, written by the same converter run as
+ * assets/js/vcl-annual-data.js -- PHP cannot read the generated .js, and a second
+ * hand-maintained list here would drift from it within a release or two.
+ *
+ * Cached per request only. The file changes with a plugin update, and a longer
+ * cache would then validate against tariffs that no longer exist; reading a
+ * ~30 KB file once per request is cheaper than getting that wrong.
+ */
+function vcl_annual_fee_structure() {
+	static $structure = null;
+	if ( $structure !== null ) {
+		return $structure;
+	}
+
+	$structure = array();
+	$path      = VFC_PLUGIN_DIR . 'assets/data/annual-fees.json';
+	if ( ! file_exists( $path ) ) {
+		return $structure;
+	}
+
+	$raw  = file_get_contents( $path );
+	$data = json_decode( (string) $raw, true );
+	if ( ! is_array( $data ) || empty( $data['countries'] ) || ! is_array( $data['countries'] ) ) {
+		return $structure;
+	}
+
+	foreach ( $data['countries'] as $country ) {
+		if ( ! is_array( $country ) || empty( $country['cc'] ) ) {
+			continue;
+		}
+		$tariffs = array();
+		if ( ! empty( $country['tariffs'] ) && is_array( $country['tariffs'] ) ) {
+			foreach ( $country['tariffs'] as $tariff ) {
+				if ( ! is_array( $tariff ) || ! isset( $tariff['id'] ) ) {
+					continue;
+				}
+				$tariffs[ (string) $tariff['id'] ] =
+					array_key_exists( 'addStrength', $tariff ) && $tariff['addStrength'] !== null;
+			}
+		}
+		$structure[ (string) $country['cc'] ] = $tariffs;
+	}
+
+	return $structure;
+}
+
+/**
  * The saved overrides, always in the shape
  * array( 'rows' => array( '<rowNo>' => array( '<field>' => float ) ),
  *        'points' => array( '<cc>' => float ),
  *        'countries' => array( '<CC>' => array( 'checked' => 'Y-m-d',
  *                                               'source' => string,
  *                                               'updated' => 'Y-m-d' ) ),
+ *        'annual' => array( '<CC>' => array( '<tariffId>' => array( 'base' => float,
+ *                                                                   'addStrength' => float ) ) ),
  *        'updated' => ..., 'by' => ... ).
  */
 function vcl_get_fee_overrides() {
@@ -71,6 +124,7 @@ function vcl_get_fee_overrides() {
 		'points'    => array(),
 		'countries' => array(),
 		'imprint'   => array(),
+		'annual'    => array(),
 		'updated'   => '',
 		'by'        => '',
 	) );
@@ -84,7 +138,7 @@ function vcl_get_fee_overrides() {
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array(), 'annual' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -199,6 +253,55 @@ function vcl_sanitize_fee_overrides( $payload ) {
 		} );
 	}
 
+	// Annual maintenance fees. Only amounts are editable, and only for tariffs the
+	// plugin actually ships: an unknown country or tariff id is a leftover from an
+	// older build, and addStrength on a tariff that does not scale with strengths
+	// would change the structure rather than a value.
+	if ( isset( $payload['annual'] ) && is_array( $payload['annual'] ) ) {
+		$structure = vcl_annual_fee_structure();
+		foreach ( $payload['annual'] as $cc => $tariffs ) {
+			$code = sanitize_text_field( (string) $cc );
+			if ( ! isset( $structure[ $code ] ) || ! is_array( $tariffs ) ) {
+				$dropped++;
+				continue;
+			}
+			$cc_clean = array();
+			foreach ( $tariffs as $tariff_id => $fields ) {
+				$tid = sanitize_text_field( (string) $tariff_id );
+				if ( ! isset( $structure[ $code ][ $tid ] ) || ! is_array( $fields ) ) {
+					$dropped++;
+					continue;
+				}
+				$entry = array();
+				foreach ( array( 'base', 'addStrength' ) as $key ) {
+					if ( ! isset( $fields[ $key ] ) ) {
+						continue;
+					}
+					if ( 'addStrength' === $key && ! $structure[ $code ][ $tid ] ) {
+						$dropped++;
+						continue;
+					}
+					if ( ! is_numeric( $fields[ $key ] ) ) {
+						$dropped++;
+						continue;
+					}
+					$num = (float) $fields[ $key ];
+					if ( ! is_finite( $num ) || $num < 0 ) {
+						$dropped++;
+						continue;
+					}
+					$entry[ $key ] = $num;
+				}
+				if ( $entry ) {
+					$cc_clean[ $tid ] = $entry;
+				}
+			}
+			if ( $cc_clean ) {
+				$clean['annual'][ $code ] = $cc_clean;
+			}
+		}
+	}
+
 	return array( $clean, $dropped );
 }
 
@@ -218,6 +321,15 @@ function vcl_count_fee_overrides( $overrides ) {
 				if ( ! empty( $fields[ $key ] ) ) {
 					$n++;
 				}
+			}
+		}
+	}
+	// Annual fees count like any other maintained amount: an installation whose
+	// only edit is a Danish annual fee still has something to export and to clear.
+	if ( ! empty( $overrides['annual'] ) && is_array( $overrides['annual'] ) ) {
+		foreach ( $overrides['annual'] as $tariffs ) {
+			foreach ( (array) $tariffs as $fields ) {
+				$n += count( (array) $fields );
 			}
 		}
 	}
@@ -523,6 +635,7 @@ function vcl_handle_save_fee_overrides() {
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
+		'annual'    => $clean['annual'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
@@ -558,6 +671,7 @@ function vcl_handle_export_fee_overrides() {
 		'points'    => (object) $overrides['points'],
 		'countries' => (object) $overrides['countries'],
 		'imprint'   => array_values( $overrides['imprint'] ),
+		'annual'    => (object) $overrides['annual'],
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -617,6 +731,7 @@ function vcl_handle_import_fee_overrides() {
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
+		'annual'    => $clean['annual'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );
