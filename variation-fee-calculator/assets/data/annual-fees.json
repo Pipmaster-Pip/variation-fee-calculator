@@ -1,0 +1,599 @@
+{
+  "updated": "2026-09-02",
+  "countries": [
+    {
+      "cc": "AT",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "rms",
+          "label": "RMS",
+          "role": "RMS",
+          "base": 3965.0,
+          "addStrength": 3965.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "cms",
+          "label": "CMS",
+          "role": "CMS",
+          "base": 2052.0,
+          "addStrength": 2052.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "national",
+          "label": "national",
+          "role": "national",
+          "base": 1709.0,
+          "addStrength": 1709.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "BE",
+      "hasAnnual": true,
+      "turnoverBased": true,
+      "note": "Annual fee per packs sold",
+      "tariffs": []
+    },
+    {
+      "cc": "BG",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 127.82,
+          "addStrength": null,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "CH",
+      "hasAnnual": true,
+      "turnoverBased": true,
+      "note": "Annual sales fee on medicines",
+      "tariffs": []
+    },
+    {
+      "cc": "CY",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "CZ",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "rms",
+          "label": "RMS",
+          "role": "RMS",
+          "base": 42795.0,
+          "addStrength": 42795.0,
+          "ccy": "CZK"
+        },
+        {
+          "id": "cms",
+          "label": "CMS",
+          "role": "CMS",
+          "base": 21345.0,
+          "addStrength": 21345.0,
+          "ccy": "CZK"
+        },
+        {
+          "id": "national",
+          "label": "national",
+          "role": "national",
+          "base": 21345.0,
+          "addStrength": 21345.0,
+          "ccy": "CZK"
+        }
+      ]
+    },
+    {
+      "cc": "DE",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "DK",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 20116.0,
+          "addStrength": 20116.0,
+          "ccy": "DKK"
+        }
+      ]
+    },
+    {
+      "cc": "EE",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "rms",
+          "label": "RMS",
+          "role": "RMS",
+          "base": 600.0,
+          "addStrength": null,
+          "ccy": "EUR"
+        },
+        {
+          "id": "cms",
+          "label": "CMS",
+          "role": "CMS",
+          "base": 320.0,
+          "addStrength": null,
+          "ccy": "EUR"
+        },
+        {
+          "id": "national",
+          "label": "national",
+          "role": "national",
+          "base": 320.0,
+          "addStrength": null,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "EL",
+      "hasAnnual": true,
+      "turnoverBased": true,
+      "note": "depending on the national tariff system/turnover",
+      "tariffs": []
+    },
+    {
+      "cc": "EU",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "reference_innovative_mas",
+          "label": "Reference/innovative MAs",
+          "role": null,
+          "base": 232400.0,
+          "addStrength": null,
+          "ccy": "EUR"
+        },
+        {
+          "id": "art_10_1_3_10c",
+          "label": "Art. 10(1)/(3) & 10c",
+          "role": null,
+          "base": 60300.0,
+          "addStrength": null,
+          "ccy": "EUR",
+          "isDefault": true
+        },
+        {
+          "id": "art_10_4_biosimilar",
+          "label": "Art. 10(4) Biosimilar",
+          "role": null,
+          "base": 118100.0,
+          "addStrength": null,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "ES",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "Reference 8(3) in the first 10 years; Generics and Reference 8(3) after 10 years",
+      "tariffs": [
+        {
+          "id": "reference_8_3_10_yrs",
+          "label": "Reference 8(3) <= 10 yrs",
+          "role": null,
+          "base": 1711.71,
+          "addStrength": 1711.71,
+          "ccy": "EUR"
+        },
+        {
+          "id": "generic_8_3_10_yrs",
+          "label": "Generic & 8(3) > 10 yrs",
+          "role": null,
+          "base": 855.85,
+          "addStrength": 855.85,
+          "ccy": "EUR",
+          "isDefault": true
+        }
+      ]
+    },
+    {
+      "cc": "FI",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 1550.0,
+          "addStrength": 1550.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "FR",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "HR",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 318.54,
+          "addStrength": 318.54,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "HU",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 364500.0,
+          "addStrength": null,
+          "ccy": "HUF"
+        }
+      ]
+    },
+    {
+      "cc": "IE",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "w/o Annual Enforcement Fee",
+      "tariffs": [
+        {
+          "id": "annual_fee_10_ma_s",
+          "label": "Annual Fee <= 10 MA's",
+          "role": null,
+          "base": 865.0,
+          "addStrength": 865.0,
+          "ccy": "EUR",
+          "isDefault": true
+        },
+        {
+          "id": "annual_fee_each_add_ma",
+          "label": "Annual Fee each add. MA",
+          "role": null,
+          "base": 1080.0,
+          "addStrength": 1080.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "annual_fee_for_dormant_ma_s",
+          "label": "Annual Fee for Dormant MA's",
+          "role": null,
+          "base": 463.0,
+          "addStrength": 463.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "IS",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 42600.0,
+          "addStrength": 42600.0,
+          "ccy": "ISK"
+        }
+      ]
+    },
+    {
+      "cc": "IT",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "Annual fee per valid six-digit AIC",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 1879.0,
+          "addStrength": null,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "LT",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "LU",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 100.0,
+          "addStrength": 100.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "LV",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 850.0,
+          "addStrength": 850.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "MT",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "rms",
+          "label": "RMS",
+          "role": "RMS",
+          "base": 900.0,
+          "addStrength": 900.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "cms",
+          "label": "CMS",
+          "role": "CMS",
+          "base": 275.0,
+          "addStrength": 275.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "national",
+          "label": "national",
+          "role": "national",
+          "base": 275.0,
+          "addStrength": 275.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "NL",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "rms",
+          "label": "RMS",
+          "role": "RMS",
+          "base": 2330.0,
+          "addStrength": 2330.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "cms",
+          "label": "CMS",
+          "role": "CMS",
+          "base": 1830.0,
+          "addStrength": 1830.0,
+          "ccy": "EUR"
+        },
+        {
+          "id": "national",
+          "label": "national",
+          "role": "national",
+          "base": 1830.0,
+          "addStrength": 1830.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "NO",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "PL",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "rms",
+          "label": "RMS",
+          "role": "RMS",
+          "base": 2730.0,
+          "addStrength": 2730.0,
+          "ccy": "PLN"
+        },
+        {
+          "id": "cms",
+          "label": "CMS",
+          "role": "CMS",
+          "base": 2100.0,
+          "addStrength": 2100.0,
+          "ccy": "PLN"
+        },
+        {
+          "id": "national",
+          "label": "national",
+          "role": "national",
+          "base": 2100.0,
+          "addStrength": 2100.0,
+          "ccy": "PLN"
+        }
+      ]
+    },
+    {
+      "cc": "PT",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "RO",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 230.0,
+          "addStrength": 230.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "RS",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "SE",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 60000.0,
+          "addStrength": 30000.0,
+          "ccy": "SEK"
+        }
+      ]
+    },
+    {
+      "cc": "SI",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "The value of one point shall be EUR 5.8",
+      "tariffs": [
+        {
+          "id": "all",
+          "label": "RMS/CMS/national",
+          "role": null,
+          "base": 348.0,
+          "addStrength": 348.0,
+          "ccy": "EUR"
+        }
+      ]
+    },
+    {
+      "cc": "SK",
+      "hasAnnual": false,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": []
+    },
+    {
+      "cc": "UK",
+      "hasAnnual": true,
+      "turnoverBased": false,
+      "note": "",
+      "tariffs": [
+        {
+          "id": "pom_standard",
+          "label": "POM - standard",
+          "role": null,
+          "base": 2908.0,
+          "addStrength": 2908.0,
+          "ccy": "GBP",
+          "isDefault": true
+        },
+        {
+          "id": "pom_reduced",
+          "label": "POM - reduced",
+          "role": null,
+          "base": 1450.0,
+          "addStrength": 1450.0,
+          "ccy": "GBP"
+        },
+        {
+          "id": "new_api",
+          "label": "New API",
+          "role": null,
+          "base": 11627.0,
+          "addStrength": 11627.0,
+          "ccy": "GBP"
+        }
+      ]
+    }
+  ],
+  "fallbackFx": {
+    "CZK": 24.2,
+    "DKK": 7.47,
+    "GBP": 0.857,
+    "HUF": 395.0,
+    "ISK": 144.0,
+    "PLN": 4.28,
+    "SEK": 11.0
+  }
+}

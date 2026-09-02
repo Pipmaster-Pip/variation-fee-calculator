@@ -440,6 +440,22 @@ def render_js(countries, fallback_fx, generated_date):
     return "\n".join(lines)
 
 
+def render_json(countries, fallback_fx, generated_date):
+    """The same structure as render_js(), as JSON.
+
+    PHP cannot read the generated .js, but the fee editor has to validate what is
+    typed against the shipped tariffs -- which country codes exist, which tariff
+    ids a country has, and whether a tariff scales with the number of strengths.
+    Written by the same run as the .js so the two cannot drift apart.
+    """
+    payload = {
+        "updated": generated_date,
+        "countries": countries,
+        "fallbackFx": fallback_fx,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
 def load_existing_countries(output_path):
     """Best-effort: shells out to Node to require() the CURRENT output file and
     return its COUNTRIES array as plain data, for the diff report. Returns None
@@ -551,11 +567,16 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(js, encoding="utf-8")
 
+    json_path = output_path.parent.parent / "data" / "annual-fees.json"
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(render_json(countries, fallback_fx, generated_date), encoding="utf-8")
+
     with_annual = sum(1 for c in countries if c["hasAnnual"] and not c["turnoverBased"])
     turnover = sum(1 for c in countries if c["turnoverBased"])
     no_fee = sum(1 for c in countries if not c["hasAnnual"])
     print(
         f"\nOK  {output_path}\n"
+        f"    + {json_path} (structure for the fee editor)\n"
         f"    {len(countries)} countries: {with_annual} priced, {turnover} turnover-based, {no_fee} no annual fee.\n"
         f"    FALLBACK_FX: {', '.join(fallback_fx.keys()) or '(none)'}\n"
         f"    updated: {generated_date}"

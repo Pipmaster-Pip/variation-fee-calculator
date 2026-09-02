@@ -49,6 +49,7 @@ FILES = [
     "assets/js/vcl-workload-data.js",
     "assets/js/vcl-workload-hours.js",
     "assets/js/vcl-workload-hours-data.js",
+    "assets/data/annual-fees.json",
     "assets/js/vcl-annual-data.js",
     "assets/js/vcl-budget-engine.js",
     "assets/js/vcl-budget.js",
