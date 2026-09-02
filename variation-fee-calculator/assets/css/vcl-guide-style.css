@@ -66,7 +66,7 @@
 .vcl-app .vcl-guide-stepper { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .vcl-app .vcl-guide-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); border: none; padding: 0; cursor: pointer; }
 .vcl-app .vcl-guide-dot.is-current { background: var(--tc, var(--accent)); width: 20px; border-radius: 5px; }
-.vcl-app .vcl-guide-counter { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
+.vcl-app .vcl-guide-counter { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
 
 .vcl-app .vcl-guide-page-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .vcl-app .vcl-guide-dot-lg { width: 10px; height: 10px; border-radius: 50%; background: var(--tc, var(--accent)); flex-shrink: 0; }

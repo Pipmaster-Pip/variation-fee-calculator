@@ -17,6 +17,11 @@
  * ============================================================================ */
 
 .vcl-app {
+  /* Figures and code-ish labels (country codes, type pills, guideline codes). This was
+     IBM Plex Mono until v1.16.0; its zero carries a centre dot, which reads as a typo in
+     a column of amounts. The body face with tabular figures keeps columns aligned without
+     a second family -- the same move the fee editor already made with its own --figure. */
+  --figure: "Libre Franklin","Helvetica Neue",Arial,sans-serif;
   --paper: #F3F5F8;
   --panel: #FFFFFF;
   --ink: #1B212C;
@@ -105,7 +110,7 @@
 
 .vcl-app, .vcl-app * { box-sizing: border-box; }
 
-.vcl-app .mono { font-family: "IBM Plex Mono", monospace; }
+.vcl-app .mono { font-family:var(--figure); font-variant-numeric:tabular-nums; }
 
 .vcl-app header.app-header {
   padding: 28px 0 20px;
@@ -164,7 +169,7 @@
 .vcl-app .app-header__summary svg { flex-shrink: 0; }
 .vcl-app .app-header__summary.is-active { border-color: var(--plum); }
 .vcl-app .app-header__summary-count {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   font-weight: 600;
   color: var(--plum);
@@ -175,7 +180,7 @@
 }
 
 .vcl-app .app-header__eyebrow {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -392,7 +397,7 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 15px;
   font-weight: 700;
   color: var(--accent);
@@ -455,7 +460,7 @@
 .vcl-app .section-row--pending { opacity: 0.55; }
 
 .vcl-app .section-row__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--accent);
@@ -584,7 +589,7 @@
 .vcl-app .changed-badge {
   display: inline-block;
   margin-top: 6px;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   font-weight: 600;
   color: var(--history);
@@ -651,7 +656,7 @@
 .vcl-app .entry-summary--active { font-weight: 600; }
 
 .vcl-app .entry-summary__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-weight: 700;
   color: var(--classify);
   white-space: nowrap;
@@ -763,7 +768,7 @@
 .vcl-app .level-card__top { display: flex; align-items: baseline; gap: 8px; }
 
 .vcl-app .level-card__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   font-weight: 600;
   color: var(--classify);
@@ -795,7 +800,7 @@
   flex-shrink: 0;
 }
 
-.vcl-app .level-card__range { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); }
+.vcl-app .level-card__range { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 11px; color: var(--muted); }
 
 /* A section with no entries yet (chapter/section still in preparation) -- shown, because its
    absence from the list would be harder to explain than its presence, but not clickable. */
@@ -863,7 +868,7 @@
    title-only. Only rendered when the group actually came from entry.listGroup (see
    renderEntryGroup() in vcl-app.js). */
 .vcl-app .group-toggle__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--accent);
@@ -882,7 +887,7 @@
 
 .vcl-app .group-toggle__range {
   display: block;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10.5px;
   text-transform: none;
   letter-spacing: 0;
@@ -898,7 +903,7 @@
 .vcl-app .group-toggle--open .group-toggle__label { color: var(--ink); }
 
 .vcl-app .group-toggle__count {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10.5px;
   color: var(--muted);
   background: var(--paper);
@@ -1039,7 +1044,7 @@
 .vcl-app .variant-block__code {
   display: inline-block;
   margin: 0;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   font-weight: 600;
   color: var(--classify);
@@ -1094,7 +1099,7 @@
 
 .vcl-app .badge {
   display: inline-block;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
@@ -1211,8 +1216,7 @@
   min-width: 26px;
   text-align: center;
   /* Body face with tabular figures, exactly as the Fee Calculator's own stepper sets it
-     (.num-stepper input in vcl-calc-style.css). IBM Plex Mono's zero carries a centre dot,
-     which reads as a typo on a count that is normally 0. */
+     (.num-stepper input in vcl-calc-style.css). */
   font-family: "Libre Franklin", -apple-system, sans-serif;
   font-variant-numeric: tabular-nums;
   font-size: 13px;
@@ -1309,7 +1313,7 @@
 }
 
 .vcl-app .selection-chip__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
@@ -1352,7 +1356,7 @@
 .vcl-app .selection-bar__link:hover { background: var(--paper); }
 
 .vcl-app .tab__count {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10.5px;
   color: var(--accent);
   background: var(--panel);
@@ -1544,7 +1548,7 @@
 .vcl-app .ref-updated {
   margin-top: 9px !important;
   font-size: 11px !important;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   color: var(--ink-faint) !important;
 }
 
@@ -1640,7 +1644,7 @@
   border-radius: 7px;
   background: var(--group-bg);
   color: var(--group);
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   font-weight: 600;
 }
@@ -1648,7 +1652,7 @@
 /* Count pill, hard right next to the chevron. */
 .vcl-app .grouping-section__count {
   flex: none;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure);
   font-size: 11.5px;
   font-weight: 600;
   color: var(--group);
@@ -1693,7 +1697,7 @@
 }
 
 .vcl-app .code-chip {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   font-weight: 600;
   color: var(--accent);
@@ -1758,7 +1762,7 @@
 .vcl-app .qa-q--open { font-weight: 600; }
 
 .vcl-app .qa-no {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   font-weight: 600;
   color: var(--group);
@@ -1799,7 +1803,7 @@
 .vcl-app .code-chip--link {
   border: none;
   cursor: pointer;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 12px;
   font-weight: 600;
   color: var(--classify);
@@ -1848,7 +1852,7 @@
 }
 .vcl-app .qa-revisions table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 0; }
 .vcl-app .qa-revisions thead th {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.09em;
@@ -1876,7 +1880,7 @@
 .vcl-app .qa-revisions tbody th { width: 96px; white-space: nowrap; }
 .vcl-app .qa-rev-no {
   display: inline-block;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure);
   font-size: 11.5px;
   font-weight: 600;
   color: var(--group);
@@ -1888,7 +1892,7 @@
 .vcl-app .qa-revisions tr.is-latest .qa-rev-no { color: var(--panel); background: var(--group); }
 .vcl-app .qa-revisions tr.is-latest td { color: var(--ink); }
 .vcl-app .qa-rev-latest {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1938,14 +1942,14 @@
 .vcl-app .art5-rec:first-child { border-top: none; }
 .vcl-app .art5-rec__head { display: flex; align-items: center; gap: 9px; margin-bottom: 5px; }
 .vcl-app .art5-rec__code {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--muted);
 }
 .vcl-app .art5-rec__date {
   margin-left: auto;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   color: var(--ink-faint);
 }
@@ -2082,7 +2086,7 @@
   gap: 2px;
 }
 .vcl-app .tt-seg button {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   font-weight: 500;
   border: none;
@@ -2174,7 +2178,7 @@
   left: 50%;
   top: -2px;
   transform: translate(-50%, -100%);
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9px;
   color: var(--muted);
   background: var(--panel);
@@ -2239,7 +2243,7 @@
   z-index: 3;
 }
 .vcl-app .tt-tl-dn {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9px;
   font-weight: 700;
   color: var(--ink-faint);
@@ -2260,7 +2264,7 @@
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9.5px;
   font-weight: 700;
   cursor: pointer;
@@ -2280,14 +2284,14 @@
 .vcl-app .tt-tl-dur::after { right: 0; border-left: 5px solid var(--border); }
 .vcl-app .tt-tl-dur span {
   position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%);
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10px; color: var(--muted); background: var(--panel); padding: 0 4px; white-space: nowrap;
 }
 
 /* ---- Slider ---------------------------------------------------------------------- */
 .vcl-app .tt-tl-slider { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; }
 .vcl-app .tt-tl-slider label { font-size: 12px; color: var(--ink); }
-.vcl-app .tt-tl-slider label strong { color: var(--slate); font-family: "IBM Plex Mono", monospace; }
+.vcl-app .tt-tl-slider label strong { color: var(--slate); font-family:var(--figure); font-variant-numeric:tabular-nums; }
 .vcl-app .tt-tl-slider label .rng { color: var(--muted); font-size: 11px; }
 .vcl-app .tt-tl-slider input[type="range"] { width: 320px; max-width: 100%; accent-color: var(--slate); }
 
@@ -2322,7 +2326,7 @@
   height: 20px;
   border-radius: 50%;
   color: #fff;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10px;
   font-weight: 600;
   display: flex;
@@ -2331,11 +2335,11 @@
   margin-top: 1px;
 }
 .vcl-app .tt-milestone-item .tt-body { flex: 1; }
-.vcl-app .tt-milestone-item .tt-day { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted); }
+.vcl-app .tt-milestone-item .tt-day { font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 10.5px; color: var(--muted); }
 .vcl-app .tt-milestone-item .tt-title { font-weight: 600; font-size: 13px; margin: 1px 0 3px; }
 .vcl-app .tt-milestone-item .tt-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .vcl-app .tt-lane-chip {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2386,7 +2390,7 @@
   overflow: hidden;
 }
 .vcl-app .tt-compare-bar--stop span {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 8.5px;
   color: var(--muted);
   background: var(--panel);
@@ -2418,7 +2422,7 @@
   top: 100%;
   margin-top: 4px;
   transform: translateX(-50%);
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9px;
   color: var(--muted);
   white-space: nowrap;
@@ -2517,7 +2521,7 @@
    It used to sit a step smaller and at 0.7 opacity, which made the numbering look like a
    separate, fainter layer instead of the first part of "1. E.1(a)". */
 .vcl-app .summary-item__num {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 13px;
   font-weight: 700;
   color: var(--plum);
@@ -2567,7 +2571,7 @@
 }
 
 .vcl-app .summary-item__doccount {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 11px;
   color: var(--muted);
   background: var(--paper);
@@ -2774,7 +2778,7 @@
 .vcl-app .tool-bar__btn[aria-current="true"] .tool-bar__name { font-weight: 700; }
 
 .vcl-app .tool-bar__meta {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 9.5px;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -2808,7 +2812,7 @@
   color: var(--ink-faint);
 }
 .vcl-app .app-colophon__sep { opacity: 0.55; margin: 0 3px; }
-.vcl-app .app-colophon__ver { font-family: "IBM Plex Mono", monospace; }
+.vcl-app .app-colophon__ver { font-family:var(--figure); font-variant-numeric:tabular-nums; }
 
 /* Collapse/expand control for the left Classification/Guidance tree. The button sits in the
    list column's own header row, its collapsed counterpart in a narrow rail in the grid's first
@@ -2822,7 +2826,7 @@
 }
 .vcl-app .browse-col__head:empty { display: none; }
 .vcl-app .browse-col__head-title {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
   color: var(--ink-faint); margin-right: auto;
 }
