@@ -2344,26 +2344,40 @@ function renderStepFeeData() {
     };
   });
 
-  const qcNumField = (key, label) => `
-          <label class="fd-field">
-            <span>${escapeHtml(label)}</span>
-            <input type="text" inputmode="numeric" autocomplete="off"
-                   data-fdq="${escapeAttr(key)}" value="${escapeAttr(String(qc[key]))}">
-          </label>`;
-  const qcSpecialField = (t) => {
+  // One line per variation type: name, stepper, special case. The stepper is the
+  // calculator's own .num-stepper -- same markup, same geometry -- so a count is
+  // set the same way everywhere in the toolbox. Strengths sits above a divider
+  // because it is not a variation type.
+  const qcStepper = (key, label) => `
+            <div class="num-stepper" data-fdqstep="${escapeAttr(key)}">
+              <button type="button" data-fdqact="dec" aria-label="One fewer ${escapeAttr(label)}">&minus;</button>
+              <input type="text" inputmode="numeric" autocomplete="off"
+                     data-fdq="${escapeAttr(key)}" value="${escapeAttr(String(qc[key]))}"
+                     aria-label="${escapeAttr(label)}">
+              <button type="button" data-fdqact="inc" aria-label="One more ${escapeAttr(label)}">+</button>
+            </div>`;
+  // The third cell of a type's line: a selector where the type offers more than
+  // one row (the fee can differ by a factor of two), otherwise a quiet note
+  // saying why there is nothing to pick.
+  const qcSpecialCell = (t) => {
     const cand = qcRows[t].candidates;
-    if (cand.length < 2) return '';
+    if (!cand.length) return '<span class="fd-nospecial">no fee line for this type</span>';
+    if (cand.length < 2) return '<span class="fd-nospecial">one fee line only</span>';
     const cur = qcRows[t].picked ? (qcRows[t].picked.special || '') : '';
     return `
-          <label class="fd-field">
-            <span>Type ${escapeHtml(t)} &mdash; special case</span>
-            <select data-fdqspecial="${escapeAttr(t)}">
+            <select class="fd-rowsel" data-fdqspecial="${escapeAttr(t)}"
+                    aria-label="Type ${escapeAttr(t)} &mdash; special case">
               ${cand.map(r => `<option value="${escapeAttr(r.special || '')}"${
                 (r.special || '') === cur ? ' selected' : ''
               }>${escapeHtml(r.special || 'standard')}</option>`).join('')}
-            </select>
-          </label>`;
+            </select>`;
   };
+  const qcTypeRow = (t) => `
+          <div class="fd-row">
+            <span class="fd-rowlbl">Type ${escapeHtml(t)}</span>
+            ${qcStepper(t, 'Type ' + t + ' variations')}
+            ${qcSpecialCell(t)}
+          </div>`;
 
   const quickCalc = `
     <div class="fd-calc" id="vclcalc-fdCalc"${appState.feeDataOpen ? '' : ' hidden'}>
@@ -2378,11 +2392,13 @@ function renderStepFeeData() {
       </div>
       <div class="fd-calcgrid">
         <div class="fd-fields">
-          ${qcNumField('strengths', 'Strengths')}
-          ${qcNumField('IA', 'Type IA variations')}
-          ${qcNumField('IB', 'Type IB variations')}
-          ${qcNumField('II', 'Type II variations')}
-          ${VAR_TYPES.map(qcSpecialField).join('')}
+          <div class="fd-row">
+            <span class="fd-rowlbl">Strengths</span>
+            ${qcStepper('strengths', 'Strengths')}
+            <span></span>
+          </div>
+          <hr class="fd-rowsep">
+          ${VAR_TYPES.map(qcTypeRow).join('')}
         </div>
         <div class="fd-out" id="vclcalc-fdOut" aria-live="polite"></div>
       </div>
@@ -2670,6 +2686,23 @@ function renderStepFeeData() {
     el.addEventListener('input', () => {
       qc[el.getAttribute('data-fdq')] = fdQuickNum(el.value);
       fdQuickRender();
+    });
+  });
+  // The stepper buttons write the same state the field does, so neither a click
+  // nor a keystroke needs a full render(). Strengths never goes below one; a
+  // count of variations may be zero.
+  contentEl.querySelectorAll('[data-fdqstep]').forEach((wrap) => {
+    const key = wrap.getAttribute('data-fdqstep');
+    const input = wrap.querySelector('input');
+    const min = key === 'strengths' ? 1 : 0;
+    const step = (delta) => {
+      const v = Math.max(min, Math.min(99, fdQuickNum(input.value) + delta));
+      input.value = v;
+      qc[key] = v;
+      fdQuickRender();
+    };
+    wrap.querySelectorAll('[data-fdqact]').forEach((b) => {
+      b.addEventListener('click', () => step(b.getAttribute('data-fdqact') === 'inc' ? 1 : -1));
     });
   });
   // Role and special case change which rows exist, so those do re-render.

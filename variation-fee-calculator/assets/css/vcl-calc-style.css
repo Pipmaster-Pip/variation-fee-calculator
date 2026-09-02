@@ -1435,38 +1435,44 @@
 .vclcalc-app .fd-rolebtn:hover{ color:var(--ink); }
 .vclcalc-app .fd-rolebtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 .vclcalc-app .fd-rolebtn.on{ background:var(--panel); border-color:var(--line); color:var(--accent-deep); }
+/* Both columns share one height, so the result box ends flush with the last
+   field on the left instead of floating above it. */
 .vclcalc-app .fd-calcgrid{
-  display:grid; grid-template-columns:minmax(280px,1.1fr) minmax(230px,1fr);
-  gap:22px; align-items:start;
+  display:grid; grid-template-columns:minmax(300px,1.15fr) minmax(230px,1fr);
+  gap:22px; align-items:stretch;
 }
 @media (max-width:820px){ .vclcalc-app .fd-calcgrid{ grid-template-columns:1fr; } }
-.vclcalc-app .fd-fields{
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px;
+/* One line per variation type: name, stepper, special case. Strengths sits above
+   the divider because it is not a variation type. */
+.vclcalc-app .fd-fields{ display:flex; flex-direction:column; gap:9px; }
+.vclcalc-app .fd-row{
+  display:grid; grid-template-columns:118px auto 1fr;
+  align-items:center; gap:11px;
 }
-.vclcalc-app .fd-field{
-  display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:var(--ink-soft);
-}
-.vclcalc-app .fd-field input,
-.vclcalc-app .fd-field select{
-  width:100%; padding:6px 9px;
+.vclcalc-app .fd-rowlbl{ font-size:12.5px; color:var(--ink-soft); }
+.vclcalc-app .fd-rowsep{ border:0; border-top:1px solid var(--line); margin:3px 0 2px; }
+.vclcalc-app .fd-nospecial{ font-size:12px; color:var(--ink-faint); font-style:italic; }
+.vclcalc-app .fd-rowsel{
+  width:100%; max-width:190px; height:34px; padding:6px 9px;
   font-family:var(--sans); font-size:13px;
   border:1px solid var(--line-strong); border-radius:6px;
   background:var(--paper); color:var(--ink);
 }
-.vclcalc-app .fd-field input{ text-align:right; font-variant-numeric:tabular-nums; }
-.vclcalc-app .fd-field input:focus-visible,
-.vclcalc-app .fd-field select:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+.vclcalc-app .fd-rowsel:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
 .vclcalc-app .fd-out{
   padding:13px 15px 14px; background:var(--paper);
   border:1px solid var(--line); border-radius:8px;
+  display:flex; flex-direction:column;
 }
 .vclcalc-app .fd-line{
   display:flex; justify-content:space-between; gap:12px;
   font-size:12.5px; color:var(--ink-soft); padding:3px 0;
 }
+/* margin-top:auto pushes the total to the foot of the box, so it lines up with
+   the bottom of the fields column. */
 .vclcalc-app .fd-total{
   display:flex; justify-content:space-between; align-items:baseline; gap:12px;
-  margin-top:10px; padding-top:10px; border-top:1px solid var(--line-strong);
+  margin-top:auto; padding-top:10px; border-top:1px solid var(--line-strong);
 }
 .vclcalc-app .fd-total-l{ font-size:12.5px; font-weight:600; }
 .vclcalc-app .fd-total-r{
