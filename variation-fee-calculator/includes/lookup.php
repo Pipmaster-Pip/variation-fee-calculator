@@ -409,10 +409,7 @@ function vcl_shortcode( $atts ) {
 		// Same admin-editable/fallback pattern for the free-text guideline reference shown
 		// next to it (see vcl_get_reference_text() in includes/admin.php).
 		'referenceText' => vcl_get_reference_text(),
-		// Optional download link to the calculator's source Excel workbook, shown in the
-		// embedded Fee Calculator's heading (see vcl_get_calc_excel_url() in admin.php).
-		'calcExcelUrl'  => vcl_get_calc_excel_url(),
-		// Same, for the workbook behind Workload Planning's RA-hours factors -- shown in that
+		// Download link to the workbook behind Workload Planning's RA-hours factors -- shown in that
 		// tool's "How this estimate is built" panel (see vcl_get_workload_excel_url()).
 		'workloadExcelUrl' => vcl_get_workload_excel_url(),
 		// Feedback address for the "Suggest an improvement" links, handed over split into

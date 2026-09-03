@@ -377,12 +377,15 @@ function vcl_count_fee_overrides( $overrides ) {
 // ---------------------------------------------------------------------------
 
 /**
- * Top-level menu entry, not a Settings submenu: the fee maintenance is the most
- * frequently used admin screen of this plugin, so it gets its own icon in the
- * sidebar instead of hiding two clicks deep under Settings. The page slug is
- * deliberately unchanged ('vcl-fee-editor') so saved bookmarks that carry it,
- * and the post-save redirect, keep pointing at the same page. Capability is
- * unchanged as well ('manage_options').
+ * The plugin's single top-level admin page "Variation Toolbox". It carries
+ * three tabs -- the fee editor (the most frequently used screen), the
+ * "Datenstand & Quellen" overview and the "Einstellungen" -- routed by the
+ * `tab` query var (see vcl_toolbox_current_tab()). Everything that used to sit
+ * under Settings -> Variation Fee Calculator now lives here as a tab.
+ *
+ * The page slug is deliberately unchanged ('vcl-fee-editor') so saved bookmarks
+ * that carry it, and every post-save redirect, keep pointing at the same page.
+ * Capability is unchanged as well ('manage_options').
  *
  * Position 58 puts it just below Settings and above the plugin-added block at
  * 60+, i.e. in the tools/settings neighbourhood rather than among the content
@@ -390,16 +393,78 @@ function vcl_count_fee_overrides( $overrides ) {
  */
 function vcl_fee_editor_menu() {
 	add_menu_page(
-		'Variation Toolbox — Gebühren',
-		'Toolbox-Gebühren',
+		'Variation Toolbox',
+		'Variation Toolbox',
 		'manage_options',
 		'vcl-fee-editor',
-		'vcl_render_fee_editor',
+		'vcl_render_toolbox_page',
 		'dashicons-money-alt',
 		58
 	);
 }
 add_action( 'admin_menu', 'vcl_fee_editor_menu' );
+
+/**
+ * The tabs of the Variation Toolbox admin page, in display order. Keys are the
+ * `tab` query value, values the label shown on the nav-tab.
+ */
+function vcl_toolbox_tabs() {
+	return array(
+		'fees'     => 'Gebühren',
+		'sources'  => 'Datenstand & Quellen',
+		'settings' => 'Einstellungen',
+	);
+}
+
+/**
+ * The tab currently requested, defaulting to the fee editor. Anything unknown
+ * (a stale bookmark, a hand-typed value) also falls back to 'fees'.
+ */
+function vcl_toolbox_current_tab() {
+	$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'fees';
+	return array_key_exists( $tab, vcl_toolbox_tabs() ) ? $tab : 'fees';
+}
+
+/**
+ * URL of the toolbox admin page for a given tab. Used by every save handler's
+ * redirect so it returns to the tab the form lives on.
+ */
+function vcl_toolbox_page_url( $tab = 'fees' ) {
+	return add_query_arg( 'tab', $tab, admin_url( 'admin.php?page=vcl-fee-editor' ) );
+}
+
+/**
+ * Router for the toolbox admin page: renders the shared frame (title + tab nav)
+ * and dispatches to the renderer of the active tab.
+ */
+function vcl_render_toolbox_page() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$current = vcl_toolbox_current_tab();
+	?>
+	<div class="wrap">
+		<h1>Variation Toolbox</h1>
+		<h2 class="nav-tab-wrapper">
+			<?php foreach ( vcl_toolbox_tabs() as $tab => $label ) : ?>
+				<a href="<?php echo esc_url( vcl_toolbox_page_url( $tab ) ); ?>" class="nav-tab<?php echo $tab === $current ? ' nav-tab-active' : ''; ?>">
+					<?php echo esc_html( $label ); ?>
+				</a>
+			<?php endforeach; ?>
+		</h2>
+
+		<?php
+		if ( $current === 'sources' ) {
+			vcl_render_sources_tab();
+		} elseif ( $current === 'settings' ) {
+			vcl_render_settings_tab();
+		} else {
+			vcl_render_fees_tab();
+		}
+		?>
+	</div>
+	<?php
+}
 
 /**
  * Compatibility for the old location (Settings -> Variation Toolbox — Gebühren):
@@ -427,6 +492,29 @@ function vcl_fee_editor_legacy_redirect() {
 add_action( 'admin_init', 'vcl_fee_editor_legacy_redirect' );
 
 /**
+ * Compatibility for the retired Settings -> Variation Fee Calculator page
+ * (slug 'vfc-settings'): its contents are now the "Datenstand & Quellen" and
+ * "Einstellungen" tabs of the toolbox page. A bookmark still requesting
+ * options-general.php?page=vfc-settings lands on the sources tab instead of a
+ * dead menu entry.
+ */
+function vcl_settings_legacy_redirect() {
+	global $pagenow;
+	if ( 'options-general.php' !== $pagenow ) {
+		return;
+	}
+	if ( ! isset( $_GET['page'] ) || 'vfc-settings' !== $_GET['page'] ) {
+		return;
+	}
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	wp_safe_redirect( vcl_toolbox_page_url( 'sources' ) );
+	exit;
+}
+add_action( 'admin_init', 'vcl_settings_legacy_redirect' );
+
+/**
  * The editor drives the real calculator: it loads vcl-calc-data.js and
  * vcl-calc-app.js and prices its live example through window.VCLCALC.
  * vcl-calc-app.js expects the calculator's own container elements to exist, so
@@ -438,6 +526,12 @@ function vcl_fee_editor_assets( $hook ) {
 	// Top-level menu page, so the hook suffix is 'toplevel_page_...', not
 	// 'settings_page_...' as it was while the editor lived under Settings.
 	if ( $hook !== 'toplevel_page_vcl-fee-editor' ) {
+		return;
+	}
+	// The calculator engine and editor only run on the "Gebühren" tab; the
+	// "Datenstand & Quellen" and "Einstellungen" tabs are plain forms that would
+	// only boot the engine against a missing #vclfe-root.
+	if ( vcl_toolbox_current_tab() !== 'fees' ) {
 		return;
 	}
 
@@ -491,7 +585,7 @@ function vcl_fee_editor_assets( $hook ) {
 }
 add_action( 'admin_enqueue_scripts', 'vcl_fee_editor_assets' );
 
-function vcl_render_fee_editor() {
+function vcl_render_fees_tab() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
@@ -503,9 +597,6 @@ function vcl_render_fee_editor() {
 	$overrides = vcl_get_fee_overrides();
 	$count     = vcl_count_fee_overrides( $overrides );
 	?>
-	<div class="wrap">
-		<h1>Variation Toolbox — Gebühren bearbeiten</h1>
-
 		<?php if ( $status === 'saved' ) : ?>
 			<div class="notice notice-success is-dismissible"><p>
 				Gebühren gespeichert<?php echo $dropped ? ' — ' . (int) $dropped . ' unbrauchbare Werte wurden dabei verworfen.' : '.'; ?>
@@ -645,7 +736,6 @@ function vcl_render_fee_editor() {
 				<button type="button" id="vclcalc-<?php echo esc_attr( $id ); ?>"></button>
 			<?php endforeach; ?>
 		</div>
-	</div>
 	<?php
 }
 
