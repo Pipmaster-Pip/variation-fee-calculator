@@ -807,6 +807,131 @@
 .vcl-app .level-card--empty { cursor: default; opacity: 0.55; }
 .vcl-app .level-card--empty:hover { border-color: var(--border); background: var(--panel); }
 
+/* --- PI filter: chip + panel shown below the top-level E/Q/C/M/Art.5 cards, listing the codes
+   that affect the product information (SmPC/labelling/PL). Reuses --plum, Summary's identity
+   color, since it isn't Classification's own --classify and doesn't need a fourth new token. --- */
+.vcl-app .pi-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--plum) 35%, var(--border));
+  border-radius: 20px;
+  padding: 6px 13px 6px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--plum);
+  cursor: pointer;
+}
+.vcl-app .pi-filter-chip:hover { background: var(--plum-tint); }
+.vcl-app .pi-filter-chip__icon {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--plum); flex-shrink: 0;
+}
+.vcl-app .pi-filter-chip__count {
+  font-family:var(--figure); font-variant-numeric:tabular-nums;
+  background: var(--plum); color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 10.5px;
+}
+
+.vcl-app .pi-filter-panel { display: none; margin-top: 14px; }
+.vcl-app .pi-filter-panel--open { display: block; }
+
+.vcl-app .pi-filter-group { margin-top: 8px; }
+.vcl-app .pi-filter-group:first-child { margin-top: 0; }
+
+/* Chapter rows, same accordion shape as the Guidance sections (.grouping-section__title) but in
+   this filter's plum identity: the whole row is the target, and the chevron below is drawn from
+   borders so no icon file is needed. */
+.vcl-app .pi-filter-group__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 13px;
+  margin: 0;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+.vcl-app .pi-filter-group__head:hover {
+  background: var(--plum-tint);
+  border-color: color-mix(in srgb, var(--plum) 40%, var(--border));
+}
+.vcl-app .pi-filter-group__head[aria-expanded="true"] {
+  background: var(--plum-tint);
+  border-color: color-mix(in srgb, var(--plum) 40%, var(--border));
+  margin-bottom: 7px;
+}
+.vcl-app .pi-filter-group__head:focus-visible { outline: 2px solid var(--plum); outline-offset: 2px; }
+
+.vcl-app .pi-filter-group__head::after {
+  content: "";
+  flex: none;
+  order: 99; /* always last, whether or not the row carries a count */
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--ink-faint);
+  border-bottom: 2px solid var(--ink-faint);
+  transform: rotate(-45deg);
+  margin-right: 2px;
+  transition: transform .18s ease;
+}
+.vcl-app .pi-filter-group__head[aria-expanded="true"]::after { transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .vcl-app .pi-filter-group__head::after { transition: none; }
+}
+
+.vcl-app .pi-filter-group__letter {
+  flex: none;
+  font-family:var(--figure); font-size: 11px; font-weight: 600;
+  color: var(--classify); background: var(--classify-bg); border-radius: 5px; padding: 1px 6px;
+}
+.vcl-app .pi-filter-group__name {
+  font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em;
+}
+.vcl-app .pi-filter-group__n {
+  font-family:var(--figure); font-variant-numeric:tabular-nums; font-size: 11px; color: var(--ink-faint);
+  margin-left: auto;
+}
+/* Without a count the chevron alone would sit hard against the title, so the gap is pushed here. */
+.vcl-app .pi-filter-group__head > .pi-filter-group__name:last-of-type { margin-right: auto; }
+
+.vcl-app .pi-filter-entries { display: flex; flex-direction: column; gap: 6px; }
+/* A shade off the chapter rows' white -- just enough to read as content nested under the open
+   chapter rather than as more rows of the same rank. Hover lifts it back to the full white. */
+.vcl-app .pi-filter-entry {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: color-mix(in srgb, var(--paper) 55%, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; font-family: inherit; font-size: 12.8px; color: var(--ink);
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.vcl-app .pi-filter-entry:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--plum) 40%, var(--border));
+}
+@media (prefers-reduced-motion: reduce) {
+  .vcl-app .pi-filter-entry { transition: none; }
+}
+.vcl-app .pi-filter-entry__code {
+  font-family:var(--figure); font-size: 11.5px; font-weight: 500;
+  color: var(--classify); background: var(--classify-bg); border-radius: 5px; padding: 2px 7px; flex-shrink: 0;
+}
+.vcl-app .pi-filter-entry__title { flex: 1; }
+
+/* The answer for a chapter that lists no codes of its own ("all of them" for C, "none" for M and
+   Art. 5) -- indented under its row so it reads as that row's content, like the entries do. */
+.vcl-app .pi-filter-note {
+  margin: 0 0 0 4px;
+  padding: 2px 4px 6px;
+  font-size: 12px; color: var(--muted); line-height: 1.55;
+}
+
 /* Divider between entries when the list mixes more than one genuine subsection heading (see
    renderDetail()'s showInlineHeadings) -- an auto-expanded section can show several subsections
    at once (e.g. Q.V.a + Q.V.b) with no nav-level toggle to label them, so this stands in for it. */
@@ -1831,6 +1956,25 @@
   transition: color .12s;
 }
 .vcl-app .vcl-guidance-return:hover { color: var(--classify); text-decoration: underline; }
+
+/* Same link, but sharing the breadcrumb's own line (the PI filter's way back) -- so it carries
+   that filter's plum instead of the muted grey, and drops the block margin the stacked variant
+   needs. The row keeps both on one line and lets the link fall below only when space runs out. */
+.vcl-app .entry-breadcrumb-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+.vcl-app .entry-breadcrumb-row .entry-breadcrumb { flex: 1 1 auto; }
+.vcl-app .vcl-guidance-return--inline {
+  flex: none;
+  margin: 0 0 12px;
+  color: var(--plum);
+  font-weight: 600;
+}
+.vcl-app .vcl-guidance-return--inline:hover { color: var(--plum); text-decoration: underline; }
 
 /* Revision history of the source Q&A document -- a quiet card rather than a bare table: real
    column headings, room around the text, only horizontal hairlines, and a narrow revision

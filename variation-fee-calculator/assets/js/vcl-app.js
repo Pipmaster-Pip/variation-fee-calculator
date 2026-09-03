@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const { CLASSIFICATION_META, SECTIONS, CHAPTERS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, variantCodeSuffix, variantFullCode } = window.VCL_DATA;
+  const { CLASSIFICATION_META, SECTIONS, CHAPTERS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, PI_RELEVANT_CODES, variantCodeSuffix, variantFullCode } = window.VCL_DATA;
 
   // Its own generated file (see vcl-qa-data.js). Optional on purpose: the Q&A nav row and view
   // are simply left out when the script isn't enqueued, rather than the whole guide failing.
@@ -73,6 +73,7 @@
     guidanceOpen: false, // whether the "Guidance on Variations" sub-nav branch is expanded
     guidanceHub: false, // whether the detail area shows the Guidance hub (its three documents as cards) instead of the welcome overview
     guidanceReturn: null, // {view, scrollY} set after a code-chip jump so Classification can offer "back to guidance"
+    piFilterReturn: null, // scrollY set after a PI-filter entry jump so Classification can offer "back to PI filter", same pattern as guidanceReturn
     focusCode: null, // one-shot: when set, the next renderBrowse shows ONLY this entry (deep-link / guidance code jump), then clears itself so later tree/search navigation is normal
     activeChapter: null, // no chapter expanded at first -- only E/Q/C/M show, all collapsed
     activeSection: null, // e.g. "I", "II" ... within a chapter that has SECTIONS (currently only Q)
@@ -104,6 +105,8 @@
     // every page load starts open, and goToDestination() resets it on any tool switch so the
     // tree can never end up hidden in a view the user did not collapse it in.
     treeCollapsed: false,
+    piFilterOpen: false, // Classification top-level overview: whether the "affects product information" chip below the E/Q/C/M cards is expanded. Not persisted -- every page load starts collapsed, same as treeCollapsed.
+    piFilterOpenChapter: null, // chapter key ("E"/"Q") whose codes are listed inside that panel -- same one-at-a-time accordion as groupingOpen/qaOpenChapter; null = every chapter collapsed
   };
 
   // Entries currently "in scope" while browsing/searching Classification -- rebuilt as a side
@@ -913,6 +916,7 @@
   function jumpToClassificationFromGuidance(code, variantId, returnView) {
     const scrollY = window.pageYOffset;
     if (!openEntryByCode(code, variantId)) return;
+    state.piFilterReturn = null;
     state.guidanceReturn = { view: returnView, scrollY: scrollY };
     renderBrowse();
     renderToolBar();
@@ -3460,6 +3464,156 @@
     });
   }
 
+  // "Affects product information" filter -- a chip shown only below the top-level chapter cards
+  // (E/Q/C/M/Art.5), since it answers a question about that whole level ("which of these chapters'
+  // codes touch the SmPC/labelling/PL"), not about a chapter already drilled into. Chapter C is
+  // entirely PI-relevant by definition, so it gets one explanatory sentence instead of being
+  // listed entry-by-entry alongside the E/Q/M codes that only sometimes qualify.
+  function piFilterEntries() {
+    const byChapter = new Map();
+    PI_RELEVANT_CODES.forEach((code) => {
+      const entry = ENTRIES.find((e) => e.code === code);
+      if (!entry) return;
+      if (!byChapter.has(entry.chapter)) byChapter.set(entry.chapter, []);
+      byChapter.get(entry.chapter).push(entry);
+    });
+    return byChapter;
+  }
+
+  // The chapters that carry no individually listed PI code still get a row, in the same order as
+  // the cards above -- an absent chapter would read as an oversight, and each absence has its own
+  // reason worth stating. C is the one where "all of them" is the answer; M and Art. 5 are the two
+  // where "none" is, for different reasons.
+  function piFilterChapterNote(chapterKey) {
+    if (chapterKey === "C") {
+      const n = ENTRIES.filter((e) => e.chapter === "C").length;
+      return `All ${n} Chapter C codes affect the product information by definition (that's the whole chapter's purpose), so they aren't listed here one by one.`;
+    }
+    if (chapterKey === "M") {
+      return "No Chapter M code affects the product information: these are Plasma/Vaccine Antigen Master File changes (certificate holder, collection and testing sites, plasma pool handling), which stay inside the master file dossier.";
+    }
+    if (chapterKey === "art5") {
+      // Why the live list is empty (and the archive is not simply "more codes") is explained where
+      // the Art. 5 view itself is built -- see the section comment above renderArt5().
+      return ART5_DATA && ART5_DATA.current.length === 0
+        ? `No Art. 5 recommendations are currently in force, so none are listed here — the ${ART5_DATA.historical.length} historical ones are an archive in the old A/B/C nomenclature.`
+        : "Art. 5 recommendations are issued case by case, so none are listed here.";
+    }
+    return "";
+  }
+
+  function piFilterHtml() {
+    const byChapter = piFilterEntries();
+    const total = PI_RELEVANT_CODES.length;
+    // Same order as the level cards above (Object.values(CHAPTERS), then the Art. 5 card), so the
+    // filter reads as a second pass over the very same list rather than a list of its own.
+    const groupKeys = Object.values(CHAPTERS).map((c) => c.code);
+    if (ART5_DATA) groupKeys.push("art5");
+    const groupsHtml = groupKeys
+      .map((chapterKey) => {
+        const entries = byChapter.get(chapterKey) || [];
+        const isArt5 = chapterKey === "art5";
+        const chapter = isArt5 ? { title: "Recommendations for unforeseen variations" } : CHAPTERS[chapterKey];
+        const letter = isArt5 ? "Art. 5" : chapterKey;
+        const note = entries.length ? "" : piFilterChapterNote(chapterKey);
+        // Same one-at-a-time accordion the Guidance/Q&A/Art.5 sections use (a single open key,
+        // not a Set): opening one chapter closes the other, so the panel opens as a short list of
+        // chapters rather than a wall of every code at once.
+        const isOpen = state.piFilterOpenChapter === chapterKey;
+        const rows = entries
+          .map(
+            (e) => `
+              <button type="button" class="pi-filter-entry" data-pi-code="${e.code}">
+                <span class="pi-filter-entry__code">${e.code}</span>
+                <span class="pi-filter-entry__title">${e.title}</span>
+              </button>`
+          )
+          .join("");
+        // A chapter with listed codes carries their count; one that carries a note instead has no
+        // number to show -- the note itself says whether the answer is "all of them" or "none".
+        const body = entries.length
+          ? `<div class="pi-filter-entries">${rows}</div>`
+          : `<p class="pi-filter-note">${note}</p>`;
+        return `
+          <div class="pi-filter-group">
+            <button type="button" class="pi-filter-group__head" data-pi-group="${chapterKey}" aria-expanded="${isOpen}">
+              <span class="pi-filter-group__letter">${letter}</span>
+              <span class="pi-filter-group__name">${chapter.title}</span>
+              ${entries.length ? `<span class="pi-filter-group__n">${entries.length}</span>` : ""}
+            </button>
+            ${isOpen ? body : ""}
+          </div>`;
+      })
+      .join("");
+    return `
+      <button type="button" class="pi-filter-chip" id="vcl-piFilterChip" aria-expanded="${state.piFilterOpen ? "true" : "false"}" aria-controls="vcl-piFilterPanel">
+        <span class="pi-filter-chip__icon" aria-hidden="true"></span>
+        Show product-information-relevant codes
+        <span class="pi-filter-chip__count">${total}</span>
+      </button>
+      <div class="pi-filter-panel${state.piFilterOpen ? " pi-filter-panel--open" : ""}" id="vcl-piFilterPanel">
+        ${groupsHtml}
+      </div>`;
+  }
+
+  function wirePiFilter(container) {
+    const chip = container.querySelector("#vcl-piFilterChip");
+    if (!chip) return;
+    chip.addEventListener("click", () => {
+      state.piFilterOpen = !state.piFilterOpen;
+      // Collapsing the panel forgets which chapter was open, so reopening it always starts on the
+      // short chapter list rather than on whatever the user last drilled into.
+      if (!state.piFilterOpen) state.piFilterOpenChapter = null;
+      renderDetail();
+    });
+    container.querySelectorAll("[data-pi-group]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-pi-group");
+        state.piFilterOpenChapter = state.piFilterOpenChapter === key ? null : key;
+        renderDetail();
+      });
+    });
+    container.querySelectorAll(".pi-filter-entry[data-pi-code]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        // Same "take me to this one variation" jump the ?code= deep link and the Guidance code
+        // chips use -- Classification already owns the full detail view, so this reuses it
+        // instead of building a second one inside the filter panel. Remember the scroll position
+        // (same pattern as jumpToClassificationFromGuidance/guidanceReturn) so renderDetail() can
+        // offer a one-click way back to the filter list, expanded, at the same spot.
+        const scrollY = window.pageYOffset;
+        if (!openEntryByCode(btn.getAttribute("data-pi-code"))) return;
+        state.guidanceReturn = null;
+        state.piFilterReturn = scrollY;
+        renderBrowse();
+        renderToolBar();
+        renderTreeToggle();
+        renderDetail();
+        jumpToTop();
+      });
+    });
+  }
+
+  // Returns from the Classification detail back to the PI-filter panel, expanded again, scrolled
+  // to the exact spot -- same pattern as returnToGuidance() for the Guidance code-chip jump.
+  function returnToPiFilter() {
+    const scrollY = state.piFilterReturn;
+    state.piFilterReturn = null;
+    if (scrollY == null) return;
+    // A leftover search query would make buildLevelNav() return null (search results replace the
+    // chapter cards), so the filter panel this link promises to reopen would never actually show.
+    state.query = ""; el.search.value = "";
+    state.activeChapter = null;
+    state.activeSection = null;
+    state.activeVariant = null;
+    state.classifyOpen = true;
+    state.piFilterOpen = true;
+    renderBrowse();
+    renderToolBar();
+    renderTreeToggle();
+    renderDetail();
+    window.scrollTo({ top: scrollY });
+  }
+
   // Renders every entry currently "in scope" (visibleEntries, rebuilt by the preceding
   // renderBrowse() call) as a stacked list in the detail panel: each entry gets a blue summary
   // chip (.entry-summary, Classification's own identity color -- see CSS) followed by one row
@@ -3472,6 +3626,7 @@
   function goToDestination(dest) {
     state.query = ""; el.search.value = "";
     state.guidanceReturn = null; // explicit nav supersedes any pending "back to guidance" context
+    state.piFilterReturn = null; // ditto for a pending "back to PI filter" context
     // Clicking a tool in the bar means "take me to that tool's own starting screen", including
     // when it is the tool already showing: without this, Classification kept whatever chapter,
     // section and variant were open, so its overview of the five chapters was unreachable once
@@ -3721,6 +3876,20 @@
     const guidanceBackHtml = state.guidanceReturn
       ? '<button type="button" class="vcl-guidance-return" id="vcl-guidanceReturn"><span aria-hidden="true">&larr;</span> Back to Guidance on Variations</button>'
       : "";
+    // Same link for a PI-filter entry jump, but on the breadcrumb's own line (see
+    // breadcrumbRowHtml below): the breadcrumb already says where this entry sits, and the way
+    // back to the filter belongs with it rather than as a second line under it. The two returns
+    // are mutually exclusive (only one of guidanceReturn/piFilterReturn is ever set, since each
+    // is cleared before the other is set).
+    const piFilterBackHtml = state.piFilterReturn != null
+      ? '<button type="button" class="vcl-guidance-return vcl-guidance-return--inline" id="vcl-piFilterReturnBtn"><span aria-hidden="true">&larr;</span> Back to PI filter</button>'
+      : "";
+    // Breadcrumb and that link share one flex row; without the link the breadcrumb renders exactly
+    // as it always has, so nothing changes for every other way into the detail view.
+    const breadcrumbRowHtml = () =>
+      piFilterBackHtml
+        ? `<div class="entry-breadcrumb-row">${buildBreadcrumbHtml()}${piFilterBackHtml}</div>`
+        : buildBreadcrumbHtml();
 
     // Nothing in scope: either the user is standing on a chapter/section whose children are the
     // level below (-> show that level, see buildLevelNav) or they are nowhere in particular
@@ -3739,9 +3908,15 @@
           `<p class="results-meta results-meta--detail">0 entries match your search</p>` +
           `<p class="classification-empty-hint">No matching entries. Try a different code or keyword.</p>`;
       } else if (levelNav) {
-        el.detailEmpty.innerHTML = buildBreadcrumbHtml() + levelCardsHtml(levelNav);
+        // The PI filter answers "which codes in this list touch the product information" -- only
+        // meaningful for the top-of-branch chapter cards (E/Q/C/M/Art.5), not once a chapter/
+        // section/heading has narrowed the cards to something below that level.
+        const isChapterLevel = levelNav.items.some((it) => it.kind === "chapter");
+        el.detailEmpty.innerHTML =
+          buildBreadcrumbHtml() + levelCardsHtml(levelNav) + (isChapterLevel ? piFilterHtml() : "");
         wireBreadcrumb(el.detailEmpty);
         wireLevelCards(el.detailEmpty, levelNav);
+        if (isChapterLevel) wirePiFilter(el.detailEmpty);
       } else {
         // Same empty-scope slot, two occupants: the Guidance hub while that branch is open,
         // otherwise the first-load welcome overview. Both wire their cards the same way.
@@ -3772,7 +3947,7 @@
 
     el.detail.innerHTML =
       searchCountHtml +
-      buildBreadcrumbHtml() +
+      breadcrumbRowHtml() +
       guidanceBackHtml +
       visibleEntries
         .map((entry) => {
@@ -3808,6 +3983,9 @@
 
     const guidanceBackBtn = el.detail.querySelector("#vcl-guidanceReturn");
     if (guidanceBackBtn) guidanceBackBtn.addEventListener("click", returnToGuidance);
+
+    const piFilterReturnBtn = el.detail.querySelector("#vcl-piFilterReturnBtn");
+    if (piFilterReturnBtn) piFilterReturnBtn.addEventListener("click", returnToPiFilter);
 
     el.detail.querySelectorAll(".entry-summary[data-entry-code]").forEach((btn) => {
       btn.addEventListener("click", () => {

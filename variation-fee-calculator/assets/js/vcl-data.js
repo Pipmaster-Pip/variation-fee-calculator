@@ -6934,6 +6934,27 @@ const PRECISE_SCOPE_GUIDANCE = {
   ],
 };
 
+// --- Codes that affect the Product Information (SmPC, labelling or package leaflet) --------
+// Chapter C is PI-relevant by definition (every C code updates the SmPC/labelling/PL), so it
+// isn't listed here entry-by-entry -- the UI shows a standard sentence for it instead. This
+// covers the other chapters, whose entries only sometimes touch PI: identified by scanning
+// ENTRIES' conditions/documentation/notes text for explicit PI/SmPC/labelling/package-leaflet
+// language (2026-09-03).
+const PI_RELEVANT_CODES = [
+  "E.1", "E.2", "E.3", "E.4", "E.5",
+  "Q.I.a.6",
+  "Q.II.a.1", "Q.II.a.2", "Q.II.a.3", "Q.II.a.6",
+  "Q.II.b.2",
+  "Q.II.e.1", "Q.II.e.2", "Q.II.e.3", "Q.II.e.6",
+  "Q.II.f.1",
+  "Q.II.h.1",
+  "Q.IV.1", "Q.IV.2",
+  "Q.V.a.1",
+  // No Chapter M code qualifies: M.z's notes ("Covers PMF/VAMF-related changes that cannot be
+  // classified...") carry no PI/SmPC/labelling/package-leaflet language, same as its Chapter-E
+  // sibling E.z (also excluded) -- both are generic catch-alls, not PI-specific.
+];
+
 // --- Variant ids vs. the Guideline's own code notation -------------------------------------
 // The Guideline nests a two-level variant: a lettered group "(a)" whose rows are numbered
 // "1., 2., ...", written out as the code Q.II.a.3.a.1. This dataset stores that same variant
@@ -6964,8 +6985,8 @@ function variantFullCode(entryCode, variantId) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, variantCodeSuffix, variantFullCode };
+  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, PI_RELEVANT_CODES, variantCodeSuffix, variantFullCode };
 }
 
-  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE: PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY, variantCodeSuffix: variantCodeSuffix, variantFullCode: variantFullCode };
+  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE: PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY, PI_RELEVANT_CODES: PI_RELEVANT_CODES, variantCodeSuffix: variantCodeSuffix, variantFullCode: variantFullCode };
 })();
