@@ -4,6 +4,28 @@
 // computes hours itself (the bands come in via ctx.blocks, from VCL_SUBMISSION.computeSubmissionHours).
 // Colours come from the host tool through --vcl-rat-accent* (see vcl-ra-tasks.css).
 // See docs/superpowers/specs/2026-09-03-editable-ra-hours-design.md.
+//
+// ctx fields:
+//   raTasks   (required) the object this module reads/mutates (gates, activeSubstance, piDocs,
+//             hourAdjust).
+//   blocks    (required) { core, cmc, pi, compilation } bands from the benchmark engine, or
+//             falsy/missing entries when a block hasn't been computed yet.
+//   onChange  (required) called after every mutation so the host tool can rerender/persist.
+//   compact   (optional) adds the "is-compact" class for tighter host layouts.
+//   id        (optional) a string identifying which caller/instance is rendering. The module is a
+//             single shared instance reused across the Guided Workflow AND every Budget plan line,
+//             so without an id the "which stepper is expanded" state would leak between them —
+//             opening one plan line's CMC stepper would leave it open for every other plan line and
+//             for the Guided Workflow. Pass a stable per-instance id (e.g. the plan line's id); a
+//             fixed fallback is used when omitted, which is fine for a host that only ever renders
+//             one instance at a time.
+//   adjust    (optional) { core, cmc, pi, compilation } — the engine's own CLAMPED deltas, i.e. the
+//             adjustment actually reflected in ctx.blocks (the engine re-clamps a negative delta so
+//             a block's min never falls below 0, and does so again on every recompute). When a
+//             number is present here for a block, it is used in place of the raw stored value from
+//             raTasks.hourAdjust for that block's stepper display, benchmark hint and disabled
+//             state, so a stored value the engine has since clamped away doesn't show stale numbers
+//             or a wrongly-disabled "−" button. Falls back to the stored raw value when omitted.
 (function (root) {
   "use strict";
 
@@ -35,9 +57,11 @@
       offHint: "Off: dossier compilation and submission are handled elsewhere — they add no RA hours." },
   ];
 
-  // Which blocks currently show their stepper. Keyed by block key; a block whose adjustment is
-  // non-zero is always expanded, so this only tracks the "opened but still at 0" case. Module-level
-  // (not per render) so the row survives the host tool's rerender on every click.
+  // Which blocks currently show their stepper. Keyed by "ctx.id|blockKey" (see expandedKey) so state
+  // never leaks between the Guided Workflow and the many Budget plan lines that share this one
+  // module instance. A block whose adjustment is non-zero is always expanded, so this only tracks
+  // the "opened but still at 0" case. Module-level (not per render) so the row survives the host
+  // tool's rerender on every click.
   var expanded = {};
 
   function adjustOf(raTasks, key) {
@@ -47,6 +71,17 @@
   function setAdjust(raTasks, key, value) {
     if (!raTasks.hourAdjust) raTasks.hourAdjust = { core: 0, cmc: 0, pi: 0, compilation: 0 };
     raTasks.hourAdjust[key] = value;
+  }
+  // Prefer the engine's applied (clamped) delta over the raw stored one, when the caller supplies
+  // it — see the ctx.adjust doc comment above for why the two can disagree.
+  function appliedOf(ctx, key) {
+    if (ctx.adjust && typeof ctx.adjust[key] === "number") return ctx.adjust[key];
+    return adjustOf(ctx.raTasks, key);
+  }
+  // Keys the "expanded" map by both the caller's instance id and the block, so opening a stepper in
+  // one context (one Budget plan line, or the Guided Workflow) never affects another.
+  function expandedKey(ctx, blockKey) {
+    return (ctx.id || "default") + "|" + blockKey;
   }
 
   function toggle(isOn, label, onClick) {
@@ -73,7 +108,9 @@
   // "Own adjustment  [−] ± 0 h [+]" plus, once non-zero, the untouched benchmark beside it.
   function adjustRow(ctx, block, base) {
     var raTasks = ctx.raTasks;
-    var d = adjustOf(raTasks, block.key);
+    // Use the engine's applied (clamped) delta when the caller supplies one, since that's what
+    // ctx.blocks actually reflects; the raw stored value can be stale (see ctx.adjust doc above).
+    var d = appliedOf(ctx, block.key);
     var row = el("div", "vcl-rat-adj");
     row.appendChild(el("span", "vcl-rat-adj__label", "Own adjustment"));
 
@@ -86,6 +123,8 @@
     minus.setAttribute("aria-label", "Decrease " + block.name + " by one hour");
     minus.disabled = base ? (d <= minDelta) : false;
     minus.addEventListener("click", function () {
+      // Written value is derived from the applied delta, not the (possibly stale) raw one, so a
+      // stored value the engine has since clamped away heals itself on the next click.
       setAdjust(raTasks, block.key, d - 1);
       ctx.onChange();
     });
@@ -115,7 +154,7 @@
     var row = el("div", "vcl-rat-adj");
     var b = el("button", "vcl-rat-link", "Adjust these hours");
     b.type = "button";
-    b.addEventListener("click", function () { expanded[block.key] = true; ctx.onChange(); });
+    b.addEventListener("click", function () { expanded[expandedKey(ctx, block.key)] = true; ctx.onChange(); });
     row.appendChild(b);
     return row;
   }
@@ -172,8 +211,8 @@
       }
 
       if (on) {
-        var d = adjustOf(rt, block.key);
-        if (d === 0 && !expanded[block.key]) card.appendChild(adjustLink(ctx, block));
+        var d = appliedOf(ctx, block.key);
+        if (d === 0 && !expanded[expandedKey(ctx, block.key)]) card.appendChild(adjustLink(ctx, block));
         else card.appendChild(adjustRow(ctx, block, base));
       }
 
