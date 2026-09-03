@@ -1666,7 +1666,14 @@
       children.push(kv("Timeline", [new TextRun(sd ? fmtDate(addDays(sd, 0)) + " → EOP " + fmtDate(addDays(sd, sch.subToEop)) + " (" + sch.subToEop + " days)" : "Submission → EOP " + sch.subToEop + " days")]));
     }
     const ra = raEffort();
-    if (ra) children.push(kv("RA workload", [new TextRun(raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")")]));
+    if (ra) {
+      // Never merge the user's own adjustment silently into the benchmark figure: the reader of
+      // the summary must be able to see that a number was changed by hand.
+      var adjTotal = ra.adjust ? (ra.adjust.core + ra.adjust.cmc + ra.adjust.pi + ra.adjust.compilation) : 0;
+      var raText = raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")";
+      if (adjTotal) raText += " — incl. own adjustment " + (adjTotal > 0 ? "+" : "−") + Math.abs(adjTotal) + " h";
+      children.push(kv("RA workload", [new TextRun(raText)]));
+    }
     if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
 
     // ---- Annual Update / Super-Grouping block (absent for Worksharing and no-mode-selected) ----
