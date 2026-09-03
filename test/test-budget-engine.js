@@ -38,7 +38,8 @@ eq(BUD.emptySubmission(), {
   variations: [],
   procedures: [{ kind: "national", nat: null, rms: null, cms: [] }],
   lead: null,
-  raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+  raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null,
+             hourAdjust: { core: 0, cmc: 0, pi: 0, compilation: 0 } },
   strengths: { default: 1, overrides: {} },
   specials: { line: {}, ws: {}, lead: null },
 }, "emptySubmission: default shape");
@@ -174,6 +175,22 @@ var migrated = BUD.loadPlan(v1Store);
 eq(migrated.version, 3, "loadPlan: migrating from v1 key returns version 3");
 eq(migrated.lines[0].submission.variations, [{ code: "C.I.2", variantId: null, type: "IB" }],
   "loadPlan: v1-key migration normalizes each line via normalizeLine");
+
+// --- Hour adjustments survive save/load and never come back malformed. -------------------------
+eq(BUD.emptySubmission().raTasks.hourAdjust, { core: 0, cmc: 0, pi: 0, compilation: 0 },
+  "budget: a fresh submission starts with zero hour adjustments");
+
+var normKept = BUD.normalizeSubmission({ raTasks: { hourAdjust: { core: 5, cmc: -3 } } });
+eq(normKept.raTasks.hourAdjust, { core: 5, cmc: -3, pi: 0, compilation: 0 },
+  "budget: stored adjustments are kept, missing keys default to 0");
+
+var normJunk = BUD.normalizeSubmission({ raTasks: { hourAdjust: { core: "7", pi: null, cmc: 1.4, nope: 9 } } });
+eq(normJunk.raTasks.hourAdjust, { core: 0, cmc: 1, pi: 0, compilation: 0 },
+  "budget: non-numeric adjustments fall back to 0, fractions round, unknown keys are dropped");
+
+var normLegacy = BUD.normalizeSubmission({ raTasks: { cmc: true } });
+eq(normLegacy.raTasks.hourAdjust, { core: 0, cmc: 0, pi: 0, compilation: 0 },
+  "budget: a plan stored before this feature loads with zero adjustments");
 
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);
