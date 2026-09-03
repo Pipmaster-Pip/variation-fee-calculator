@@ -452,9 +452,9 @@ function vcl_shortcode( $atts ) {
 	    <span id="vcl-contactSlot"></span>
 	  </p>
 	  <p>
-	    One toolbox for the full variation lifecycle &mdash; classification, grouping, timetables, RA
-	    workload and official fees across EU-27, EMA, CH, IS, NO, UK and RS, plus portfolio-level
-	    budget planning.
+	    Calculation of official fees for variations and annual fees across EU-27, EMA, CH, IS, NO, UK
+	    and RS, as well as the classification of variations, budget planning, calculation of RA
+	    workload and visualisation of timetables for variations.
 	  </p>
 	</header>
 
