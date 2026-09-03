@@ -3569,8 +3569,16 @@
     container.querySelectorAll("[data-pi-group]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = btn.getAttribute("data-pi-group");
-        state.piFilterOpenChapter = state.piFilterOpenChapter === key ? null : key;
+        const opening = state.piFilterOpenChapter !== key;
+        state.piFilterOpenChapter = opening ? key : null;
         renderDetail();
+        // Either direction moves the ground under the user: opening closes whichever chapter was
+        // open before (its rows vanish, pulling everything below them up the document), and closing
+        // shortens the page enough that the browser clamps the scroll offset. Measured, both land
+        // the clicked row under the site's fixed nav. So put it back just below that nav after every
+        // toggle -- the Guidance sections do the same on open; here closing needs it too.
+        const clicked = el.detailEmpty.querySelector(`[data-pi-group="${key}"]`);
+        if (clicked) scrollTargetToTop(clicked);
       });
     });
     container.querySelectorAll(".pi-filter-entry[data-pi-code]").forEach((btn) => {
