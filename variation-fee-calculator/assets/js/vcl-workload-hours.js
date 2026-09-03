@@ -251,6 +251,32 @@
     return (min + 4 * mode + max) / 6;
   }
 
+  // ---- user hour adjustments ------------------------------------------------------------------
+  // The benchmark workbook is the default; a department that works differently adds its own delta
+  // per block. Deltas are whole hours and may be negative. Applying a delta shifts min AND max by
+  // the same amount, so the band keeps its width, and it is clamped so a block's min never goes
+  // below 0 (a block cannot cost less than no work at all).
+  var ADJUST_KEYS = ["core", "cmc", "pi", "compilation"];
+  function normalizeHourAdjust(raw) {
+    var out = {};
+    raw = raw || {};
+    for (var i = 0; i < ADJUST_KEYS.length; i++) {
+      var k = ADJUST_KEYS[i];
+      var v = raw[k];
+      out[k] = (typeof v === "number" && isFinite(v)) ? Math.round(v) : 0;
+    }
+    return out;
+  }
+  function sumParts(a, b) {
+    return { min: (a ? a.min : 0) + (b ? b.min : 0), max: (a ? a.max : 0) + (b ? b.max : 0) };
+  }
+  // The delta actually applied: 0 when the block's gate is off, otherwise never below -min.
+  function applicableAdjust(delta, base, gateOn) {
+    if (!gateOn || !delta) return 0;
+    return Math.max(delta, -base.min);
+  }
+  function shiftBand(base, delta) { return { min: base.min + delta, max: base.max + delta }; }
+
   // Main entry point. `sel` describes the current case:
   //   { type, procedure, cmsCount, activeSubstance, piDocs,
   //     modules: { pi, cmc, compilation },     // gate booleans
@@ -278,34 +304,66 @@
       ? sumSubmissionModifiers(HD, "cmc", bucket, role1, sel.submission)
       : zero();
 
+    // Per-block bands (the four cards Station "RA tasks" renders) plus the user's own adjustment.
+    // Blocks map onto the engine parts as: core = RA core + the grouped/shared submission
+    // modifiers, pi = product information, cmc = CMC core + its modifiers, compilation = the
+    // compilation & submission sheet.
+    var rawAdjust = normalizeHourAdjust(sel.hourAdjust);
+    var blockBase = {
+      core: sumParts(raCore, submissionRa),
+      pi: pi,
+      cmc: sumParts(cmcCore, submissionCmc),
+      compilation: compilation,
+    };
+    var gates = { core: true, pi: !!modules.pi, cmc: !!modules.cmc, compilation: !!modules.compilation };
+    var adjust = {}, blocks = {};
+    for (var ai = 0; ai < ADJUST_KEYS.length; ai++) {
+      var ak = ADJUST_KEYS[ai];
+      adjust[ak] = applicableAdjust(rawAdjust[ak], blockBase[ak], gates[ak]);
+      blocks[ak] = shiftBand(blockBase[ak], adjust[ak]);
+    }
+
     // Itemised lines per visible section. Core rows are already itemised by the summers; PI, the
     // grouped/shared modifiers (and the per-CMS row, inside sumFlat) collapse to one line each.
+    // Each non-zero own adjustment is appended as its own line, tagged own:true so the UI can
+    // colour it apart from the benchmark rows.
+    function ownItem(label, delta) { return { label: label, min: delta, max: delta, own: true }; }
+
     var raItems = (raCore.items || []).slice();
     if (modules.pi && (pi.min || pi.max)) raItems.push({ label: piLabel(sel.piDocs), min: pi.min, max: pi.max });
     (submissionRa.items || []).forEach(function (it) { raItems.push(it); });
+    if (adjust.core) raItems.push(ownItem("Own adjustment · RA preparation", adjust.core));
+    if (adjust.pi) raItems.push(ownItem("Own adjustment · Product information", adjust.pi));
 
     var cmcItems = (cmcCore.items || []).slice();
     (submissionCmc.items || []).forEach(function (it) { cmcItems.push(it); });
+    if (adjust.cmc) cmcItems.push(ownItem("Own adjustment", adjust.cmc));
 
     var compItems = (compilation.items || []).slice();
+    if (adjust.compilation) compItems.push(ownItem("Own adjustment", adjust.compilation));
 
     return {
       raCore: raCore, pi: pi, submissionRa: submissionRa,
       cmcCore: cmcCore, submissionCmc: submissionCmc,
       compilation: compilation,
+      adjust: adjust, blocks: blocks,
       items: { ra: raItems, cmc: cmcItems, compilation: compItems },
     };
   }
 
   // Compose the confirmed "Variant A" three-section view from the granular parts. Returns each
   // section's {min,max} subtotal plus the grand total. CMC only counts into the total when its
-  // gate is on (its part is already zero otherwise, so the sum is correct either way).
+  // gate is on (its part is already zero otherwise, so the sum is correct either way). The user's
+  // own adjustments (already clamped and gated by computeAdditiveWorkload) are added into the
+  // section they belong to: RA carries both the core and the product-information delta.
   function composeSections(parts) {
-    var ra = { min: parts.raCore.min + parts.pi.min + parts.submissionRa.min,
-               max: parts.raCore.max + parts.pi.max + parts.submissionRa.max };
-    var cmc = { min: parts.cmcCore.min + parts.submissionCmc.min,
-                max: parts.cmcCore.max + parts.submissionCmc.max };
-    var compilation = { min: parts.compilation.min, max: parts.compilation.max };
+    var adj = parts.adjust || { core: 0, cmc: 0, pi: 0, compilation: 0 };
+    var ra = { min: parts.raCore.min + parts.pi.min + parts.submissionRa.min + adj.core + adj.pi,
+               max: parts.raCore.max + parts.pi.max + parts.submissionRa.max + adj.core + adj.pi };
+    var cmc = { min: parts.cmcCore.min + parts.submissionCmc.min + adj.cmc,
+                max: parts.cmcCore.max + parts.submissionCmc.max + adj.cmc };
+    var compilation = { min: parts.compilation.min + adj.compilation,
+                        max: parts.compilation.max + adj.compilation };
     var total = { min: ra.min + cmc.min + compilation.min,
                   max: ra.max + cmc.max + compilation.max };
     return { ra: ra, cmc: cmc, compilation: compilation, total: total };
@@ -318,6 +376,7 @@
     // Additive model:
     computeAdditiveWorkload: computeAdditiveWorkload,
     composeSections: composeSections,
+    normalizeHourAdjust: normalizeHourAdjust,
     pertExpected: pertExpected,
     typeBucket: typeBucket,
     procedureRole1: procedureRole1,
