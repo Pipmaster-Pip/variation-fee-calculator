@@ -216,13 +216,36 @@ function vcl_register_assets() {
 		true
 	);
 
+	// Shared "RA tasks" station renderer (window.VCL_RA_TASKS), used by the Guided Workflow's
+	// Station C and the Budget line editor so the two stay identical.
+	$ra_tasks_file = VFC_PLUGIN_DIR . 'assets/js/vcl-ra-tasks-ui.js';
+	$ra_tasks_ver  = file_exists( $ra_tasks_file ) ? filemtime( $ra_tasks_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-ra-tasks-ui',
+		VFC_PLUGIN_URL . 'assets/js/vcl-ra-tasks-ui.js',
+		array(),
+		$ra_tasks_ver,
+		true
+	);
+
+	$ra_tasks_style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-ra-tasks.css';
+	$ra_tasks_style_ver  = file_exists( $ra_tasks_style_file ) ? filemtime( $ra_tasks_style_file ) : VFC_VERSION;
+
+	wp_register_style(
+		'vcl-ra-tasks-style',
+		VFC_PLUGIN_URL . 'assets/css/vcl-ra-tasks.css',
+		array( 'vcl-style' ),
+		$ra_tasks_style_ver
+	);
+
 	$workflow_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-workflow.js';
 	$workflow_app_ver  = file_exists( $workflow_app_file ) ? filemtime( $workflow_app_file ) : VFC_VERSION;
 
 	wp_register_script(
 		'vcl-workflow',
 		VFC_PLUGIN_URL . 'assets/js/vcl-workflow.js',
-		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-workload-data', 'vcl-workload-hours', 'vcl-calc-app', 'vcl-submission' ),
+		array( 'vcl-sg-logic', 'vcl-data', 'vcl-timeline', 'vcl-workload-data', 'vcl-workload-hours', 'vcl-calc-app', 'vcl-submission', 'vcl-ra-tasks-ui' ),
 		$workflow_app_ver,
 		true
 	);
@@ -276,7 +299,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-budget',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget.js',
-		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-annual-overrides', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic' ),
+		array( 'vcl-data', 'vcl-calc-app', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-annual-overrides', 'vcl-budget-engine', 'vcl-submission', 'vcl-sg-logic', 'vcl-ra-tasks-ui' ),
 		$budget_app_ver,
 		true
 	);
@@ -400,6 +423,8 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_script( 'vcl-annual-data' );
 	wp_enqueue_script( 'vcl-budget-engine' );
 	wp_enqueue_script( 'vcl-budget' );
+	wp_enqueue_script( 'vcl-ra-tasks-ui' );
+	wp_enqueue_style( 'vcl-ra-tasks-style' );
 	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
 		'calculatorUrl' => $atts['calculator_url'],
 		// Admin-editable via the "Variation Toolbox" section on the plugin's settings
