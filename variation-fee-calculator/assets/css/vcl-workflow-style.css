@@ -954,3 +954,15 @@
 .vcl-app .vcl-wf-ref-mod-row { display: grid; grid-template-columns: 1fr 64px; gap: 8px; padding: 2px 0 2px 12px; color: #27500A; font-size: 12.5px; }
 .vcl-app .vcl-wf-ref-mod-row--2 { grid-template-columns: 1fr 60px 60px; }
 .vcl-app .vcl-wf-ref-mod-row > span:not(:first-child) { text-align: right; white-space: nowrap; }
+
+/* The shared RA-tasks station takes the Guided Workflow's identity colour. */
+.vcl-app .vcl-wf-ratasks {
+  --vcl-rat-accent: var(--workflow);
+  --vcl-rat-accent-bg: var(--workflow-bg);
+  --vcl-rat-accent-tint: var(--workflow-tint);
+  margin-top: 16px;
+}
+/* "Own adjustment" rows inside the "How the RA hours are calculated" box read as an annotation
+   on the benchmark, not as another benchmark row. */
+.vcl-app .vcl-wf-meth-row.is-own .l,
+.vcl-app .vcl-wf-meth-row.is-own .vcl-wf-meth-val { color: var(--history); font-weight: 600; }

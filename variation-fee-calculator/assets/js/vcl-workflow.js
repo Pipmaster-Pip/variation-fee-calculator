@@ -54,6 +54,9 @@
     // Product information module: gate + which documents this change touches.
     piInRA: false,
     piDocs: { smpc: false, leaflet: false, labelling: false, mockups: false },
+    // The user's own per-block hour adjustment (Station "RA tasks" steppers), in whole hours.
+    // Benchmark hours stay untouched; these deltas are added on top by the workload engine.
+    hourAdjust: { core: 0, cmc: 0, pi: 0, compilation: 0 },
     // "How the RA hours are calculated" box open/closed (persists across stations).
     methodOpen: false,
     // "RA-hours reference" lookup box: open/closed + its independent filters.
@@ -155,7 +158,7 @@
       variations: variations,
       procedures: procedures,
       lead: state.worksharingLead,
-      raTasks: { cmc: !!state.cmcInRA, compilation: !!state.compilationInRA, pi: state.piInRA, piDocs: state.piDocs, activeSubstance: state.activeSubstance },
+      raTasks: { cmc: !!state.cmcInRA, compilation: !!state.compilationInRA, pi: state.piInRA, piDocs: state.piDocs, activeSubstance: state.activeSubstance, hourAdjust: state.hourAdjust },
       strengths: { default: state.strengthsDefault, overrides: state.strengthsOverrides },
       specials: { line: state.specials, ws: state.wsSpecials, lead: state.worksharingLeadSpecial },
     };
@@ -494,6 +497,7 @@
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
     state.cmcInRA = false; state.compilationInRA = false;
     state.piInRA = false; state.piDocs = { smpc: false, leaflet: false, labelling: false, mockups: false };
+    state.hourAdjust = { core: 0, cmc: 0, pi: 0, compilation: 0 };
     state.methodOpen = false;
     state.refOpen = false; state.refType = "II"; state.refRole = "national"; state.refStream = "all";
     state.procedure = newProcedure(); state.submission = { grouping: false, mode: null };
@@ -580,91 +584,39 @@
   // alongside the two new modules. Every gate uses the same switch look as the old PI gate: a gate
   // on -> its hours join the RA workload and its own section appears in the "How the RA hours are
   // calculated" box. CMC carries the active substance it depends on.
+  // ---- Station "RA tasks": the four hour blocks, rendered by the SHARED component so this
+  // station and the Budget line editor are one implementation. Hours per block come from the
+  // shared workload engine; the steppers write state.hourAdjust, which submissionFromState()
+  // hands back to that engine.
   function buildStationRA(body) {
     body.appendChild(el("div", "vcl-wf-body__title", "RA tasks"));
-    body.appendChild(el("div", "vcl-wf-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles."));
+    body.appendChild(el("div", "vcl-wf-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles. The hours come from the RA/CMC benchmark; adjust them where your department works differently."));
 
-    // --- CMC dossier (carries the active substance it depends on) ---
-    const cmcHead = el("div", "vcl-wf-flabel", "CMC dossier"); cmcHead.style.marginTop = "16px"; body.appendChild(cmcHead);
-    const cmcGate = el("label", "vcl-wf-switch" + (state.cmcInRA ? " is-on" : ""));
-    cmcGate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
-      + '<span class="vcl-wf-switch__label">CMC dossier written in RA</span>';
-    cmcGate.addEventListener("click", (e) => { e.preventDefault(); state.cmcInRA = !state.cmcInRA; rerender(); });
-    body.appendChild(cmcGate);
-    if (!state.cmcInRA) {
-      body.appendChild(el("p", "vcl-wf-hint", "Off: a separate CMC / quality unit writes the dossier — it adds no RA hours."));
-    } else {
-      body.appendChild(el("p", "vcl-wf-hint", "The dossier effort depends on the active substance:"));
-      buildSubstance(body);
-      if (!state.activeSubstance) body.appendChild(el("p", "vcl-wf-hint", "Pick the active substance to include the CMC dossier hours."));
-    }
+    const host = el("div", "vcl-wf-ratasks");
+    body.appendChild(host);
 
-    // --- Product information (moved from Variations) ---
-    buildProductInfo(body);
-
-    // --- Compilation & submission (docuBridge/Veeva + CESP) ---
-    const compHead = el("div", "vcl-wf-flabel", "Compilation & submission"); compHead.style.marginTop = "16px"; body.appendChild(compHead);
-    const compGate = el("label", "vcl-wf-switch" + (state.compilationInRA ? " is-on" : ""));
-    compGate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
-      + '<span class="vcl-wf-switch__label">Compilation & submission in RA</span>';
-    compGate.addEventListener("click", (e) => { e.preventDefault(); state.compilationInRA = !state.compilationInRA; rerender(); });
-    body.appendChild(compGate);
-    body.appendChild(el("p", "vcl-wf-hint", state.compilationInRA
-      ? "Dossier compilation (docuBridge / Veeva), internal checks and CESP submission are done in RA."
-      : "Off: dossier compilation and submission are handled elsewhere — they add no RA hours."));
-  }
-
-  function buildSubstance(body) {
-    const asHead = el("div", "vcl-wf-flabel", "Active substance");
-    asHead.style.marginTop = "16px";
-    body.appendChild(asHead);
-    const opts = el("div", "vcl-wf-opts");
-    [{ key: "biologic", label: "Biologic" }, { key: "chemical", label: "Chemically-synthesized API" }].forEach((o) => {
-      const chip = el("button", "vcl-wf-opt" + (state.activeSubstance === o.key ? " is-on" : ""), escapeHtml(o.label));
-      chip.type = "button";
-      chip.addEventListener("click", () => { state.activeSubstance = o.key; rerender(); });
-      opts.appendChild(chip);
+    const ra = raEffort();
+    window.VCL_RA_TASKS.render(host, {
+      raTasks: {
+        // A live view onto the workflow state: the component mutates these keys in place, so the
+        // getters/setters below keep state.* as the single source of truth.
+        get cmc() { return state.cmcInRA; }, set cmc(v) { state.cmcInRA = v; },
+        get pi() { return state.piInRA; }, set pi(v) { state.piInRA = v; },
+        get compilation() { return state.compilationInRA; }, set compilation(v) { state.compilationInRA = v; },
+        get activeSubstance() { return state.activeSubstance; }, set activeSubstance(v) { state.activeSubstance = v; },
+        piDocs: state.piDocs,
+        hourAdjust: state.hourAdjust,
+      },
+      blocks: ra ? ra.blocks : null,
+      // The engine's APPLIED deltas: it re-clamps against the current benchmark, so a stored
+      // adjustment can differ from what actually counts. The component shows and steps from these.
+      adjust: ra ? ra.adjust : null,
+      // Namespaces the component's "stepper opened" state. The Guided Workflow renders one
+      // station at a time, but the Budget tool renders one per plan line through the same module.
+      id: "guided-workflow",
+      compact: false,
+      onChange: rerender,
     });
-    // Same 16px rhythm as between the other Station A blocks -- without it the chips sit
-    // flush on the variation box below.
-    opts.style.marginBottom = "16px";
-    body.appendChild(opts);
-  }
-
-  // Product information module (Station "RA tasks"): does RA prepare the product information for
-  // this change, and which documents does it touch? Gate defaults OFF (another department carries
-  // PI -> no RA hours). Chips reuse the green .vcl-wf-opt look; the ticked documents filter which
-  // PI rows count (sumPi), and the hours are shown only in the methodology box, never as pills.
-  function buildProductInfo(body) {
-    const head = el("div", "vcl-wf-flabel", "Product information");
-    head.style.marginTop = "16px";
-    body.appendChild(head);
-
-    const gate = el("label", "vcl-wf-switch" + (state.piInRA ? " is-on" : ""));
-    gate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
-      + '<span class="vcl-wf-switch__label">Product information managed in RA</span>';
-    gate.addEventListener("click", (e) => { e.preventDefault(); state.piInRA = !state.piInRA; rerender(); });
-    body.appendChild(gate);
-
-    if (!state.piInRA) {
-      body.appendChild(el("p", "vcl-wf-hint", "Off: another department prepares the product information — it adds no RA hours."));
-      return;
-    }
-
-    body.appendChild(el("p", "vcl-wf-hint", "Which documents does this change touch?"));
-    const opts = el("div", "vcl-wf-opts");
-    [
-      { key: "smpc", label: "SmPC" },
-      { key: "leaflet", label: "Package leaflet" },
-      { key: "labelling", label: "Labelling" },
-      { key: "mockups", label: "Mock-ups" },
-    ].forEach((o) => {
-      const chip = el("button", "vcl-wf-opt" + (state.piDocs[o.key] ? " is-on" : ""), escapeHtml(o.label));
-      chip.type = "button";
-      chip.addEventListener("click", () => { state.piDocs[o.key] = !state.piDocs[o.key]; rerender(); });
-      opts.appendChild(chip);
-    });
-    body.appendChild(opts);
   }
 
   // Direct type pick when there is no classification code to choose.
@@ -2099,7 +2051,9 @@
   function methSection(title, items, subtotal) {
     const sec = el("div", "vcl-wf-meth-sec");
     sec.appendChild(el("div", "vcl-wf-meth-sec__title", escapeHtml(title)));
-    items.forEach((it) => sec.appendChild(methRow(it.label, raBand(it))));
+    // An own adjustment is the user's own number, not a benchmark row — it carries its own class
+    // so the box can colour it apart (see .vcl-wf-meth-row.is-own).
+    items.forEach((it) => sec.appendChild(methRow(it.label, raBand(it), it.own ? "is-own" : null)));
 
     sec.appendChild(methRow("Subtotal · " + title, raBand(subtotal), "vcl-wf-meth-subtotal"));
     return sec;
