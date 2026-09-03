@@ -115,10 +115,14 @@
     });
     return parts.join("; ");
   }
-  // The user's own hour adjustment for a line, summed across the four blocks. Exported as its own
-  // column so a reader can always separate the benchmark from what was changed by hand.
-  function ownAdjustTotal(sub) {
-    var a = (sub && sub.raTasks && sub.raTasks.hourAdjust) || {};
+  // The user's own hour adjustment for a line, summed across the four blocks -- the engine's own
+  // APPLIED (clamped) deltas from computeLineResult, not the raw stored value: a negative
+  // adjustment is re-clamped so a block's hours never fall below 0, so the raw stored value can
+  // overstate what's actually reflected in the neighbouring Hours (min/max/expected) columns.
+  // Exported as its own column so a reader can always separate the benchmark from what was
+  // changed by hand -- without contradicting those neighbours.
+  function ownAdjustTotal(r) {
+    var a = (r && r.hours && r.hours.adjust) || {};
     return (a.core || 0) + (a.cmc || 0) + (a.pi || 0) + (a.compilation || 0);
   }
   var MODE_LABEL = { worksharing: "Worksharing", superGrouping: "Super-Grouping", annualUpdate: "Annual Update", grouping: "Grouping", single: "Single" };
@@ -2009,7 +2013,7 @@
         line.product || "", MODE_LABEL[mode] || mode, variationsText(sub), proceduresText(sub),
         line.year || "", line.quarter || "", line.probability, r.complete ? Math.round(r.fee * 100) / 100 : 0,
         r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
-        r.complete ? ownAdjustTotal(line.submission) : 0,
+        r.complete ? ownAdjustTotal(r) : 0,
       ]);
     });
     var wsLines = XLSX.utils.aoa_to_sheet(linesRows);

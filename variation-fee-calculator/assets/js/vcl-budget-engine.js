@@ -54,7 +54,7 @@
   function computeLineResult(line, engines) {
     engines = engines || {};
     var sub = (line && line.submission) || {};
-    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0 }, hoursDetail: null, complete: false };
+    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0, adjust: { core: 0, cmc: 0, pi: 0, compilation: 0 } }, hoursDetail: null, complete: false };
     if (!engines.SUB || !engines.computeFees) return out;
     var feeRes = engines.SUB.computeSubmissionFees(sub, engines); // {total, byCountry}
     out.complete = feeRes.total !== null;
@@ -63,7 +63,10 @@
     out.feeByCountry = feeRes.byCountry || [];
     var h = engines.SUB.computeSubmissionHours(sub, engines);
     if (h) {
-      out.hours = { min: h.min, max: h.max, expected: h.expected };
+      // adjust: the engine's own CLAMPED per-block deltas (h.adjust), not the raw stored
+      // sub.raTasks.hourAdjust -- a negative adjustment is re-clamped so hours never go below 0,
+      // so the raw value can overstate what's actually reflected in min/max/expected below.
+      out.hours = { min: h.min, max: h.max, expected: h.expected, adjust: h.adjust || { core: 0, cmc: 0, pi: 0, compilation: 0 } };
       // Itemised breakdown (grouped RA / CMC / Compilation, matching the GW method box) for the
       // expandable per-line detail in the table.
       out.hoursDetail = { items: h.items, sections: h.sections };
