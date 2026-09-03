@@ -1,0 +1,228 @@
+// The "RA tasks" station, rendered once and used by BOTH the Guided Workflow (Station C) and the
+// Budget line editor, so the two can never drift apart. Pure DOM + callbacks: it mutates the
+// raTasks object it is handed and calls ctx.onChange(); it never reads global state and never
+// computes hours itself (the bands come in via ctx.blocks, from VCL_SUBMISSION.computeSubmissionHours).
+// Colours come from the host tool through --vcl-rat-accent* (see vcl-ra-tasks.css).
+// See docs/superpowers/specs/2026-09-03-editable-ra-hours-design.md.
+//
+// ctx fields:
+//   raTasks   (required) the object this module reads/mutates (gates, activeSubstance, piDocs,
+//             hourAdjust).
+//   blocks    (required) { core, cmc, pi, compilation } bands from the benchmark engine, or
+//             falsy/missing entries when a block hasn't been computed yet.
+//   onChange  (required) called after every mutation so the host tool can rerender/persist.
+//   compact   (optional) adds the "is-compact" class for tighter host layouts.
+//   id        (optional) a string identifying which caller/instance is rendering. The module is a
+//             single shared instance reused across the Guided Workflow AND every Budget plan line,
+//             so without an id the "which stepper is expanded" state would leak between them —
+//             opening one plan line's CMC stepper would leave it open for every other plan line and
+//             for the Guided Workflow. Pass a stable per-instance id (e.g. the plan line's id); a
+//             fixed fallback is used when omitted, which is fine for a host that only ever renders
+//             one instance at a time.
+//   adjust    (optional) { core, cmc, pi, compilation } — the engine's own CLAMPED deltas, i.e. the
+//             adjustment actually reflected in ctx.blocks (the engine re-clamps a negative delta so
+//             a block's min never falls below 0, and does so again on every recompute). When a
+//             number is present here for a block, it is used in place of the raw stored value from
+//             raTasks.hourAdjust for that block's stepper display, benchmark hint and disabled
+//             state, so a stored value the engine has since clamped away doesn't show stale numbers
+//             or a wrongly-disabled "−" button. Falls back to the stored raw value when omitted.
+(function (root) {
+  "use strict";
+
+  function el(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  // Whole-hours-ish band: keeps half hours, drops a trailing ".0" (the workbook has 0.5 steps).
+  function num(n) { return (Math.round(n * 10) / 10).toString().replace(/\.0$/, ""); }
+  function bandHtml(b) { return num(b.min) + ' <span class="vcl-rat-dash">–</span> ' + num(b.max) + " h"; }
+
+  var BLOCKS = [
+    { key: "core", name: "RA preparation", always: true, tag: "always included" },
+    { key: "cmc", name: "CMC dossier written in RA", gate: "cmc",
+      onHint: "The dossier effort depends on the active substance:",
+      offHint: "Off: a separate CMC / quality unit writes the dossier — it adds no RA hours." },
+    { key: "pi", name: "Product information", gate: "pi",
+      onHint: "Which documents does this change touch?",
+      offHint: "Off: another department prepares the product information — it adds no RA hours." },
+    { key: "compilation", name: "Compilation & submission", gate: "compilation",
+      onHint: "Dossier compilation (docuBridge / Veeva), internal checks and CESP submission are done in RA.",
+      offHint: "Off: dossier compilation and submission are handled elsewhere — they add no RA hours." },
+  ];
+
+  // Which blocks currently show their stepper. Keyed by "ctx.id|blockKey" (see expandedKey) so state
+  // never leaks between the Guided Workflow and the many Budget plan lines that share this one
+  // module instance. A block whose adjustment is non-zero is always expanded, so this only tracks
+  // the "opened but still at 0" case. Module-level (not per render) so the row survives the host
+  // tool's rerender on every click.
+  var expanded = {};
+
+  function adjustOf(raTasks, key) {
+    var a = raTasks.hourAdjust || (raTasks.hourAdjust = { core: 0, cmc: 0, pi: 0, compilation: 0 });
+    return a[key] || 0;
+  }
+  function setAdjust(raTasks, key, value) {
+    if (!raTasks.hourAdjust) raTasks.hourAdjust = { core: 0, cmc: 0, pi: 0, compilation: 0 };
+    raTasks.hourAdjust[key] = value;
+  }
+  // Prefer the engine's applied (clamped) delta over the raw stored one, when the caller supplies
+  // it — see the ctx.adjust doc comment above for why the two can disagree.
+  function appliedOf(ctx, key) {
+    if (ctx.adjust && typeof ctx.adjust[key] === "number") return ctx.adjust[key];
+    return adjustOf(ctx.raTasks, key);
+  }
+  // Keys the "expanded" map by both the caller's instance id and the block, so opening a stepper in
+  // one context (one Budget plan line, or the Guided Workflow) never affects another.
+  function expandedKey(ctx, blockKey) {
+    return (ctx.id || "default") + "|" + blockKey;
+  }
+
+  function toggle(isOn, label, onClick) {
+    var b = el("button", "vcl-rat-toggle" + (isOn ? " is-on" : ""));
+    b.type = "button";
+    b.setAttribute("aria-pressed", isOn ? "true" : "false");
+    b.setAttribute("aria-label", label);
+    b.innerHTML = '<span class="vcl-rat-toggle__track"><span class="vcl-rat-toggle__thumb"></span></span>';
+    b.addEventListener("click", function (e) { e.preventDefault(); onClick(); });
+    return b;
+  }
+
+  function chips(options, isOn, onPick) {
+    var wrap = el("div", "vcl-rat-chips");
+    options.forEach(function (o) {
+      var c = el("button", "vcl-rat-chip" + (isOn(o.k) ? " is-on" : ""), esc(o.l));
+      c.type = "button";
+      c.addEventListener("click", function () { onPick(o.k); });
+      wrap.appendChild(c);
+    });
+    return wrap;
+  }
+
+  // "Own adjustment  [−] ± 0 h [+]" plus, once non-zero, the untouched benchmark beside it.
+  function adjustRow(ctx, block, base) {
+    var raTasks = ctx.raTasks;
+    // Use the engine's applied (clamped) delta when the caller supplies one, since that's what
+    // ctx.blocks actually reflects; the raw stored value can be stale (see ctx.adjust doc above).
+    var d = appliedOf(ctx, block.key);
+    var row = el("div", "vcl-rat-adj");
+    row.appendChild(el("span", "vcl-rat-adj__label", "Own adjustment"));
+
+    var st = el("span", "vcl-rat-stepper");
+    // The lowest delta that still leaves the block at 0 h or more; mirrors the engine's clamp.
+    var minDelta = base ? -base.min + d : -Infinity;
+
+    var minus = el("button", null, "&minus;");
+    minus.type = "button";
+    minus.setAttribute("aria-label", "Decrease " + block.name + " by one hour");
+    minus.disabled = base ? (d <= minDelta) : false;
+    minus.addEventListener("click", function () {
+      // Written value is derived from the applied delta, not the (possibly stale) raw one, so a
+      // stored value the engine has since clamped away heals itself on the next click.
+      setAdjust(raTasks, block.key, d - 1);
+      ctx.onChange();
+    });
+
+    var val = el("span", "vcl-rat-stepper__val" + (d === 0 ? " is-zero" : ""),
+      d === 0 ? "&pm; 0 h" : (d > 0 ? "+ " : "&minus; ") + Math.abs(d) + " h");
+
+    var plus = el("button", null, "+");
+    plus.type = "button";
+    plus.setAttribute("aria-label", "Increase " + block.name + " by one hour");
+    plus.addEventListener("click", function () {
+      setAdjust(raTasks, block.key, d + 1);
+      ctx.onChange();
+    });
+
+    st.appendChild(minus); st.appendChild(val); st.appendChild(plus);
+    row.appendChild(st);
+
+    if (d !== 0 && base) {
+      row.appendChild(el("span", "vcl-rat-adj__base",
+        "Benchmark " + num(base.min - d) + " – " + num(base.max - d) + " h"));
+    }
+    return row;
+  }
+
+  function adjustLink(ctx, block) {
+    var row = el("div", "vcl-rat-adj");
+    var b = el("button", "vcl-rat-link", "Adjust these hours");
+    b.type = "button";
+    b.addEventListener("click", function () { expanded[expandedKey(ctx, block.key)] = true; ctx.onChange(); });
+    row.appendChild(b);
+    return row;
+  }
+
+  function render(host, ctx) {
+    host.innerHTML = "";
+    var rt = ctx.raTasks;
+    var wrap = el("div", "vcl-rat" + (ctx.compact ? " is-compact" : ""));
+
+    BLOCKS.forEach(function (block) {
+      var on = block.always ? true : !!rt[block.gate];
+      var base = (ctx.blocks && ctx.blocks[block.key]) || null;
+      var card = el("div", "vcl-rat-block" + (block.always ? " is-core" : "") + (on ? "" : " is-off"));
+
+      var top = el("div", "vcl-rat-block__top");
+      var id = el("div", "vcl-rat-block__id");
+      if (!block.always) {
+        id.appendChild(toggle(on, block.name, function () { rt[block.gate] = !rt[block.gate]; ctx.onChange(); }));
+      }
+      id.appendChild(el("span", "vcl-rat-block__name", esc(block.name)));
+      if (block.tag) id.appendChild(el("span", "vcl-rat-tag", esc(block.tag)));
+      top.appendChild(id);
+      top.appendChild(el("span", "vcl-rat-hrs" + (on && base ? "" : " is-none"),
+        on ? (base ? bandHtml(base) : "—") : "not in RA"));
+      card.appendChild(top);
+
+      if (block.always) {
+        card.appendChild(el("p", "vcl-rat-hint", "Based on your variations &amp; procedures — including any grouping, worksharing or super-grouping."));
+      } else {
+        card.appendChild(el("p", "vcl-rat-hint", on ? esc(block.onHint) : esc(block.offHint)));
+      }
+
+      if (on && block.key === "cmc") {
+        card.appendChild(chips(
+          [{ k: "biologic", l: "Biologic" }, { k: "chemical", l: "Chemically-synthesized API" }],
+          function (k) { return rt.activeSubstance === k; },
+          function (k) { rt.activeSubstance = k; ctx.onChange(); }));
+        if (!rt.activeSubstance) {
+          card.appendChild(el("p", "vcl-rat-hint", "Pick the active substance to include the CMC dossier hours."));
+        }
+      }
+      if (on && block.key === "pi") {
+        // piDocs keys MUST match the workload engine's PI filter (smpc / leaflet / labelling /
+        // mockups), consumed via sub.raTasks.piDocs in vcl-submission.js.
+        card.appendChild(chips(
+          [{ k: "smpc", l: "SmPC" }, { k: "leaflet", l: "Package leaflet" },
+           { k: "labelling", l: "Labelling" }, { k: "mockups", l: "Mock-ups" }],
+          function (k) { return !!(rt.piDocs && rt.piDocs[k]); },
+          function (k) {
+            if (!rt.piDocs) rt.piDocs = {};
+            rt.piDocs[k] = !rt.piDocs[k];
+            ctx.onChange();
+          }));
+      }
+
+      if (on) {
+        var d = appliedOf(ctx, block.key);
+        if (d === 0 && !expanded[expandedKey(ctx, block.key)]) card.appendChild(adjustLink(ctx, block));
+        else card.appendChild(adjustRow(ctx, block, base));
+      }
+
+      wrap.appendChild(card);
+    });
+
+    host.appendChild(wrap);
+  }
+
+  var api = { render: render };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  if (root) root.VCL_RA_TASKS = api;
+})(typeof window !== "undefined" ? window : null);

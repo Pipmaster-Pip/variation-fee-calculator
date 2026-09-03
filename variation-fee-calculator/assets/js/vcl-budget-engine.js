@@ -10,13 +10,28 @@
   // A default Submission (see docs/superpowers/specs/2026-08-05-budget-submission-model-design.md
   // and vcl-submission.js's header) — the shape VCL_SUBMISSION reads. `specials` MUST use the real
   // { line, ws, lead } shape (not `{}`): computeSubmissionFees dereferences sub.specials.line/.ws/.lead.
+  // The user's own per-block hour adjustments (Station "RA tasks" steppers), validated: exactly the
+  // four known keys, whole hours, negatives allowed. Anything else recovers to 0 rather than
+  // throwing — a hand-edited or older localStorage plan must still load.
+  var HOUR_ADJUST_KEYS = ["core", "cmc", "pi", "compilation"];
+  function normalizeHourAdjust(raw) {
+    raw = (raw && typeof raw === "object") ? raw : {};
+    var out = {};
+    HOUR_ADJUST_KEYS.forEach(function (k) {
+      var v = raw[k];
+      out[k] = (typeof v === "number" && isFinite(v)) ? Math.round(v) : 0;
+    });
+    return out;
+  }
+
   function emptySubmission() {
     return {
       mode: null,
       variations: [],
       procedures: [{ kind: "national", nat: null, rms: null, cms: [] }],
       lead: null,
-      raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+      raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null,
+                 hourAdjust: normalizeHourAdjust(null) },
       strengths: { default: 1, overrides: {} },
       specials: { line: {}, ws: {}, lead: null },
     };
@@ -39,7 +54,7 @@
   function computeLineResult(line, engines) {
     engines = engines || {};
     var sub = (line && line.submission) || {};
-    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0 }, hoursDetail: null, complete: false };
+    var out = { fee: 0, feeByCountry: [], hours: { min: 0, max: 0, expected: 0, adjust: { core: 0, cmc: 0, pi: 0, compilation: 0 } }, hoursDetail: null, complete: false };
     if (!engines.SUB || !engines.computeFees) return out;
     var feeRes = engines.SUB.computeSubmissionFees(sub, engines); // {total, byCountry}
     out.complete = feeRes.total !== null;
@@ -48,7 +63,10 @@
     out.feeByCountry = feeRes.byCountry || [];
     var h = engines.SUB.computeSubmissionHours(sub, engines);
     if (h) {
-      out.hours = { min: h.min, max: h.max, expected: h.expected };
+      // adjust: the engine's own CLAMPED per-block deltas (h.adjust), not the raw stored
+      // sub.raTasks.hourAdjust -- a negative adjustment is re-clamped so hours never go below 0,
+      // so the raw value can overstate what's actually reflected in min/max/expected below.
+      out.hours = { min: h.min, max: h.max, expected: h.expected, adjust: h.adjust || { core: 0, cmc: 0, pi: 0, compilation: 0 } };
       // Itemised breakdown (grouped RA / CMC / Compilation, matching the GW method box) for the
       // expandable per-line detail in the table.
       out.hoursDetail = { items: h.items, sections: h.sections };
@@ -110,6 +128,7 @@
       cmc: !!m.cmc, compilation: !!m.compilation, pi: !!m.pi,
       piDocs: (raw && raw.piDocs && typeof raw.piDocs === "object") ? raw.piDocs : {},
       activeSubstance: (raw && raw.activeSubstance) || null,
+      hourAdjust: normalizeHourAdjust(raw && raw.hourAdjust),
     };
   }
 
@@ -151,8 +170,10 @@
       raTasks: (raw.raTasks && typeof raw.raTasks === "object")
         ? { cmc: !!raw.raTasks.cmc, compilation: !!raw.raTasks.compilation, pi: !!raw.raTasks.pi,
             piDocs: (raw.raTasks.piDocs && typeof raw.raTasks.piDocs === "object") ? raw.raTasks.piDocs : {},
-            activeSubstance: raw.raTasks.activeSubstance || null }
-        : { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+            activeSubstance: raw.raTasks.activeSubstance || null,
+            hourAdjust: normalizeHourAdjust(raw.raTasks.hourAdjust) }
+        : { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null,
+            hourAdjust: normalizeHourAdjust(null) },
       strengths: normalizeStrengths(raw.strengths),
       specials: { line: {}, ws: {}, lead: null },
     };
@@ -389,6 +410,7 @@
   var api = {
     newLine: newLine,
     emptySubmission: emptySubmission,
+    normalizeSubmission: normalizeSubmission,
     computeLineResult: computeLineResult,
     computeRollup: computeRollup,
     computeFte: computeFte,

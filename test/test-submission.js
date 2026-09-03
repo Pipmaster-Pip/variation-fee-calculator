@@ -16,6 +16,11 @@ function eq(a, b, msg) {
   console.log((ok ? "  PASS " : "  FAIL ") + msg + (ok ? "" : " — expected " + JSON.stringify(b) + ", got " + JSON.stringify(a)));
   if (!ok) failures++;
 }
+function approx(a, b, msg) {
+  var ok = Math.abs(a - b) < 1e-9;
+  console.log((ok ? "  PASS " : "  FAIL ") + msg + (ok ? "" : " — expected " + b + ", got " + a));
+  if (!ok) failures++;
+}
 var engines = { sgLogic: SG, workload: WLH, workloadData: HD };
 
 // helper: build a submission
@@ -103,6 +108,31 @@ eq({ min: h.min, max: h.max, expected: h.expected },
    "hours match a direct workload-engine call with the equivalent sel");
 eq(!!h.sections && !!h.parts, true, "hours result carries the transparency-box superset (sections, parts)");
 eq(SUB.computeSubmissionHours(mk({ variations: [] }), engines), null, "hours: no variation → null");
+
+// --- Hour adjustments travel from Submission.raTasks.hourAdjust into the hours result. ---------
+function subWithAdjust(hourAdjust) {
+  return {
+    mode: null,
+    variations: [{ code: null, variantId: undefined, type: "IB" }],
+    procedures: [{ kind: "national", nat: "DE", rms: null, cms: [] }],
+    lead: null,
+    raTasks: { cmc: true, compilation: false, pi: false, piDocs: {}, activeSubstance: "chemical",
+               hourAdjust: hourAdjust },
+    strengths: { default: 1, overrides: {} },
+    specials: { line: {}, ws: {}, lead: null },
+  };
+}
+var hBase = SUB.computeSubmissionHours(subWithAdjust(null), engines);
+var hAdj = SUB.computeSubmissionHours(subWithAdjust({ core: 4, cmc: -2 }), engines);
+
+approx(hAdj.adjust.core, 4, "submission: +4 h core adjustment reaches the engine");
+approx(hAdj.total.min - hBase.total.min, 2, "submission: +4 core and -2 cmc net +2 on the total min");
+approx(hAdj.blocks.core.min - hBase.blocks.core.min, 4, "submission: blocks.core carries the delta");
+approx(hAdj.expected - hBase.expected, 2, "submission: the PERT expected value moves with the delta");
+
+var hMissing = SUB.computeSubmissionHours(subWithAdjust(undefined), engines);
+eq(hMissing.adjust, { core: 0, cmc: 0, pi: 0, compilation: 0 },
+  "submission: a submission without hourAdjust behaves exactly as before");
 
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);

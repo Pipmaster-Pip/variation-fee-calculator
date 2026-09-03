@@ -38,7 +38,8 @@ eq(BUD.emptySubmission(), {
   variations: [],
   procedures: [{ kind: "national", nat: null, rms: null, cms: [] }],
   lead: null,
-  raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null },
+  raTasks: { cmc: false, compilation: false, pi: false, piDocs: {}, activeSubstance: null,
+             hourAdjust: { core: 0, cmc: 0, pi: 0, compilation: 0 } },
   strengths: { default: 1, overrides: {} },
   specials: { line: {}, ws: {}, lead: null },
 }, "emptySubmission: default shape");
@@ -65,7 +66,9 @@ eq(r.fee, 100, "computeLineResult: fee delegated to computeSubmissionFees");
 eq(r.feeByCountry, [{ cc: "FR", total: 100 }], "computeLineResult: feeByCountry delegated to computeSubmissionFees");
 eq(BUD.computeLineResult(BUD.newLine("l2"), eng).complete, false, "computeLineResult: empty submission is incomplete");
 eq(BUD.computeLineResult(BUD.newLine("l2"), eng).fee, 0, "computeLineResult: incomplete line fee = 0");
-eq(BUD.computeLineResult(BUD.newLine("l2"), eng).hours, { min: 0, max: 0, expected: 0 }, "computeLineResult: incomplete line hours = 0");
+eq(BUD.computeLineResult(BUD.newLine("l2"), eng).hours,
+  { min: 0, max: 0, expected: 0, adjust: { core: 0, cmc: 0, pi: 0, compilation: 0 } },
+  "computeLineResult: incomplete line hours = 0, incl. zeroed adjust");
 
 // computeLineResult must never throw when the engines aren't wired (e.g. SUB/computeFees missing).
 // NOTE: a `line` with NO `.submission` at all (or a bare `{}` submission) is not covered here: the
@@ -80,8 +83,22 @@ eq(BUD.computeLineResult(line, {}).complete, false, "computeLineResult: missing 
 // with the same submission, so this test tracks the delegation, not engine internals (those are
 // already covered by test-additive-workload.js / test-submission.js).
 var directHours = SUB.computeSubmissionHours(line.submission, eng);
-eq(r.hours, { min: directHours.min, max: directHours.max, expected: directHours.expected },
+eq(r.hours, { min: directHours.min, max: directHours.max, expected: directHours.expected, adjust: directHours.adjust },
   "computeLineResult: hours match a direct SUB.computeSubmissionHours call with the same submission");
+
+// r.hours.adjust exposes the engine's own APPLIED (clamped) per-block deltas, not the raw stored
+// sub.raTasks.hourAdjust -- this is what the Budget export's "Hours (own adjustment)" column must
+// read so it reconciles with the neighbouring min/max/expected columns (see task-7 finding).
+// A line with no adjustment at all reports all-zero, not undefined/null.
+eq(r.hours.adjust, { core: 0, cmc: 0, pi: 0, compilation: 0 }, "computeLineResult: no own adjustment -> hours.adjust all zero");
+var lineAdj = BUD.newLine("lAdj");
+lineAdj.submission.variations = [{ type: "II" }];
+lineAdj.submission.procedures = [{ kind: "national", nat: "FR", cms: [] }];
+lineAdj.submission.raTasks.hourAdjust = { core: -1000, cmc: 0, pi: 0, compilation: 0 };
+var rAdj = BUD.computeLineResult(lineAdj, eng);
+var directAdjHours = SUB.computeSubmissionHours(lineAdj.submission, eng);
+eq(rAdj.hours.adjust, directAdjHours.adjust,
+  "computeLineResult: a clamped (huge negative) adjustment is exposed as the engine's APPLIED delta, not the raw -1000");
 
 // --- 3. computeRollup(): sums totals, groups by market (per-country fee, not an even split) and
 //        by product. Product A = single national FR (100). Product B = MRP/DCP RMS DE + CMS FR
@@ -174,6 +191,22 @@ var migrated = BUD.loadPlan(v1Store);
 eq(migrated.version, 3, "loadPlan: migrating from v1 key returns version 3");
 eq(migrated.lines[0].submission.variations, [{ code: "C.I.2", variantId: null, type: "IB" }],
   "loadPlan: v1-key migration normalizes each line via normalizeLine");
+
+// --- Hour adjustments survive save/load and never come back malformed. -------------------------
+eq(BUD.emptySubmission().raTasks.hourAdjust, { core: 0, cmc: 0, pi: 0, compilation: 0 },
+  "budget: a fresh submission starts with zero hour adjustments");
+
+var normKept = BUD.normalizeSubmission({ raTasks: { hourAdjust: { core: 5, cmc: -3 } } });
+eq(normKept.raTasks.hourAdjust, { core: 5, cmc: -3, pi: 0, compilation: 0 },
+  "budget: stored adjustments are kept, missing keys default to 0");
+
+var normJunk = BUD.normalizeSubmission({ raTasks: { hourAdjust: { core: "7", pi: null, cmc: 1.4, nope: 9 } } });
+eq(normJunk.raTasks.hourAdjust, { core: 0, cmc: 1, pi: 0, compilation: 0 },
+  "budget: non-numeric adjustments fall back to 0, fractions round, unknown keys are dropped");
+
+var normLegacy = BUD.normalizeSubmission({ raTasks: { cmc: true } });
+eq(normLegacy.raTasks.hourAdjust, { core: 0, cmc: 0, pi: 0, compilation: 0 },
+  "budget: a plan stored before this feature loads with zero adjustments");
 
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);

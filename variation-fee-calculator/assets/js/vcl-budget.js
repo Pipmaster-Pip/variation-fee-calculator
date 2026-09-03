@@ -115,6 +115,16 @@
     });
     return parts.join("; ");
   }
+  // The user's own hour adjustment for a line, summed across the four blocks -- the engine's own
+  // APPLIED (clamped) deltas from computeLineResult, not the raw stored value: a negative
+  // adjustment is re-clamped so a block's hours never fall below 0, so the raw stored value can
+  // overstate what's actually reflected in the neighbouring Hours (min/max/expected) columns.
+  // Exported as its own column so a reader can always separate the benchmark from what was
+  // changed by hand -- without contradicting those neighbours.
+  function ownAdjustTotal(r) {
+    var a = (r && r.hours && r.hours.adjust) || {};
+    return (a.core || 0) + (a.cmc || 0) + (a.pi || 0) + (a.compilation || 0);
+  }
   var MODE_LABEL = { worksharing: "Worksharing", superGrouping: "Super-Grouping", annualUpdate: "Annual Update", grouping: "Grouping", single: "Single" };
 
   // Inline SVG row-action icons (16px, stroke = currentColor) -- render identically on every
@@ -575,7 +585,9 @@
       if (!items || !items.length) return;
       left.appendChild(el("div", "vcl-bud-detail__sec", escapeHtml(title)));
       items.forEach(function (it) {
-        var row = el("div", "vcl-bud-detail__item");
+        // An own adjustment is the user's own number, not a benchmark row — its own class lets the
+        // breakdown colour it apart (see .vcl-bud-detail__item.is-own).
+        var row = el("div", "vcl-bud-detail__item" + (it.own ? " is-own" : ""));
         row.appendChild(el("span", null, escapeHtml(it.label)));
         row.appendChild(el("span", "vcl-bud-detail__h", hBand(it)));
         left.appendChild(row);
@@ -1772,65 +1784,29 @@
     }
   }
 
-  // ---- Station C: RA tasks ----
-  // A switch-style gate row (track + thumb + label); clicking flips the boolean via onClick.
-  function toggleGate(labelText, on, onClick) {
-    var btn = el("button", "vcl-bud-toggle" + (on ? " is-on" : ""));
-    btn.type = "button";
-    btn.innerHTML = '<span class="vcl-bud-toggle__track"><span class="vcl-bud-toggle__thumb"></span></span>'
-      + '<span class="vcl-bud-toggle__label">' + escapeHtml(labelText) + "</span>";
-    btn.addEventListener("click", function (e) { e.preventDefault(); onClick(); });
-    return btn;
-  }
-
+  // Station "RA tasks" in the line editor — the SAME shared component the Guided Workflow's
+  // Station C uses, in the Budget tool's own colour. One implementation, so the two can't drift.
   function renderStationC(host) {
     var rt = modalState.draft.submission.raTasks;
     host.appendChild(el("div", "vcl-bud-body__title", "RA tasks"));
-    host.appendChild(el("div", "vcl-bud-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles."));
+    host.appendChild(el("div", "vcl-bud-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles. The hours come from the RA/CMC benchmark; adjust them where your department works differently."));
 
-    // --- CMC dossier (+ active substance it depends on) ---
-    host.appendChild(el("div", "vcl-bud-section-label", "CMC dossier"));
-    host.appendChild(toggleGate("CMC dossier written in RA", !!rt.cmc, function () { rt.cmc = !rt.cmc; refreshEditor(); }));
-    if (rt.cmc) {
-      host.appendChild(el("p", "vcl-bud-hint", "The dossier effort depends on the active substance:"));
-      var asChips = el("div", "vcl-bud-chips");
-      [{ k: "chemical", l: "Chemically-synthesized API" }, { k: "biologic", l: "Biologic" }].forEach(function (o) {
-        var chip = el("button", "vcl-bud-chip" + (rt.activeSubstance === o.k ? " is-on" : ""), escapeHtml(o.l));
-        chip.type = "button";
-        chip.addEventListener("click", function () { rt.activeSubstance = o.k; refreshEditor(); });
-        asChips.appendChild(chip);
-      });
-      host.appendChild(asChips);
-      if (!rt.activeSubstance) host.appendChild(el("p", "vcl-bud-hint", "Pick the active substance to include the CMC dossier hours."));
-    } else {
-      host.appendChild(el("p", "vcl-bud-hint", "Off: a separate CMC / quality unit writes the dossier — it adds no RA hours."));
-    }
+    var box = el("div", "vcl-bud-ratasks");
+    host.appendChild(box);
 
-    // --- Product information (+ which documents the change touches) ---
-    host.appendChild(el("div", "vcl-bud-section-label", "Product information"));
-    host.appendChild(toggleGate("Product information managed in RA", !!rt.pi, function () { rt.pi = !rt.pi; refreshEditor(); }));
-    if (rt.pi) {
-      host.appendChild(el("p", "vcl-bud-hint", "Which documents does this change touch?"));
-      var piChips = el("div", "vcl-bud-chips");
-      // piDocs keys MUST match the workload engine's PI filter -- see vcl-workflow.js buildProductInfo
-      // (smpc / leaflet / labelling / mockups), consumed via sub.raTasks.piDocs in vcl-submission.js.
-      [{ k: "smpc", l: "SmPC" }, { k: "leaflet", l: "Package leaflet" }, { k: "labelling", l: "Labelling" }, { k: "mockups", l: "Mock-ups" }].forEach(function (o) {
-        var chip = el("button", "vcl-bud-chip" + (rt.piDocs[o.k] ? " is-on" : ""), escapeHtml(o.l));
-        chip.type = "button";
-        chip.addEventListener("click", function () { rt.piDocs[o.k] = !rt.piDocs[o.k]; refreshEditor(); });
-        piChips.appendChild(chip);
-      });
-      host.appendChild(piChips);
-    } else {
-      host.appendChild(el("p", "vcl-bud-hint", "Off: another department prepares the product information — it adds no RA hours."));
-    }
-
-    // --- Compilation & submission (docuBridge/Veeva + CESP) ---
-    host.appendChild(el("div", "vcl-bud-section-label", "Compilation & submission"));
-    host.appendChild(toggleGate("Compilation & submission in RA", !!rt.compilation, function () { rt.compilation = !rt.compilation; refreshEditor(); }));
-    host.appendChild(el("p", "vcl-bud-hint", rt.compilation
-      ? "Dossier compilation (docuBridge / Veeva), internal checks and CESP submission are done in RA."
-      : "Off: dossier compilation and submission are handled elsewhere — they add no RA hours."));
+    var hours = SUB.computeSubmissionHours(modalState.draft.submission, engines());
+    window.VCL_RA_TASKS.render(box, {
+      raTasks: rt,
+      blocks: hours ? hours.blocks : null,
+      // The engine's APPLIED deltas (it re-clamps against the current benchmark), so the stepper
+      // shows and steps from the value that actually counts.
+      adjust: hours ? hours.adjust : null,
+      // MUST be stable and unique per plan line: the component keys its "stepper opened" state by
+      // this id, so a shared or missing id would leak one line's opened stepper onto every other.
+      id: "budget-line-" + modalState.draft.id,
+      compact: true,
+      onChange: refreshEditor,
+    });
   }
 
   // Emphasised live Fee / RA-hours preview, recomputed from the draft on every rerender via the
@@ -2025,7 +2001,7 @@
 
     // "Fee (EUR)" is renamed to make clear it is the one-off variation fee, distinct from the
     // recurring annual maintenance fees on the second sheet.
-    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "Variation Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)"]];
+    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "Variation Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)", "Hours (own adjustment)"]];
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
@@ -2037,6 +2013,7 @@
         line.product || "", MODE_LABEL[mode] || mode, variationsText(sub), proceduresText(sub),
         line.year || "", line.quarter || "", line.probability, r.complete ? Math.round(r.fee * 100) / 100 : 0,
         r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
+        r.complete ? ownAdjustTotal(r) : 0,
       ]);
     });
     var wsLines = XLSX.utils.aoa_to_sheet(linesRows);

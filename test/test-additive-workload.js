@@ -122,5 +122,61 @@ var cmsCase = WLH.computeAdditiveWorkload(HD, { type: "IA", procedure: "mrpdcp",
 var cmsLine = cmsCase.items.ra.filter(function (it) { return it.label.indexOf("for 5 CMS") !== -1; })[0];
 eq(!!cmsLine, true, "Per-CMS core line reads 'for 5 CMS'");
 
+// --- Hour adjustments: the user's own delta on top of the benchmark. --------------------------
+// Baseline case: Type IB, MRP/DCP with 3 CMS, chemical API, all three optional modules on.
+function withAdjust(hourAdjust) {
+  return WLH.computeAdditiveWorkload(HD, {
+    type: "IB", procedure: "mrpdcp", cmsCount: 3, activeSubstance: "chemical",
+    piDocs: { smpc: true },
+    modules: { pi: true, cmc: true, compilation: true },
+    hourAdjust: hourAdjust,
+  });
+}
+var adjBase = withAdjust(null);
+var adjBaseSec = WLH.composeSections(adjBase);
+
+eq(adjBase.adjust, { core: 0, cmc: 0, pi: 0, compilation: 0 }, "adjust: no input -> all zero");
+approx(adjBase.blocks.core.min, adjBase.raCore.min + adjBase.submissionRa.min,
+  "blocks.core.min = raCore + submissionRa");
+approx(adjBase.blocks.cmc.max, adjBase.cmcCore.max + adjBase.submissionCmc.max,
+  "blocks.cmc.max = cmcCore + submissionCmc");
+
+// +6 h on CMC shifts min AND max by 6, and lands in the CMC section and the total.
+var adjCmc = withAdjust({ cmc: 6 });
+var adjCmcSec = WLH.composeSections(adjCmc);
+approx(adjCmc.adjust.cmc, 6, "adjust: +6 h on CMC is applied as +6");
+approx(adjCmc.blocks.cmc.min - adjBase.blocks.cmc.min, 6, "adjust: +6 h shifts the CMC block min");
+approx(adjCmc.blocks.cmc.max - adjBase.blocks.cmc.max, 6, "adjust: +6 h shifts the CMC block max");
+approx(adjCmcSec.cmc.min - adjBaseSec.cmc.min, 6, "adjust: +6 h shifts the CMC section min");
+approx(adjCmcSec.total.max - adjBaseSec.total.max, 6, "adjust: +6 h shifts the grand total max");
+
+// A negative delta is clamped so the block's min never goes below 0; min and max shift by the
+// SAME clamped amount, so the band keeps its width.
+var hugeNeg = withAdjust({ core: -1000 });
+approx(hugeNeg.adjust.core, -adjBase.blocks.core.min, "adjust: negative delta clamps at -min");
+approx(hugeNeg.blocks.core.min, 0, "adjust: clamped negative leaves the block min at 0");
+approx(hugeNeg.blocks.core.max - hugeNeg.blocks.core.min,
+  adjBase.blocks.core.max - adjBase.blocks.core.min, "adjust: clamping keeps the band width");
+
+// A switched-off block ignores its stored adjustment entirely.
+var offAdj = WLH.computeAdditiveWorkload(HD, {
+  type: "IB", procedure: "national", modules: { pi: false, cmc: false, compilation: false },
+  hourAdjust: { cmc: 12, pi: 5, compilation: 3 },
+});
+eq({ cmc: offAdj.adjust.cmc, pi: offAdj.adjust.pi, compilation: offAdj.adjust.compilation },
+  { cmc: 0, pi: 0, compilation: 0 }, "adjust: gates off -> stored adjustments contribute nothing");
+
+// Each non-zero adjustment shows as its own itemised line, tagged own:true.
+var ownRa = adjCmc.items.cmc.filter(function (i) { return i.own; });
+eq(ownRa.length, 1, "adjust: CMC delta adds exactly one own:true item line");
+eq({ label: ownRa[0].label, min: ownRa[0].min, max: ownRa[0].max },
+  { label: "Own adjustment", min: 6, max: 6 }, "adjust: CMC item line is labelled and carries the delta");
+var adjBoth = withAdjust({ core: 3, pi: -2 });
+var raOwn = adjBoth.items.ra.filter(function (i) { return i.own; }).map(function (i) { return i.label; });
+eq(raOwn, ["Own adjustment · RA preparation", "Own adjustment · Product information"],
+  "adjust: the two RA-section deltas are labelled apart");
+eq(adjBase.items.ra.filter(function (i) { return i.own; }).length, 0,
+  "adjust: zero delta adds no item line");
+
 console.log("\n" + (failures ? failures + " FAILURE(S)" : "All tests passed."));
 process.exit(failures ? 1 : 0);

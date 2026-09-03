@@ -54,6 +54,12 @@
     // Product information module: gate + which documents this change touches.
     piInRA: false,
     piDocs: { smpc: false, leaflet: false, labelling: false, mockups: false },
+    // The user's own per-block hour adjustment (Station "RA tasks" steppers), in whole hours.
+    // Benchmark hours stay untouched; these deltas are added on top by the workload engine.
+    hourAdjust: { core: 0, cmc: 0, pi: 0, compilation: 0 },
+    // Summary: the RA-workload breakdown ("Show hours by department") open/closed. Mirrors
+    // state.summaryShowVariations, so both disclosures in the card behave the same way.
+    summaryShowHours: false,
     // "How the RA hours are calculated" box open/closed (persists across stations).
     methodOpen: false,
     // "RA-hours reference" lookup box: open/closed + its independent filters.
@@ -155,7 +161,7 @@
       variations: variations,
       procedures: procedures,
       lead: state.worksharingLead,
-      raTasks: { cmc: !!state.cmcInRA, compilation: !!state.compilationInRA, pi: state.piInRA, piDocs: state.piDocs, activeSubstance: state.activeSubstance },
+      raTasks: { cmc: !!state.cmcInRA, compilation: !!state.compilationInRA, pi: state.piInRA, piDocs: state.piDocs, activeSubstance: state.activeSubstance, hourAdjust: state.hourAdjust },
       strengths: { default: state.strengthsDefault, overrides: state.strengthsOverrides },
       specials: { line: state.specials, ws: state.wsSpecials, lead: state.worksharingLeadSpecial },
     };
@@ -494,6 +500,7 @@
     state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; state.typeOnly = null; state.activeSubstance = null;
     state.cmcInRA = false; state.compilationInRA = false;
     state.piInRA = false; state.piDocs = { smpc: false, leaflet: false, labelling: false, mockups: false };
+    state.hourAdjust = { core: 0, cmc: 0, pi: 0, compilation: 0 };
     state.methodOpen = false;
     state.refOpen = false; state.refType = "II"; state.refRole = "national"; state.refStream = "all";
     state.procedure = newProcedure(); state.submission = { grouping: false, mode: null };
@@ -580,91 +587,39 @@
   // alongside the two new modules. Every gate uses the same switch look as the old PI gate: a gate
   // on -> its hours join the RA workload and its own section appears in the "How the RA hours are
   // calculated" box. CMC carries the active substance it depends on.
+  // ---- Station "RA tasks": the four hour blocks, rendered by the SHARED component so this
+  // station and the Budget line editor are one implementation. Hours per block come from the
+  // shared workload engine; the steppers write state.hourAdjust, which submissionFromState()
+  // hands back to that engine.
   function buildStationRA(body) {
     body.appendChild(el("div", "vcl-wf-body__title", "RA tasks"));
-    body.appendChild(el("div", "vcl-wf-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles."));
+    body.appendChild(el("div", "vcl-wf-body__sub", "Which activities fall to RA here? Core RA preparation is always included — switch on any extra module your department also handles. The hours come from the RA/CMC benchmark; adjust them where your department works differently."));
 
-    // --- CMC dossier (carries the active substance it depends on) ---
-    const cmcHead = el("div", "vcl-wf-flabel", "CMC dossier"); cmcHead.style.marginTop = "16px"; body.appendChild(cmcHead);
-    const cmcGate = el("label", "vcl-wf-switch" + (state.cmcInRA ? " is-on" : ""));
-    cmcGate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
-      + '<span class="vcl-wf-switch__label">CMC dossier written in RA</span>';
-    cmcGate.addEventListener("click", (e) => { e.preventDefault(); state.cmcInRA = !state.cmcInRA; rerender(); });
-    body.appendChild(cmcGate);
-    if (!state.cmcInRA) {
-      body.appendChild(el("p", "vcl-wf-hint", "Off: a separate CMC / quality unit writes the dossier — it adds no RA hours."));
-    } else {
-      body.appendChild(el("p", "vcl-wf-hint", "The dossier effort depends on the active substance:"));
-      buildSubstance(body);
-      if (!state.activeSubstance) body.appendChild(el("p", "vcl-wf-hint", "Pick the active substance to include the CMC dossier hours."));
-    }
+    const host = el("div", "vcl-wf-ratasks");
+    body.appendChild(host);
 
-    // --- Product information (moved from Variations) ---
-    buildProductInfo(body);
-
-    // --- Compilation & submission (docuBridge/Veeva + CESP) ---
-    const compHead = el("div", "vcl-wf-flabel", "Compilation & submission"); compHead.style.marginTop = "16px"; body.appendChild(compHead);
-    const compGate = el("label", "vcl-wf-switch" + (state.compilationInRA ? " is-on" : ""));
-    compGate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
-      + '<span class="vcl-wf-switch__label">Compilation & submission in RA</span>';
-    compGate.addEventListener("click", (e) => { e.preventDefault(); state.compilationInRA = !state.compilationInRA; rerender(); });
-    body.appendChild(compGate);
-    body.appendChild(el("p", "vcl-wf-hint", state.compilationInRA
-      ? "Dossier compilation (docuBridge / Veeva), internal checks and CESP submission are done in RA."
-      : "Off: dossier compilation and submission are handled elsewhere — they add no RA hours."));
-  }
-
-  function buildSubstance(body) {
-    const asHead = el("div", "vcl-wf-flabel", "Active substance");
-    asHead.style.marginTop = "16px";
-    body.appendChild(asHead);
-    const opts = el("div", "vcl-wf-opts");
-    [{ key: "biologic", label: "Biologic" }, { key: "chemical", label: "Chemically-synthesized API" }].forEach((o) => {
-      const chip = el("button", "vcl-wf-opt" + (state.activeSubstance === o.key ? " is-on" : ""), escapeHtml(o.label));
-      chip.type = "button";
-      chip.addEventListener("click", () => { state.activeSubstance = o.key; rerender(); });
-      opts.appendChild(chip);
+    const ra = raEffort();
+    window.VCL_RA_TASKS.render(host, {
+      raTasks: {
+        // A live view onto the workflow state: the component mutates these keys in place, so the
+        // getters/setters below keep state.* as the single source of truth.
+        get cmc() { return state.cmcInRA; }, set cmc(v) { state.cmcInRA = v; },
+        get pi() { return state.piInRA; }, set pi(v) { state.piInRA = v; },
+        get compilation() { return state.compilationInRA; }, set compilation(v) { state.compilationInRA = v; },
+        get activeSubstance() { return state.activeSubstance; }, set activeSubstance(v) { state.activeSubstance = v; },
+        piDocs: state.piDocs,
+        hourAdjust: state.hourAdjust,
+      },
+      blocks: ra ? ra.blocks : null,
+      // The engine's APPLIED deltas: it re-clamps against the current benchmark, so a stored
+      // adjustment can differ from what actually counts. The component shows and steps from these.
+      adjust: ra ? ra.adjust : null,
+      // Namespaces the component's "stepper opened" state. The Guided Workflow renders one
+      // station at a time, but the Budget tool renders one per plan line through the same module.
+      id: "guided-workflow",
+      compact: false,
+      onChange: rerender,
     });
-    // Same 16px rhythm as between the other Station A blocks -- without it the chips sit
-    // flush on the variation box below.
-    opts.style.marginBottom = "16px";
-    body.appendChild(opts);
-  }
-
-  // Product information module (Station "RA tasks"): does RA prepare the product information for
-  // this change, and which documents does it touch? Gate defaults OFF (another department carries
-  // PI -> no RA hours). Chips reuse the green .vcl-wf-opt look; the ticked documents filter which
-  // PI rows count (sumPi), and the hours are shown only in the methodology box, never as pills.
-  function buildProductInfo(body) {
-    const head = el("div", "vcl-wf-flabel", "Product information");
-    head.style.marginTop = "16px";
-    body.appendChild(head);
-
-    const gate = el("label", "vcl-wf-switch" + (state.piInRA ? " is-on" : ""));
-    gate.innerHTML = '<span class="vcl-wf-switch__track"><span class="vcl-wf-switch__thumb"></span></span>'
-      + '<span class="vcl-wf-switch__label">Product information managed in RA</span>';
-    gate.addEventListener("click", (e) => { e.preventDefault(); state.piInRA = !state.piInRA; rerender(); });
-    body.appendChild(gate);
-
-    if (!state.piInRA) {
-      body.appendChild(el("p", "vcl-wf-hint", "Off: another department prepares the product information — it adds no RA hours."));
-      return;
-    }
-
-    body.appendChild(el("p", "vcl-wf-hint", "Which documents does this change touch?"));
-    const opts = el("div", "vcl-wf-opts");
-    [
-      { key: "smpc", label: "SmPC" },
-      { key: "leaflet", label: "Package leaflet" },
-      { key: "labelling", label: "Labelling" },
-      { key: "mockups", label: "Mock-ups" },
-    ].forEach((o) => {
-      const chip = el("button", "vcl-wf-opt" + (state.piDocs[o.key] ? " is-on" : ""), escapeHtml(o.label));
-      chip.type = "button";
-      chip.addEventListener("click", () => { state.piDocs[o.key] = !state.piDocs[o.key]; rerender(); });
-      opts.appendChild(chip);
-    });
-    body.appendChild(opts);
   }
 
   // Direct type pick when there is no classification code to choose.
@@ -1526,6 +1481,59 @@
     return "";
   }
 
+  // The RA-workload breakdown revealed by "Show hours by department" in the summary card -- the
+  // same disclosure pattern as "Show codes & descriptions" one row above. Lists one line per
+  // department block with its min-max band, in the order Station "RA tasks" shows them, and only
+  // those actually handled in RA. Deliberately NO per-block expected value: the headline figure is
+  // a right-skewed PERT expectation over the WHOLE submission, and four separate expectations
+  // would not add up to it -- they would be an invented number. `ra.blocks` and `ra.adjust` come
+  // from the shared workload engine (see vcl-workload-hours.js).
+  function buildSummaryHours(card, ra) {
+    if (!ra || !ra.blocks) return;
+    const list = el("div", "vcl-wf-sum__hlist");
+    // Which selection drives a block's hours, shown muted behind its name so the figure can be
+    // traced back to the decision that produced it.
+    const piNames = { smpc: "SmPC", leaflet: "Package leaflet", labelling: "Labelling", mockups: "Mock-ups" };
+    const piPicked = Object.keys(piNames).filter((k) => state.piDocs && state.piDocs[k]).map((k) => piNames[k]);
+    const blocks = [
+      { key: "core", label: "RA preparation", on: true },
+      { key: "cmc", label: "CMC dossier", on: !!state.cmcInRA,
+        note: state.activeSubstance === "biologic" ? "biologic"
+          : (state.activeSubstance === "chemical" ? "chemically-synthesized API" : "") },
+      { key: "pi", label: "Product information", on: !!state.piInRA, note: piPicked.join(", ") },
+      { key: "compilation", label: "Compilation & submission", on: !!state.compilationInRA },
+    ];
+    let shown = 0;
+    blocks.forEach((b) => {
+      if (!b.on) return;
+      const band = ra.blocks[b.key];
+      if (!band) return;
+      shown++;
+      const it = el("div", "vcl-wf-sum__hitem");
+      const note = b.note ? ` <span class="vcl-wf-sum__muted">&middot; ${escapeHtml(b.note)}</span>` : "";
+      // The band shown is the benchmark alone; an own adjustment gets its own line below it, so
+      // the two never merge into one figure the reader cannot take apart.
+      const own = (ra.adjust && ra.adjust[b.key]) || 0;
+      const bench = { min: band.min - own, max: band.max - own };
+      it.innerHTML = `<span class="vcl-wf-sum__hl">${escapeHtml(b.label)}${note}</span>`
+        + `<span class="vcl-wf-sum__hv">${escapeHtml(raBand(bench))}</span>`;
+      list.appendChild(it);
+      if (own) {
+        const oi = el("div", "vcl-wf-sum__hitem vcl-wf-sum__hitem--own");
+        oi.innerHTML = `<span class="vcl-wf-sum__hl">Own adjustment</span>`
+          + `<span class="vcl-wf-sum__hv">${own > 0 ? "+" : "−"} ${fmtNum(Math.abs(own))} h</span>`;
+        list.appendChild(oi);
+      }
+    });
+    if (!shown) return;
+    card.appendChild(list);
+    const off = blocks.filter((b) => !b.on).map((b) => b.label);
+    const note = el("p", "vcl-wf-sum__hnote");
+    note.innerHTML = (off.length ? escapeHtml(off.join(" and ")) + (off.length > 1 ? " are" : " is") + " not handled in RA — they add no hours. " : "")
+      + "The headline figure is the expected value across the whole submission, not the sum of separate per-department expectations.";
+    card.appendChild(note);
+  }
+
   // Closing recap of the whole path -- the "you are here, and this is the plan" card.
   function buildSummaryCard(body, grand, anyCountries) {
     const card = el("div", "vcl-wf-sum");
@@ -1552,7 +1560,7 @@
       vars.forEach((v) => { const b = feeBucket(v.type); if (b) counts[b]++; });
       const bits = ["IA", "IB", "II"].filter((t) => counts[t] > 0).map((t) => counts[t] + " × " + t);
       const row = line("Variations",
-        `<span class="vcl-wf-sum__tag">Grouping</span> ${vars.length} variations <span class="vcl-wf-sum__muted">(${escapeHtml(bits.join(" · "))})</span>`
+        `<span class="vcl-wf-sum__mode">Grouping</span><span class="vcl-wf-sum__sep">·</span>${vars.length} variations <span class="vcl-wf-sum__muted">(${escapeHtml(bits.join(" · "))})</span>`
         + ` <button type="button" class="vcl-wf-sum__toggle" data-sum-toggle>${state.summaryShowVariations ? "Hide" : "Show"} codes &amp; descriptions</button>`);
       const tg = row.querySelector("[data-sum-toggle]");
       if (tg) tg.addEventListener("click", () => { state.summaryShowVariations = !state.summaryShowVariations; rerender(); });
@@ -1581,7 +1589,7 @@
       const leadBit = state.worksharingLead
         ? ` led by <strong>${escapeHtml(cd.nameOf[state.worksharingLead] || state.worksharingLead)}</strong> <span class="vcl-wf-sum__muted">·</span>`
         : "";
-      line("Procedures", `<span class="vcl-wf-sum__tag">${sgActive() ? "Super-Grouping" : "Worksharing"}</span>${leadBit} ${procs.length} procedures`);
+      line("Procedures", `<span class="vcl-wf-sum__mode">${sgActive() ? "Super-Grouping" : "Worksharing"}</span><span class="vcl-wf-sum__sep">·</span>${leadBit}${leadBit ? " " : ""}${procs.length} procedures`);
       const plist = el("div", "vcl-wf-sum__plist");
       procs.forEach((p, i) => {
         const it = el("div", "vcl-wf-sum__pitem");
@@ -1593,7 +1601,7 @@
 
     // 3b) Annual Update / Super-Grouping filing window (mode + implementation-driven dates).
     if (annualUpdateActive()) {
-      line("Mode", `<span class="vcl-wf-sum__tag">${sgActive() ? "Super-Grouping" : "Annual Update"}</span>`);
+      line("Mode", `<span class="vcl-wf-sum__mode">${sgActive() ? "Super-Grouping" : "Annual Update"}</span>`);
       const auEarliest = annualUpdateEarliestDate();
       const auDl = annualUpdateDeadline();
       const auEarlyM = (WD.annualUpdate && WD.annualUpdate.earliestMonths) || 9;
@@ -1609,17 +1617,26 @@
     const sch = workflowSchedule();
     if (sch) {
       const sd = state.submissionDate;
-      const dm = `${sch.subToEop} days, ${fmtMonths(sch.subToEop)} months`;
+      // Duration first: the months are what the reader is after, the dates are the evidence.
+      const months = `<span class="vcl-wf-sum__fig">${escapeHtml(fmtMonths(sch.subToEop))} months</span>`;
+      const days = `<span class="vcl-wf-sum__muted">(${sch.subToEop} days)</span>`;
       if (sd) {
-        line("Timeline", `${escapeHtml(fmtDate(addDays(sd, 0)))} &rarr; EOP ${escapeHtml(fmtDate(addDays(sd, sch.subToEop)))} <span class="vcl-wf-sum__muted">(${escapeHtml(dm)})</span>`);
+        line("Timeline", `${months} ${days} <span class="vcl-wf-sum__sep">·</span>Submission ${escapeHtml(fmtDate(addDays(sd, 0)))} &rarr; EOP ${escapeHtml(fmtDate(addDays(sd, sch.subToEop)))}`);
       } else {
-        line("Timeline", `Submission &rarr; EOP <strong>${sch.subToEop} days</strong> <span class="vcl-wf-sum__muted">(${escapeHtml(fmtMonths(sch.subToEop))} months) — add a date in step C</span>`);
+        line("Timeline", `${months} ${days} <span class="vcl-wf-sum__sep">·</span><span class="vcl-wf-sum__muted">Submission &rarr; EOP — add a date in step C</span>`);
       }
     }
 
     const ra = raEffort();
-    if (ra) line("RA workload", escapeHtml(raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")"));
-    if (anyCountries) line("Total fees", `<strong>${escapeHtml(fmtEUR(grand))}</strong>`);
+    if (ra) {
+      const hrow = line("RA workload",
+        `<span class="vcl-wf-sum__fig">${escapeHtml(raExpectedText(ra))}</span> <span class="vcl-wf-sum__muted">(${escapeHtml(raRangeBare(ra.total))})</span>`
+        + ` <button type="button" class="vcl-wf-sum__toggle" data-sum-hours>${state.summaryShowHours ? "Hide" : "Show"} hours by department</button>`);
+      const htg = hrow.querySelector("[data-sum-hours]");
+      if (htg) htg.addEventListener("click", () => { state.summaryShowHours = !state.summaryShowHours; rerender(); });
+      if (state.summaryShowHours) buildSummaryHours(card, ra);
+    }
+    if (anyCountries) line("Total fees", `<span class="vcl-wf-sum__fig">${escapeHtml(fmtEUR(grand))}</span>`);
 
     // Export link: mirrors the whole summary into a .docx plus the variations table in the
     // three Letter-of-Intent columns (Number / Title / Type). Reuses the existing dashed-green
@@ -1714,7 +1731,14 @@
       children.push(kv("Timeline", [new TextRun(sd ? fmtDate(addDays(sd, 0)) + " → EOP " + fmtDate(addDays(sd, sch.subToEop)) + " (" + sch.subToEop + " days)" : "Submission → EOP " + sch.subToEop + " days")]));
     }
     const ra = raEffort();
-    if (ra) children.push(kv("RA workload", [new TextRun(raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")")]));
+    if (ra) {
+      // Never merge the user's own adjustment silently into the benchmark figure: the reader of
+      // the summary must be able to see that a number was changed by hand.
+      var adjTotal = ra.adjust ? (ra.adjust.core + ra.adjust.cmc + ra.adjust.pi + ra.adjust.compilation) : 0;
+      var raText = raExpectedText(ra) + " (" + raRangeBare(ra.total) + ")";
+      if (adjTotal) raText += " — incl. own adjustment " + (adjTotal > 0 ? "+" : "−") + Math.abs(adjTotal) + " h";
+      children.push(kv("RA workload", [new TextRun(raText)]));
+    }
     if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
 
     // ---- Annual Update / Super-Grouping block (absent for Worksharing and no-mode-selected) ----
@@ -2099,7 +2123,9 @@
   function methSection(title, items, subtotal) {
     const sec = el("div", "vcl-wf-meth-sec");
     sec.appendChild(el("div", "vcl-wf-meth-sec__title", escapeHtml(title)));
-    items.forEach((it) => sec.appendChild(methRow(it.label, raBand(it))));
+    // An own adjustment is the user's own number, not a benchmark row — it carries its own class
+    // so the box can colour it apart (see .vcl-wf-meth-row.is-own).
+    items.forEach((it) => sec.appendChild(methRow(it.label, raBand(it), it.own ? "is-own" : null)));
 
     sec.appendChild(methRow("Subtotal · " + title, raBand(subtotal), "vcl-wf-meth-subtotal"));
     return sec;
