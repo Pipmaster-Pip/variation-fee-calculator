@@ -250,6 +250,9 @@
         compilation: !!sub.raTasks.compilation,    // Station "RA tasks" compilation & submission gate
       },
       piDocs: sub.raTasks.piDocs,                   // which PI documents the change touches (filter)
+      // The user's own per-block hour adjustment (Station "RA tasks" steppers). The engine clamps
+      // and gates it; a submission stored before this feature simply has none.
+      hourAdjust: sub.raTasks.hourAdjust,
       submission: {
         worksharing: { on: wsActive(sub), counts: { "national": wk.national, "MRP/DCP": wk.mrpdcp } },
         grouping: { on: grouped, counts: { "Type IA": gb.IA, "Type IB": gb.IB, "Type II": gb.II } },
@@ -259,6 +262,7 @@
     });
     var sections = engines.workload.composeSections(parts);
     return { parts: parts, items: parts.items, sections: sections, total: sections.total,
+      adjust: parts.adjust, blocks: parts.blocks,
       min: sections.total.min, max: sections.total.max,
       expected: engines.workload.pertExpected(sections.total.min, sections.total.max) };
   }
