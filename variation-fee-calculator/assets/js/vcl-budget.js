@@ -196,8 +196,10 @@
     // While the overlay is open, "top" means the top of the overlay's own scroll area (the card),
     // not the page behind it.
     if (overlayShown && overlayHost) { overlayHost.scrollTop = 0; return; }
-    // Share the toolbox's canonical scroll (offsets the site's fixed nav) when embedded; fall
-    // back to the container in the standalone dev harness.
+    // Share the toolbox's canonical scroll (offsets the site's fixed nav) when embedded, aimed at
+    // the tool's own heading rather than the masthead above it; fall back to the container in the
+    // standalone dev harness.
+    if (window.VCL_APP && window.VCL_APP.scrollToContentTop) { window.VCL_APP.scrollToContentTop(); return; }
     if (window.VCL_APP && window.VCL_APP.scrollToTop) { window.VCL_APP.scrollToTop(); return; }
     if (container && container.scrollIntoView) container.scrollIntoView({ block: "start" });
   }

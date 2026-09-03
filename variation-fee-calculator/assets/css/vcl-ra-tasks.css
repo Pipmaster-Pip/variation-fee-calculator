@@ -75,11 +75,13 @@
   font-family: var(--figure); font-variant-numeric: tabular-nums;
 }
 .vcl-app .vcl-rat-stepper {
-  display: inline-flex; align-items: center; background: var(--panel);
+  /* align-items: stretch (not center) so the buttons are exactly as tall as the value cell --
+     with a fixed button height the hover fill left a white strip above and below it. */
+  display: inline-flex; align-items: stretch; background: var(--panel);
   border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
 }
 .vcl-app .vcl-rat-stepper button {
-  font: inherit; font-size: 14px; font-weight: 600; line-height: 1; width: 30px; height: 30px;
+  font: inherit; font-size: 14px; font-weight: 600; line-height: 1; width: 30px;
   padding: 0; margin: 0; display: inline-flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: var(--vcl-rat-accent); cursor: pointer;
 }
@@ -87,7 +89,7 @@
 .vcl-app .vcl-rat-stepper button:disabled { color: var(--ink-faint); cursor: not-allowed; background: transparent; }
 .vcl-app .vcl-rat-stepper button:focus-visible { outline: 2px solid var(--vcl-rat-accent); outline-offset: -2px; }
 .vcl-app .vcl-rat-stepper__val {
-  min-width: 58px; text-align: center; padding: 5px 6px; font-size: 13px; font-weight: 600;
+  min-width: 58px; text-align: center; padding: 7px 6px; font-size: 13px; font-weight: 600;
   font-family: var(--figure); font-variant-numeric: tabular-nums;
   border-left: 1px solid var(--border); border-right: 1px solid var(--border);
 }

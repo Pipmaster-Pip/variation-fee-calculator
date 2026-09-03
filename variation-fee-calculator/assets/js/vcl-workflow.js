@@ -474,12 +474,14 @@
     if (key === "C") return !state.cmcInRA || !!state.activeSubstance; // CMC dossier needs a substance
     return true; // D (Date & Timeline) / E (Fees): no gating
   }
-  // Station changes land the user at the top of the tool again (same behaviour as the
-  // toolbox nav's jumpToTop) -- without this, Next/Back/Start over left the view at the
-  // bottom of the new station.
+  // Station changes land the user at the top of the TOOL -- the "Guided Workflow" heading, not
+  // the toolbox masthead above it. Jumping past the heading makes the reader re-find where they
+  // were; without any jump at all, Next/Back/Start over left the view at the bottom of the new
+  // station.
   function jumpTop() {
     // Share the toolbox's canonical scroll (offsets the site's fixed nav) when embedded; fall
     // back to the container in the standalone dev harness.
+    if (window.VCL_APP && window.VCL_APP.scrollToContentTop) { window.VCL_APP.scrollToContentTop(); return; }
     if (window.VCL_APP && window.VCL_APP.scrollToTop) { window.VCL_APP.scrollToTop(); return; }
     if (container && container.scrollIntoView) container.scrollIntoView({ block: "start", behavior: "auto" });
   }
@@ -1546,8 +1548,9 @@
       return r;
     }
 
-    // 1) Active substance -- first.
-    if (state.activeSubstance) line("Active substance", state.activeSubstance === "biologic" ? "Biologic" : "Chemically-synthesized API");
+    // (The old "Active substance" row is gone: the substance is not a decision of its own, it is
+    // the chip inside the CMC card in Station "RA tasks", and it shows up where it belongs --
+    // behind "CMC dossier" in the RA-workload breakdown below.)
 
     // 2) Variation (single) / Variations (grouped). The old separate Grouping row is folded in here.
     const vars = summaryVariations();

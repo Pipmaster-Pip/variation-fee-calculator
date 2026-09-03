@@ -3694,7 +3694,10 @@
   // the top nav and Classification. Exposed so the embedded tools (Fee Calculator, Guided Workflow,
   // Budget) can share the exact same landing on their own Back/Next/New-calculation transitions,
   // instead of each scrolling to its own container top (which tucks the heading under the site nav).
-  window.VCL_APP = { goTo: goToDestination, scrollToTop: jumpToTop };
+  // scrollToTop stops at the masthead; scrollToContentTop stops at the tool's own heading,
+  // which is what a Back/Next inside a tool wants -- sending the reader back past the
+  // masthead means re-finding where they were.
+  window.VCL_APP = { goTo: goToDestination, scrollToTop: jumpToTop, scrollToContentTop: jumpToContentTop };
 
   // First-load overview: the main destinations as cards in the detail area (each shares its
   // nav identity color).

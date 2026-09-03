@@ -727,7 +727,7 @@ window.VCLCALC = {
     if (typeof appState.step === 'number') appState.feeDataReturnStep = appState.step;
     appState.step = 'feedata';
     render();
-    if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+    if (window.VCL_APP) (window.VCL_APP.scrollToContentTop || window.VCL_APP.scrollToTop)();
   },
   // "Take me back to this tool's own first screen" -- called by the host guide whenever the
   // Variation Fee Calculator tile is clicked (vcl-app.js goToDestination). Without it, clicking
@@ -794,11 +794,12 @@ loadLiveRates();
 function setStep(n) {
   appState.step = n;
   render();
-  // Jump the toolbox heading of the new step back into view. Prefer the host's shared scroll
-  // (lands the masthead just under the site's fixed nav, same as the top nav / Classification);
-  // fall back to the calculator container when the calculator runs standalone (dev harness).
-  if (window.VCL_APP && window.VCL_APP.scrollToTop) {
-    window.VCL_APP.scrollToTop();
+  // Jump the heading of the new step back into view. Prefer the host's shared scroll, aimed at
+  // the tool's own heading rather than the masthead above it -- a step change inside the
+  // calculator should not send the reader back past the tool they are working in. Fall back to
+  // the calculator container when it runs standalone (dev harness).
+  if (window.VCL_APP && (window.VCL_APP.scrollToContentTop || window.VCL_APP.scrollToTop)) {
+    (window.VCL_APP.scrollToContentTop || window.VCL_APP.scrollToTop)();
   } else {
     const appEl = document.getElementById('vclcalc-app');
     if (appEl) {
@@ -2248,7 +2249,7 @@ function renderStepFeeData() {
       backEl.addEventListener('click', () => {
         appState.step = appState.feeDataReturnStep;
         render();
-        if (window.VCL_APP && window.VCL_APP.scrollToTop) window.VCL_APP.scrollToTop();
+        if (window.VCL_APP) (window.VCL_APP.scrollToContentTop || window.VCL_APP.scrollToTop)();
       });
     }
   };
