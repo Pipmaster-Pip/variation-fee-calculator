@@ -6935,13 +6935,38 @@ const PRECISE_SCOPE_GUIDANCE = {
 };
 
 // --- Codes that affect the Product Information (SmPC, labelling or package leaflet) --------
-// Chapter C is PI-relevant by definition (every C code updates the SmPC/labelling/PL), so it
-// isn't listed here entry-by-entry -- the UI shows a standard sentence for it instead. This
-// covers the other chapters, whose entries only sometimes touch PI: identified by scanning
-// ENTRIES' conditions/documentation/notes text for explicit PI/SmPC/labelling/package-leaflet
-// language (2026-09-03).
+// What qualifies (user's regulatory criteria, 2026-09-03) -- an entry is listed when ANY of these
+// holds. Chapter is irrelevant: "all of chapter C is PI by definition" is NOT true (see below).
+//
+//   1. Its documentation carries a position of its own for the product information --
+//      "2. Revised product information.", also worded "Updated…"/"Amendment of…".
+//   2. Its documentation folds the same requirement into a collective position --
+//      "1. Amendment of the relevant section(s) of the dossier, including revised product
+//      information as appropriate."
+//   3. Its CONDITIONS speak of amending the product information -- e.g. Q.IV.1: "The change
+//      should not lead to substantial amendments of the product information." The PI IS changed
+//      there, just not substantially, so it belongs in the list.
+//   4. Its title itself is a change to the SmPC/labelling/leaflet -- only C.4, which carries no
+//      documentation list at all (the UI then shows the generic Type II sentence).
+//
+// What does NOT qualify, and why the earlier, coarser scan got this wrong:
+//   - The generic Type II fallback the UI prints for entries with no documentation list ("…
+//     require a full variation application (assessment report, updated product information, etc.)")
+//     is interface text, not data about the entry. C.4 is in the list for its title, not for that.
+//   - Chapter C is NOT wholly PI-relevant: C.8 (pharmacovigilance system summary) and C.9
+//     (obligations/conditions of the MA) document neither, and C.12's own notes describe the case
+//     where "no change to the summary of product characteristics, labelling or package leaflet is
+//     initially proposed" -- i.e. it argues against inclusion.
+//   - "z" variations (E.z, Q.*.z, C.z, M.z) stay out across the board: they are the unforeseen
+//     catch-all rows, classified case by case, so nothing can be asserted about their PI impact.
+//   - No Chapter M code qualifies -- PMF/VAMF changes stay inside the master file dossier.
+//
+// ⚠️ Hand-maintained: there is no `affectsPI` field on the entries themselves, so a guideline
+// update has to be reflected here by hand.
 const PI_RELEVANT_CODES = [
+  // Chapter E -- administrative changes (5)
   "E.1", "E.2", "E.3", "E.4", "E.5",
+  // Chapter Q -- quality changes (15)
   "Q.I.a.6",
   "Q.II.a.1", "Q.II.a.2", "Q.II.a.3", "Q.II.a.6",
   "Q.II.b.2",
@@ -6950,9 +6975,8 @@ const PI_RELEVANT_CODES = [
   "Q.II.h.1",
   "Q.IV.1", "Q.IV.2",
   "Q.V.a.1",
-  // No Chapter M code qualifies: M.z's notes ("Covers PMF/VAMF-related changes that cannot be
-  // classified...") carry no PI/SmPC/labelling/package-leaflet language, same as its Chapter-E
-  // sibling E.z (also excluded) -- both are generic catch-alls, not PI-specific.
+  // Chapter C -- safety/efficacy/pharmacovigilance changes (9 of 13; C.8, C.9, C.12, C.z are out)
+  "C.1", "C.2", "C.3", "C.4", "C.5", "C.6", "C.7", "C.10", "C.11",
 ];
 
 // --- Variant ids vs. the Guideline's own code notation -------------------------------------

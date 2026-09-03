@@ -117,6 +117,9 @@
 
   const el = {
     appRoot: document.getElementById("vcl-app"),
+    // The nav + content grid, i.e. everything below the masthead and tool bar. Left-nav clicks
+    // scroll here rather than to appRoot -- see jumpToContentTop().
+    layout: document.querySelector("#vcl-app .layout"),
     browseCol: document.getElementById("vcl-browseCol"),
     treeRail: document.getElementById("vcl-treeRail"),
     browseColHead: document.getElementById("vcl-browseColHead"),
@@ -428,6 +431,16 @@
     window.scrollTo({ top: Math.max(0, top - SITE_FIXED_NAV_HEIGHT - 12), behavior: "auto" });
   }
 
+  // Where a click in the LEFT NAV lands: the top of the nav+content grid, not the top of the whole
+  // toolbox. Both were jumpToTop() at first, but sending the user back past the masthead, the intro
+  // paragraph and the tool bar on every chapter/section click turned out to be more travel than
+  // anyone wants -- the list they just clicked in scrolled out of reach with it. This stops at the
+  // content, so the nav stays put and the picked entry is the first thing on screen.
+  function jumpToContentTop() {
+    if (el.layout) scrollTargetToTop(el.layout);
+    else jumpToTop();
+  }
+
   // Deep-linking: reflects the currently open entry in the page URL (?code=Q.I.a) via
   // replaceState, so no extra back-button history entry is created for every click. Read
   // back on page load by openEntryFromUrl() so a link with ?code=... reopens that exact
@@ -561,9 +574,9 @@
             renderTreeToggle();
             renderDetail();
             el.detailCol.scrollTop = 0;
-            // Lift the page to the masthead like the chapter/section rows do, so the opened
+            // Lift the page to the content like the chapter/section rows do, so the opened
             // subsection lands at the top instead of leaving the user scrolled deep in the nav.
-            jumpToTop();
+            jumpToContentTop();
           });
           list.appendChild(toggle);
 
@@ -612,7 +625,7 @@
       switchViewVisibility();
       renderDetail();
       el.detailCol.scrollTop = 0;
-      jumpToTop();
+      jumpToContentTop();
     });
     container.appendChild(row);
 
@@ -671,7 +684,7 @@
       switchViewVisibility();
       renderDetail();
       el.detailCol.scrollTop = 0;
-      jumpToTop();
+      jumpToContentTop();
     });
     wrap.appendChild(head);
 
@@ -2228,7 +2241,7 @@
       active: (state.view === "browse" && state.classifyOpen) || state.view === "art5",
     });
     items.push({
-      label: "Guidance", meta: "Q&A", dest: "guidance",
+      label: "Guidance", meta: "Guidelines and Q&A", dest: "guidance",
       tc: "var(--group)", tbg: "var(--group-bg)",
       active: state.view === "grouping" || state.view === "precisescope" || state.view === "qa" ||
         ((state.view === "browse" || state.view === "art5") && (state.guidanceOpen || state.guidanceHub)),
@@ -2368,7 +2381,7 @@
           renderTreeToggle();
           switchViewVisibility();
           renderArt5();
-          jumpToTop();
+          jumpToContentTop();
         });
         art5Wrap.appendChild(art5Row);
         branch.appendChild(art5Wrap);
@@ -2411,7 +2424,7 @@
           // Its two siblings are static and rendered once at init; this one carries state
           // (open chapter/question, filter, deleted toggle) and so repaints on entry.
           if (view === "qa") renderQA();
-          jumpToTop();
+          jumpToContentTop();
         });
         guidanceBranch.appendChild(row);
       };
@@ -3466,9 +3479,9 @@
 
   // "Affects product information" filter -- a chip shown only below the top-level chapter cards
   // (E/Q/C/M/Art.5), since it answers a question about that whole level ("which of these chapters'
-  // codes touch the SmPC/labelling/PL"), not about a chapter already drilled into. Chapter C is
-  // entirely PI-relevant by definition, so it gets one explanatory sentence instead of being
-  // listed entry-by-entry alongside the E/Q/M codes that only sometimes qualify.
+  // codes touch the SmPC/labelling/PL"), not about a chapter already drilled into. Which codes
+  // qualify, and why chapter C is NOT wholly PI-relevant, is set out at PI_RELEVANT_CODES in
+  // vcl-data.js.
   function piFilterEntries() {
     const byChapter = new Map();
     PI_RELEVANT_CODES.forEach((code) => {
@@ -3481,14 +3494,9 @@
   }
 
   // The chapters that carry no individually listed PI code still get a row, in the same order as
-  // the cards above -- an absent chapter would read as an oversight, and each absence has its own
-  // reason worth stating. C is the one where "all of them" is the answer; M and Art. 5 are the two
-  // where "none" is, for different reasons.
+  // the cards above -- an absent chapter would read as an oversight, and each absence has a reason
+  // worth stating. Currently that is M and Art. 5, for different reasons.
   function piFilterChapterNote(chapterKey) {
-    if (chapterKey === "C") {
-      const n = ENTRIES.filter((e) => e.chapter === "C").length;
-      return `All ${n} Chapter C codes affect the product information by definition (that's the whole chapter's purpose), so they aren't listed here one by one.`;
-    }
     if (chapterKey === "M") {
       return "No Chapter M code affects the product information: these are Plasma/Vaccine Antigen Master File changes (certificate holder, collection and testing sites, plasma pool handling), which stay inside the master file dossier.";
     }
