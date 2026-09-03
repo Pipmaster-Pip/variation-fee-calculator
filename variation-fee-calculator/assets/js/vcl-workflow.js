@@ -1906,12 +1906,40 @@
     wrap.appendChild(list);
     host.appendChild(wrap);
   }
+  // Number of strengths: the SAME stepper the RA-tasks station uses (vcl-ra-tasks.css), so the
+  // tool has one control for "set a number" instead of two. Its middle stays a real input --
+  // a strength count is a number you know and type, not one you feel your way towards, and a
+  // two-digit count would otherwise cost a dozen clicks. The browser's own spinner is suppressed
+  // in CSS; two plus/minus pairs side by side would be nonsense.
+  // Returns the WRAPPER: callers add .is-diff to it to mark a country that deviates.
   function numInput(value, onInput) {
+    const wrap = el("span", "vcl-rat-stepper vcl-wf-strength__step");
     const inp = document.createElement("input");
-    inp.type = "number"; inp.min = "1"; inp.className = "vcl-wf-num"; inp.value = String(value);
+    inp.type = "number"; inp.min = "1"; inp.className = "vcl-rat-stepper__in"; inp.value = String(value);
+
+    const step = (d) => {
+      const v = Math.max(1, (parseInt(inp.value, 10) || 1) + d);
+      inp.value = String(v);
+      onInput(v);
+      rerender();
+    };
+    const minus = el("button", null, "&minus;");
+    minus.type = "button";
+    minus.setAttribute("aria-label", "One strength fewer");
+    minus.disabled = Math.max(1, parseInt(value, 10) || 1) <= 1;
+    minus.addEventListener("click", () => step(-1));
+    const plus = el("button", null, "+");
+    plus.type = "button";
+    plus.setAttribute("aria-label", "One strength more");
+    plus.addEventListener("click", () => step(1));
+
+    // Typing writes through on every keystroke; an empty or nonsensical entry recovers to 1 when
+    // the field is left -- same guard the plain number field carried.
     inp.addEventListener("input", () => { onInput(Math.max(1, parseInt(inp.value, 10) || 1)); });
-    inp.addEventListener("change", () => rerender());
-    return inp;
+    inp.addEventListener("change", () => { inp.value = String(Math.max(1, parseInt(inp.value, 10) || 1)); rerender(); });
+
+    wrap.appendChild(minus); wrap.appendChild(inp); wrap.appendChild(plus);
+    return wrap;
   }
 
   // ---- placeholder stations ----

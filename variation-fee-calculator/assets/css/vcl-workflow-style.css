@@ -787,17 +787,6 @@
   border-top: 0.5px solid var(--line, #eee);
   padding-top: 4px;
 }
-.vcl-app .vcl-wf-num {
-  width: 62px;
-  box-sizing: border-box;
-  font-size: 13px;
-  padding: 5px 8px;
-  border: 1px solid var(--line, #d8d8d2);
-  border-radius: 6px;
-  background: #fff;
-  text-align: center;
-}
-.vcl-app .vcl-wf-num:focus { outline: none; border-color: var(--workflow); }
 
 /* --- Station D: worksharing (lead box + per-line special-case picker) --- */
 .vcl-app .vcl-wf-ws-lead {
@@ -930,11 +919,6 @@
 }
 .vcl-app .vcl-wf-strength__reset:hover { background: var(--workflow-tint); }
 .vcl-app .vcl-wf-strength__reset[disabled] { opacity: 0.4; cursor: default; }
-.vcl-app .vcl-wf-num.is-diff {
-  border-color: var(--workflow);
-  background: var(--workflow-bg);
-  font-weight: 600;
-}
 
 /* --- Station A: Product-information gate switch (workload-pink accent when on) --- */
 
@@ -987,12 +971,23 @@
 .vcl-app .vcl-wf-ref-mod-row--2 { grid-template-columns: 1fr 60px 60px; }
 .vcl-app .vcl-wf-ref-mod-row > span:not(:first-child) { text-align: right; white-space: nowrap; }
 
-/* The shared RA-tasks station takes the Guided Workflow's identity colour. */
-.vcl-app .vcl-wf-ratasks {
+/* Everything the shared RA-tasks component renders inside this tool takes the Guided Workflow's
+   identity colour. Declared on the tool root, not just on the station, because the strengths
+   stepper in Station D reuses the same control. */
+.vcl-app .vcl-wf {
   --vcl-rat-accent: var(--workflow);
   --vcl-rat-accent-bg: var(--workflow-bg);
   --vcl-rat-accent-tint: var(--workflow-tint);
-  margin-top: 16px;
+}
+.vcl-app .vcl-wf-ratasks { margin-top: 16px; }
+
+/* Strengths stepper (Station D): the shared shell, narrower, because the numbers are one or two
+   digits. A country deviating from the default is marked on the whole control, not just its digits. */
+.vcl-app .vcl-wf-strength__step .vcl-rat-stepper__in { width: 44px; }
+.vcl-app .vcl-wf-strength__step.is-diff { border-color: var(--workflow); }
+.vcl-app .vcl-wf-strength__step.is-diff .vcl-rat-stepper__in {
+  color: var(--workflow);
+  border-color: color-mix(in srgb, var(--workflow) 35%, var(--border));
 }
 /* "Own adjustment" rows inside the "How the RA hours are calculated" box read as an annotation
    on the benchmark, not as another benchmark row. */

@@ -94,6 +94,22 @@
   border-left: 1px solid var(--border); border-right: 1px solid var(--border);
 }
 .vcl-app .vcl-rat-stepper__val.is-zero { color: var(--ink-faint); font-weight: 500; }
+
+/* Typeable variant of the value cell (the Guided Workflow's strengths field): same cell, but you
+   can click into it and type. The browser's own number spinner is suppressed -- next to the
+   stepper's own buttons it would be a second, differently-drawn plus/minus pair. */
+.vcl-app .vcl-rat-stepper__in {
+  min-width: 44px; width: 44px; box-sizing: content-box;
+  text-align: center; padding: 7px 6px;
+  font: inherit; font-size: 13px; font-weight: 600;
+  font-family: var(--figure); font-variant-numeric: tabular-nums; color: var(--ink);
+  background: transparent; border: none;
+  border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  -moz-appearance: textfield; appearance: textfield;
+}
+.vcl-app .vcl-rat-stepper__in::-webkit-outer-spin-button,
+.vcl-app .vcl-rat-stepper__in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.vcl-app .vcl-rat-stepper__in:focus { outline: 2px solid var(--vcl-rat-accent); outline-offset: -2px; }
 .vcl-app .vcl-rat-link {
   font: inherit; font-size: 12px; font-weight: 600; color: var(--vcl-rat-accent);
   background: none; border: none; padding: 0; cursor: pointer;
