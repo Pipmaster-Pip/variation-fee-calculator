@@ -1316,38 +1316,35 @@
   }
 
   // ---- Station A: Variations -- mirrors the Guided Workflow's buildStationA exactly. ----
-  // Empty base: "Classification" search + a "No classification code? Set the type directly:"
-  // quick-pick. Once a base variation is chosen: a picked-header (+ Change) and the grouping list
-  // for any further variations. variations[0] is always the base slot; variations[1..] are the
-  // additional (grouping) variations.
+  // Nothing chosen: "Classification" search + the three type counters. A variation WITH a code
+  // gets a picked-header (+ Change) above the list; a code-less one has nothing to head and lives
+  // in the list as one row per type, with how many of them in front. variations[0] is always the
+  // base slot; variations[1..] are the additional (grouping) variations.
   function renderStationA(host) {
     var sub = modalState.draft.submission;
     host.appendChild(el("div", "vcl-bud-body__title", "Variations"));
     host.appendChild(el("div", "vcl-bud-body__sub", "Which variation, or variations, are you submitting?"));
 
     var base = sub.variations[0];
-    var baseSet = base && (base.code || base.type);
-
-    if (!baseSet) {
-      // Empty state: search + quick-pick, no grouping list yet (GW's early return).
-      renderClassificationSearch(host);
-      renderTypeQuickPick(host);
-      return;
-    }
+    var entry = base && base.code ? ENTRIES.find(function (e) { return e.code === base.code; }) : null;
 
     // A classification code is picked but its specific variant/type isn't chosen yet: show the
-    // Guided-Workflow-exact descriptive variant list (title left, type badge right) and stop --
-    // no grouping list until the base variation is fully resolved. Mirrors vcl-workflow.js
-    // buildStationA's `if (!variant)` branch (which shows entry.variants, then returns early).
-    var entry = base.code ? ENTRIES.find(function (e) { return e.code === base.code; }) : null;
+    // descriptive variant list and stop -- no list until the base variation is resolved.
     if (entry && !base.type) {
       renderPickedBaseHeader(host, base);
       renderVariantChooser(host, entry, base);
       return;
     }
+    if (entry) renderPickedBaseHeader(host, base);
 
-    renderPickedBaseHeader(host, base);
-    renderGroupingList(host);
+    var anythingChosen = sub.variations.some(function (v) { return v.code || v.type; });
+    if (!entry && !anythingChosen) {
+      renderClassificationSearch(host);
+      host.appendChild(el("hr", "vcl-bud-rule"));
+      renderTypeCounters(host);
+      return;
+    }
+    renderVariationsPanel(host, !!entry);
   }
 
   // Guided-Workflow-exact variant list for a picked classification code: one full-width row per
@@ -1412,28 +1409,7 @@
   }
 
   // "No classification code? Set the type directly:" -- sets the base variation's type with no code.
-  function renderTypeQuickPick(host) {
-    var wrap = el("div", "vcl-bud-quicktype");
-    wrap.appendChild(el("div", "vcl-bud-quicktype__label", "No classification code? Set the type directly:"));
-    var opts = el("div", "vcl-bud-chips");
-    ["IA", "IB", "II"].forEach(function (t) {
-      var chip = el("button", "vcl-bud-chip vcl-bud-chip--type",
-        "Type " + escapeHtml(t) + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>");
-      chip.type = "button";
-      chip.addEventListener("click", function () {
-        var v = { code: null, variantId: null, type: t };
-        if (modalState.draft.submission.variations.length) modalState.draft.submission.variations[0] = v;
-        else modalState.draft.submission.variations.push(v);
-        modalState.query = "";
-        modalState.searchResults = [];
-        rerender();
-      });
-      opts.appendChild(chip);
-    });
-    wrap.appendChild(opts);
-    host.appendChild(wrap);
-  }
-
+ 
   // Picked base header (+ Change) -- GW's buildPickedHeader / buildTypeOnlyHeader. When the picked
   // classification entry offers more than one type, a small type chooser lets the user switch.
   function renderPickedBaseHeader(host, base) {
@@ -1471,18 +1447,45 @@
   // dropped when the line is saved rather than counting as a variation.
   function isBlankVariation(v) { return !v.type && !v.code && !(v.query || "").trim(); }
 
-  // The three type counters under the open search row: how many code-less variations of each
-  // type this line holds. "+" appends one, "-" removes the last one added this way. The search
-  // row above stays open, so several can be added without reopening it each time. Mirrors the
-  // Guided Workflow's buildTypeCounters.
+  // ---- code-less variations, counted rather than listed one by one ----
+  // The first one occupies the base slot (variations[0]); every further one is an additional
+  // variation without a code. Both are the same thing to the user, so every count spans both.
+  function codelessCount(t) {
+    return modalState.draft.submission.variations
+      .filter(function (v) { return !v.code && v.type === t; }).length;
+  }
+  function addCodeless(t) {
+    var vars = modalState.draft.submission.variations;
+    // Fill the empty base slot first -- the shared engine prices variations[0] as the base.
+    if (vars[0] && !vars[0].code && !vars[0].type) {
+      vars[0] = { code: null, variantId: null, type: t, query: "" };
+      return;
+    }
+    vars.push({ code: null, variantId: null, type: t, query: "" });
+  }
+  function removeCodeless(t, all) {
+    var vars = modalState.draft.submission.variations;
+    for (var i = vars.length - 1; i >= 1; i--) {
+      if (!vars[i].code && vars[i].type === t) { vars.splice(i, 1); if (!all) return; }
+    }
+    // The base slot is never spliced away -- it is emptied, so variations[0] stays the base.
+    if (vars[0] && !vars[0].code && vars[0].type === t) vars[0] = { code: null, variantId: null, type: null, query: "" };
+  }
+  // Variations behind the panel's badge: the code-less ones plus every listed row with a code.
+  function panelVariationCount() {
+    var codeless = ["IA", "IB", "II"].reduce(function (n, t) { return n + codelessCount(t); }, 0);
+    return codeless + modalState.draft.submission.variations
+      .filter(function (v, i) { return i >= 1 && !!v.code && !!v.type; }).length;
+  }
+
+  // The three type counters at the foot of the variations block. "+" adds one code-less
+  // variation of that type, "-" takes the last one away. Mirrors the Guided Workflow.
   function renderTypeCounters(host) {
-    var sub = modalState.draft.submission;
     var wrap = el("div", "vcl-bud-typecount");
     wrap.appendChild(el("span", "vcl-bud-hint vcl-bud-typecount__label", "or add variations without a classification code:"));
     var cells = el("div", "vcl-bud-typecount__row");
     ["IA", "IB", "II"].forEach(function (t) {
-      var extras = sub.variations.slice(1);
-      var n = extras.filter(function (v) { return !v.code && v.type === t; }).length;
+      var n = codelessCount(t);
       var cell = el("div", "vcl-bud-typecount__cell");
       cell.appendChild(el("span", "vcl-bud-typecount__l",
         "Type " + escapeHtml(t) + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>"));
@@ -1490,22 +1493,11 @@
       var minus = el("button", null, "&minus;");
       minus.type = "button"; minus.disabled = n === 0;
       minus.setAttribute("aria-label", "Remove one Type " + t + " variation without a classification code");
-      minus.addEventListener("click", function () {
-        for (var i = sub.variations.length - 1; i >= 1; i--) {
-          if (!sub.variations[i].code && sub.variations[i].type === t) { sub.variations.splice(i, 1); break; }
-        }
-        rerender();
-      });
+      minus.addEventListener("click", function () { removeCodeless(t, false); rerender(); });
       var plus = el("button", null, "+");
       plus.type = "button";
       plus.setAttribute("aria-label", "Add one Type " + t + " variation without a classification code");
-      plus.addEventListener("click", function () {
-        // Insert above the open search row so the counters stay where the cursor left them.
-        var at = sub.variations.findIndex(function (v, i) { return i >= 1 && isBlankVariation(v); });
-        var row = { code: null, variantId: null, type: t, query: "" };
-        if (at === -1) sub.variations.push(row); else sub.variations.splice(at, 0, row);
-        rerender();
-      });
+      plus.addEventListener("click", function () { addCodeless(t); rerender(); });
       st.appendChild(minus);
       st.appendChild(el("span", "vcl-rat-stepper__val" + (n === 0 ? " is-zero" : ""), String(n)));
       st.appendChild(plus);
@@ -1516,28 +1508,63 @@
     host.appendChild(wrap);
   }
 
-  function renderGroupingList(host) {
+  // The variations list. Headed "Additional variations" when a coded base variation sits above
+  // it, otherwise "Variations" -- because then the list holds the base variation too.
+  function renderVariationsPanel(host, hasCodeHeader) {
     var sub = modalState.draft.submission;
     var panel = el("div", "vcl-bud-builder");
     var head = el("div", "vcl-bud-builder__head");
-    head.appendChild(el("span", null, "Additional variations"));
-    // The open (blank) search row is not a variation, so it is left out of both counts below.
-    var realExtras = sub.variations.slice(1).filter(function (v) { return !isBlankVariation(v); });
-    head.appendChild(el("span", "vcl-bud-count", String(realExtras.length)));
+    head.appendChild(el("span", null, hasCodeHeader ? "Additional variations" : "Variations"));
+    head.appendChild(el("span", "vcl-bud-count", String(panelVariationCount())));
     panel.appendChild(head);
 
-    sub.variations.slice(1).forEach(function (v, i) { panel.appendChild(renderVariationRow(v, i + 1)); });
+    // One row per type for the code-less variations, with how many of them in front.
+    ["IA", "IB", "II"].forEach(function (t) {
+      var n = codelessCount(t);
+      if (!n) return;
+      var row = el("div", "vcl-bud-brow vcl-bud-brow--compact");
+      var main = el("div", "vcl-bud-brow__main");
+      main.innerHTML = '<span class="vcl-bud-brow__text"><span class="vcl-bud-mult">' + n + " &times;</span>Type "
+        + escapeHtml(t) + ' <span class="vcl-bud-picked__muted">— no classification code</span></span>'
+        + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>";
+      row.appendChild(main);
+      var rm = el("button", "vcl-bud-rm", "✕");
+      rm.type = "button";
+      rm.setAttribute("aria-label", "Remove all " + n + " Type " + t + " variations without a classification code");
+      rm.addEventListener("click", function () { removeCodeless(t, true); rerender(); });
+      row.appendChild(rm);
+      panel.appendChild(row);
+    });
 
-    var add = el("button", "vcl-bud-add", "＋ Add variation");
-    add.type = "button";
-    // Block piling up empty rows: no new variation until the additional ones carry a type.
-    add.disabled = sub.variations.slice(1).some(function (v) { return !v.type; });
-    add.addEventListener("click", function () { sub.variations.push({ code: null, variantId: null, type: null, query: "" }); rerender(); });
-    panel.appendChild(add);
+    // The row currently being added by code -- a blank search form, or one where a code is
+    // picked but its variant is not. It belongs under the heading below, not in the list.
+    var openIdx = sub.variations.findIndex(function (v, i) { return i >= 1 && !v.type; });
+
+    // Then the coded ones, each on its own row (they are all different).
+    sub.variations.forEach(function (v, i) {
+      if (i === 0 || i === openIdx) return;
+      if (!v.code && v.type) return;   // already covered by the counted rows above
+      panel.appendChild(renderVariationRow(v, i));
+    });
+
+    // Adding by code: a small button that opens the familiar search row in its place.
+    panel.appendChild(el("div", "vcl-bud-subhead", "Add a variation by code"));
+    if (openIdx !== -1) {
+      panel.appendChild(renderVariationRow(sub.variations[openIdx], openIdx));
+    } else {
+      var add = el("button", "vcl-bud-add", "＋ Add variation");
+      add.type = "button";
+      add.addEventListener("click", function () { sub.variations.push({ code: null, variantId: null, type: null, query: "" }); rerender(); });
+      panel.appendChild(add);
+    }
+
+    panel.appendChild(el("hr", "vcl-bud-rule"));
+    renderTypeCounters(panel);
     host.appendChild(panel);
 
-    if (realExtras.length >= 1) {
-      host.appendChild(el("p", "vcl-bud-hint", (realExtras.length + 1) + " variations — this line is priced as a Grouping."));
+    var total = panelVariationCount() + (hasCodeHeader ? 1 : 0);
+    if (total >= 2) {
+      host.appendChild(el("p", "vcl-bud-hint", total + " variations — this line is priced as a Grouping."));
     }
   }
 
@@ -1583,7 +1610,6 @@
       mainE.appendChild(inp);
       var matches = el("div", "vcl-bud-brow__matches");
       mainE.appendChild(matches);
-      renderTypeCounters(mainE);
       row.appendChild(mainE);
       renderMatches();
       function renderMatches() {

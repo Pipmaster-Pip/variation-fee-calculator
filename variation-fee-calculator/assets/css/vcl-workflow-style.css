@@ -355,13 +355,6 @@
 .vcl-app .vcl-wf-opt--sm { font-size: 12px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 5px; }
 .vcl-app .vcl-wf-opt.is-disabled { opacity: 0.35; cursor: default; }
 
-/* Direct type pick (no classification) under the search */
-.vcl-app .vcl-wf-quicktype {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 0.5px solid var(--line, #e4e4de);
-}
-.vcl-app .vcl-wf-quicktype__label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 .vcl-app .vcl-wf-brow__quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 
 /* --- Station B: procedure editor (country level) --- */
@@ -453,7 +446,22 @@
 /* The three "add a variation without a classification code" counters, side by side under the
    open search row. They add to the LIST, not to this row, so the row stays open and several
    can be added in a row -- which is why they are counters and no longer one-shot buttons. */
-.vcl-app .vcl-wf-typecount { margin-top: 10px; }
+/* Sub-heading over the classification search inside the variations panel -- the panel now has
+   two ways in (by code, or by type), and each says which it is. */
+.vcl-app .vcl-wf-subhead {
+  font-size: 12px; font-weight: 600; color: var(--ink);
+  margin: 12px 0 7px;
+}
+/* Divider between the two ways in. */
+.vcl-app .vcl-wf-rule {
+  border: 0; border-top: 1px solid var(--line, #e4e4de); margin: 14px 0;
+}
+/* How many code-less variations of one type this row stands for. */
+.vcl-app .vcl-wf-mult {
+  font-weight: 600; color: var(--workflow); margin-right: 8px;
+  font-family: var(--figure); font-variant-numeric: tabular-nums;
+}
+.vcl-app .vcl-wf-typecount { margin-top: 0; }
 .vcl-app .vcl-wf-typecount__label { display: block; margin: 0 0 8px; }
 .vcl-app .vcl-wf-typecount__row { display: flex; flex-wrap: wrap; gap: 18px; }
 .vcl-app .vcl-wf-typecount__cell { display: flex; flex-direction: column; gap: 5px; }
@@ -496,17 +504,17 @@
   flex-shrink: 0;
 }
 .vcl-app .vcl-wf-rm:hover { border-color: #b23a2e; color: #b23a2e; }
+/* Opens the classification search in its own place, so it is a small left-aligned control
+   rather than the full-width primary action the panel used to end on. */
 .vcl-app .vcl-wf-add {
   font-size: 12px;
-  width: 100%;
-  text-align: center;
-  border: 0.5px dashed color-mix(in srgb, var(--workflow) 45%, transparent);
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--workflow) 45%, transparent);
   background: #fff;
   color: var(--workflow);
-  border-radius: 7px;
-  padding: 6px;
+  border-radius: 8px;
+  padding: 6px 12px;
   cursor: pointer;
-  margin-top: 2px;
 }
 .vcl-app .vcl-wf-add:hover { background: var(--workflow-tint); }
 .vcl-app .vcl-wf-pcard {

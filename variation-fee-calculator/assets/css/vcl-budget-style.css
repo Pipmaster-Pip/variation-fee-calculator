@@ -323,8 +323,6 @@
 .vcl-app .vcl-bud-search-result { display: block; width: 100%; text-align: left; padding: 8px 10px; font-size: 12.5px; border: none; background: none; cursor: pointer; border-bottom: 1px solid var(--border-soft); }
 .vcl-app .vcl-bud-search-result:hover { background: var(--budget-tint); }
 /* Station A -- GW-style pieces: type quick-pick, picked-header + Change, grouping builder. */
-.vcl-app .vcl-bud-quicktype { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
-.vcl-app .vcl-bud-quicktype__label { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
 .vcl-app .vcl-bud-chip--type { display: inline-flex; align-items: center; gap: 6px; }
 .vcl-app .vcl-bud-picked { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); font-size: 13.5px; }
 .vcl-app .vcl-bud-picked__code { font-family:var(--figure); font-variant-numeric:tabular-nums; font-weight: 600; }
@@ -334,7 +332,9 @@
 .vcl-app .vcl-bud-builder { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 16px; background: var(--panel); }
 .vcl-app .vcl-bud-builder__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .vcl-app .vcl-bud-count { font-family:var(--figure); font-variant-numeric:tabular-nums; background: var(--border-soft); border-radius: 20px; padding: 1px 8px; font-size: 11px; }
-.vcl-app .vcl-bud-add { width: 100%; margin-top: 8px; font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--budget); cursor: pointer; }
+/* Opens the classification search in its own place, so it is a small left-aligned control
+   rather than the full-width primary action the panel used to end on. */
+.vcl-app .vcl-bud-add { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border: 1px solid color-mix(in srgb, var(--budget) 45%, transparent); border-radius: 8px; background: var(--panel); color: var(--budget); cursor: pointer; }
 .vcl-app .vcl-bud-add:hover { border-color: var(--budget); background: var(--budget-tint); }
 /* Additional-variation (grouping) row -- GW buildGroupingRow: per-row search + "or set the type
    directly:" quick-pick, a type chooser when a code has several types, or resolved text. */
@@ -361,8 +361,15 @@
    open search row. They add to the LIST, not to this row, so the row stays open and several can
    be added in a row -- which is why they are counters and no longer one-shot buttons. The shared
    stepper takes this tool's identity colour here, as it does in the RA-tasks station. */
+/* Sub-heading over the classification search inside the variations panel -- the panel has two
+   ways in (by code, or by type), and each says which it is. */
+.vcl-app .vcl-bud-subhead { font-size: 12.5px; font-weight: 600; color: var(--ink); margin: 12px 0 7px; }
+/* Divider between the two ways in. */
+.vcl-app .vcl-bud-rule { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+/* How many code-less variations of one type this row stands for. */
+.vcl-app .vcl-bud-mult { font-weight: 600; color: var(--budget); margin-right: 8px; font-family: var(--figure); font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-bud-typecount {
-  margin-top: 10px;
+  margin-top: 0;
   --vcl-rat-accent: var(--budget);
   --vcl-rat-accent-bg: var(--budget-bg);
   --vcl-rat-accent-tint: var(--budget-tint);

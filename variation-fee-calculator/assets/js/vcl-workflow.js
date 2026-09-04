@@ -590,31 +590,30 @@
 
     // The (base) variation. Active substance and product information used to sit here; they drive
     // the RA effort, so they now live in the "RA tasks" station.
-    if (state.typeOnly) {
-      buildTypeOnlyHeader(body);
-    } else {
-      const entry = pickedEntry();
-      const variant = pickedVariant();
-      if (!entry) {
-        buildSearch(body); buildTypeQuickPick(body);
-      } else if (!variant) {
-        buildPickedHeader(body, entry, null);
-        const chooser = el("div", "vcl-wf-variants");
-        appendVariantOptions(chooser, entry, (v) => {
-          state.pickedVariantId = v.id; rerender(); jumpTop();
-        });
-        body.appendChild(chooser);
-      } else {
-        buildPickedHeader(body, entry, variant);
-      }
+    //
+    // Only a variation WITH a classification code gets its own header (code, name, Change). A
+    // code-less one has nothing to head -- it lives in the list below as one row per type, with
+    // how many of them in front, so that row and the type counters always say the same number.
+    const entry = pickedEntry();
+    const variant = pickedVariant();
+    if (entry && !variant) {
+      // Code picked, variant still open: the chooser replaces everything else.
+      buildPickedHeader(body, entry, null);
+      const chooser = el("div", "vcl-wf-variants");
+      appendVariantOptions(chooser, entry, (v) => { state.pickedVariantId = v.id; rerender(); jumpTop(); });
+      body.appendChild(chooser);
+      return;
     }
+    if (entry) buildPickedHeader(body, entry, variant);
 
-    // Further variations -- more than one is treated as a grouping automatically. Keep the list
-    // visible whenever a base is resolved OR grouped variations already exist, so re-picking the
-    // base (the "Change" button clears state.pickedCode) never appears to wipe the grouped
-    // variations: they stay in state.grouping regardless, and an early return here used to hide
-    // them, which read as data loss.
-    if (state.typeOnly || pickedVariant() || state.grouping.length) buildGroupingList(body);
+    // Nothing chosen at all: the classification search plus the counters, no list panel yet.
+    if (!entry && !state.typeOnly && !state.grouping.length) {
+      buildSearch(body);
+      body.appendChild(el("hr", "vcl-wf-rule"));
+      buildTypeCounters(body);
+      return;
+    }
+    buildVariationsPanel(body, !!entry);
   }
 
   // ---- Station "RA tasks": the optional RA modules, beyond the always-on core RA work. ----
@@ -655,31 +654,6 @@
       compact: false,
       onChange: rerender,
     });
-  }
-
-  // Direct type pick when there is no classification code to choose.
-  function buildTypeQuickPick(body) {
-    const wrap = el("div", "vcl-wf-quicktype");
-    wrap.appendChild(el("div", "vcl-wf-quicktype__label", "No classification code? Set the type directly:"));
-    const opts = el("div", "vcl-wf-opts");
-    ["IA", "IB", "II"].forEach((t) => {
-      const chip = el("button", "vcl-wf-opt vcl-wf-opt--sm", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`);
-      chip.type = "button";
-      chip.addEventListener("click", () => { state.typeOnly = t; state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); jumpTop(); });
-      opts.appendChild(chip);
-    });
-    wrap.appendChild(opts);
-    body.appendChild(wrap);
-  }
-
-  function buildTypeOnlyHeader(body) {
-    const picked = el("div", "vcl-wf-picked");
-    picked.innerHTML = `<span>Variation type <span class="${typeBadgeClass(state.typeOnly)}">${escapeHtml(state.typeOnly)}</span> <span class="vcl-wf-sum__muted">&mdash; no classification code</span></span>`;
-    const change = el("button", "vcl-wf-change", "Change");
-    change.type = "button";
-    change.addEventListener("click", () => { state.typeOnly = null; rerender(); });
-    picked.appendChild(change);
-    body.appendChild(picked);
   }
 
   function buildSearch(body) {
@@ -867,22 +841,85 @@
     return wrap;
   }
 
-  // Grouping list: additional variations sharing the same procedure(s)/countries.
-  function buildGroupingList(host) {
+  // ---- code-less variations, counted rather than listed one by one ----
+  // The first one occupies the base slot (state.typeOnly); every further one is a grouping row
+  // without a code. Both are the same thing to the user, so every count below spans both.
+  function codelessCount(t) {
+    return (state.typeOnly === t ? 1 : 0)
+      + state.grouping.filter((g) => !g.code && g.type === t).length;
+  }
+  function addCodeless(t) {
+    // Fill the empty base slot first -- otherwise variations[0] would stay null while the
+    // grouping fills up, and the shared engine prices variations[0] as the base.
+    if (!state.pickedCode && !state.typeOnly) { state.typeOnly = t; return; }
+    state.grouping.push({ code: null, variantId: undefined, type: t, query: "" });
+  }
+  function removeCodeless(t, all) {
+    for (let i = state.grouping.length - 1; i >= 0; i--) {
+      if (!state.grouping[i].code && state.grouping[i].type === t) {
+        state.grouping.splice(i, 1);
+        if (!all) return;
+      }
+    }
+    if (state.typeOnly === t) state.typeOnly = null;
+  }
+  // Variations counted for the panel's badge: the code-less ones plus every grouping row that
+  // carries a code. The base variation is counted only when it has no header of its own.
+  function panelVariationCount() {
+    const codeless = ["IA", "IB", "II"].reduce((n, t) => n + codelessCount(t), 0);
+    return codeless + state.grouping.filter((g) => !!g.code && !!g.type).length;
+  }
+
+  // The variations list. Headed "Additional variations" when a coded base variation sits above
+  // it, otherwise "Variations" -- because then the list holds the base variation too.
+  function buildVariationsPanel(host, hasCodeHeader) {
     const panel = el("div", "vcl-wf-builder");
     const head = el("div", "vcl-wf-builder__head");
-    head.appendChild(el("span", null, "Additional variations"));
-    head.appendChild(el("span", "vcl-wf-count", String(state.grouping.length)));
+    head.appendChild(el("span", null, hasCodeHeader ? "Additional variations" : "Variations"));
+    head.appendChild(el("span", "vcl-wf-count", String(panelVariationCount())));
     panel.appendChild(head);
 
-    state.grouping.forEach((g, idx) => panel.appendChild(buildGroupingRow(g, idx)));
+    // One row per type for the code-less variations, with how many of them in front.
+    ["IA", "IB", "II"].forEach((t) => {
+      const n = codelessCount(t);
+      if (!n) return;
+      const row = el("div", "vcl-wf-brow is-resolved");
+      row.innerHTML = `<span class="vcl-wf-brow__main"><span class="vcl-wf-brow__text">`
+        + `<span class="vcl-wf-mult">${n} &times;</span>Type ${escapeHtml(t)} `
+        + `<span class="vcl-wf-sum__muted">&mdash; no classification code</span></span> `
+        + `<span class="${typeBadgeClass(t)}">${escapeHtml(t)}</span></span>`;
+      const rm = el("button", "vcl-wf-rm", "✕");
+      rm.type = "button";
+      rm.setAttribute("aria-label", `Remove all ${n} Type ${t} variations without a classification code`);
+      rm.addEventListener("click", () => { removeCodeless(t, true); rerender(); });
+      row.appendChild(rm);
+      panel.appendChild(row);
+    });
 
-    const add = el("button", "vcl-wf-add", "＋ Add variation");
-    add.type = "button";
-    // Block piling up open rows: only one search form at a time, as before.
-    add.disabled = state.grouping.some((g) => !g.type);
-    add.addEventListener("click", () => { state.grouping.push({ code: null, variantId: undefined, type: null, query: "" }); rerender(); });
-    panel.appendChild(add);
+    // The row currently being added by code -- a blank search form, or one where a code is
+    // picked but its variant is not. It belongs under the heading below, not in the list.
+    const openIdx = state.grouping.findIndex((g) => !g.type);
+
+    // Then the coded ones, each on its own row (they are all different).
+    state.grouping.forEach((g, idx) => {
+      if (idx === openIdx) return;     // rendered under "Add a variation by code" below
+      if (!g.code && g.type) return;   // already covered by the counted rows above
+      panel.appendChild(buildGroupingRow(g, idx));
+    });
+
+    // Adding by code: a small button that opens the familiar search row in its place.
+    panel.appendChild(el("div", "vcl-wf-subhead", "Add a variation by code"));
+    if (openIdx !== -1) {
+      panel.appendChild(buildGroupingRow(state.grouping[openIdx], openIdx));
+    } else {
+      const add = el("button", "vcl-wf-add", "＋ Add variation");
+      add.type = "button";
+      add.addEventListener("click", () => { state.grouping.push({ code: null, variantId: undefined, type: null, query: "" }); rerender(); });
+      panel.appendChild(add);
+    }
+
+    panel.appendChild(el("hr", "vcl-wf-rule"));
+    buildTypeCounters(panel);
     host.appendChild(panel);
   }
 
@@ -899,29 +936,18 @@
     wrap.appendChild(el("span", "vcl-wf-hint vcl-wf-typecount__label", "or add variations without a classification code:"));
     const cells = el("div", "vcl-wf-typecount__row");
     ["IA", "IB", "II"].forEach((t) => {
-      const n = state.grouping.filter((g) => !g.code && g.type === t).length;
+      const n = codelessCount(t);
       const cell = el("div", "vcl-wf-typecount__cell");
       cell.appendChild(el("span", "vcl-wf-typecount__l", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`));
       const st = el("span", "vcl-rat-stepper");
       const minus = el("button", null, "&minus;");
       minus.type = "button"; minus.disabled = n === 0;
       minus.setAttribute("aria-label", `Remove one Type ${t} variation without a classification code`);
-      minus.addEventListener("click", () => {
-        for (let i = state.grouping.length - 1; i >= 0; i--) {
-          if (!state.grouping[i].code && state.grouping[i].type === t) { state.grouping.splice(i, 1); break; }
-        }
-        rerender();
-      });
+      minus.addEventListener("click", () => { removeCodeless(t, false); rerender(); });
       const plus = el("button", null, "+");
       plus.type = "button";
       plus.setAttribute("aria-label", `Add one Type ${t} variation without a classification code`);
-      plus.addEventListener("click", () => {
-        // Insert above the open search row so the counters stay where the cursor left them.
-        const at = state.grouping.findIndex(isBlankRow);
-        const row = { code: null, variantId: undefined, type: t, query: "" };
-        if (at === -1) state.grouping.push(row); else state.grouping.splice(at, 0, row);
-        rerender();
-      });
+      plus.addEventListener("click", () => { addCodeless(t); rerender(); });
       st.appendChild(minus);
       st.appendChild(el("span", "vcl-rat-stepper__val" + (n === 0 ? " is-zero" : ""), String(n)));
       st.appendChild(plus);
@@ -961,14 +987,14 @@
       main.appendChild(chooser);
       row.appendChild(main);
     } else {
-      // Search by code/title, or set the type directly (no classification).
+      // Search by code/title. Setting a type without a code is no longer done here -- the
+      // counters at the foot of the panel own that, in one place for the whole submission.
       const main = el("div", "vcl-wf-brow__main");
       const inp = document.createElement("input"); inp.type = "text"; inp.className = "vcl-wf-brow__input"; inp.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ..."; inp.value = g.query || "";
       inp.addEventListener("input", () => { g.query = inp.value; renderMatches(); });
       main.appendChild(inp);
       const matches = el("div", "vcl-wf-brow__matches");
       main.appendChild(matches);
-      buildTypeCounters(main);
       row.appendChild(main);
       renderMatches();
       function renderMatches() {
