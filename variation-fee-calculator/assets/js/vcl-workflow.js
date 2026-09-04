@@ -1541,15 +1541,23 @@
 
   // Every variation in play (base + resolved grouping) -- for the summary's Variation(s) row.
   function summaryVariations() {
+    // `code`/`title` stay the ENTRY's own -- preciseScopeFor() looks the entry up by them.
+    // `fullCode`/`fullName` carry what a reader should see: the variant's full Guideline code
+    // ("Q.II.f.1.b.2") and its full name (entry - group - variant), as Station A shows them.
     const out = [];
     const e = pickedEntry(); const v = pickedVariant();
-    if (v) out.push({ code: e.code, title: e.title, type: v.type, variantId: v.id });
-    else if (state.typeOnly) out.push({ code: null, title: null, type: state.typeOnly, variantId: undefined });
+    if (v) out.push({ code: e.code, title: e.title, type: v.type, variantId: v.id, fullCode: fullCodeOf(e.code, v.id), fullName: variantFullName(e, v) });
+    else if (state.typeOnly) out.push({ code: null, title: null, type: state.typeOnly, variantId: undefined, fullCode: null, fullName: null });
     if (state.submission.grouping) {
       state.grouping.forEach((g) => {
         if (!g.type) return; // still unresolved -- not a real variation yet
         const ge = g.code ? findEntry(g.code) : null;
-        out.push({ code: g.code || null, title: ge ? ge.title : null, type: g.type, variantId: g.variantId });
+        const gv = ge ? findVariant(ge, g.variantId) : null;
+        out.push({
+          code: g.code || null, title: ge ? ge.title : null, type: g.type, variantId: g.variantId,
+          fullCode: ge && gv ? fullCodeOf(g.code, gv.id) : (g.code || null),
+          fullName: ge ? variantFullName(ge, gv) : null,
+        });
       });
     }
     return out;
@@ -1659,7 +1667,7 @@
     const vars = summaryVariations();
     if (vars.length <= 1) {
       const v = vars[0];
-      if (v && v.code) line("Variation", `${escapeHtml(v.code)} — ${escapeHtml(v.title || "")} <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`);
+      if (v && v.code) line("Variation", `${escapeHtml(v.fullCode || v.code)} — ${escapeHtml(v.fullName || v.title || "")} <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`);
       else if (v) line("Variation", `Type <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__muted">(no classification code)</span>`);
     } else {
       const counts = { IA: 0, IB: 0, II: 0 };
@@ -1691,9 +1699,9 @@
         items.forEach((item) => {
           const v = item.v;
           const it = el("div", "vcl-wf-sum__vitem1");
-          const desc = v.title ? escapeHtml(v.title) : "no classification code";
+          const desc = v.title ? escapeHtml(v.fullName || v.title) : "no classification code";
           const mult = v.code ? "" : `<span class="vcl-wf-sum__mult">${item.n} &times;</span>`;
-          it.innerHTML = `${mult}<span class="vcl-wf-sum__vcode">${escapeHtml(v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__vdesc">— ${desc}</span>`;
+          it.innerHTML = `${mult}<span class="vcl-wf-sum__vcode">${escapeHtml(v.fullCode || v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__vdesc">— ${desc}</span>`;
           vlist.appendChild(it);
         });
         card.appendChild(vlist);
@@ -1831,7 +1839,7 @@
       children.push(kv("Variations", [new TextRun("Grouping · " + vars.length + " variations"), new TextRun({ text: bits ? " (" + bits + ")" : "", color: "5B6572" })]));
     } else {
       const v = vars[0];
-      children.push(kv("Variation", [new TextRun(v.code ? v.code + " — " + (v.title || "") + " (Type " + v.type + ")" : "Type " + v.type + " (no classification code)")]));
+      children.push(kv("Variation", [new TextRun(v.code ? (v.fullCode || v.code) + " — " + (v.fullName || v.title || "") + " (Type " + v.type + ")" : "Type " + v.type + " (no classification code)")]));
     }
 
     const procs = allProcedures();
@@ -1907,8 +1915,8 @@
     ] })];
     vars.slice().sort((a, b) => typeRankOf(a.type) - typeRankOf(b.type)).forEach((v) => {
       rows.push(new TableRow({ children: [
-        cell(v.code || "—", { width: 22, mono: true }),
-        cell(v.title || "No classification code (type only)", { width: 63 }),
+        cell(v.fullCode || v.code || "—", { width: 22, mono: true }),
+        cell(v.fullName || v.title || "No classification code (type only)", { width: 63 }),
         cell(v.type || "—", { width: 15, center: true }),
       ] }));
     });
@@ -1935,11 +1943,11 @@
       children.push(new Paragraph({ children: [new TextRun({ text: (psg.subtitle || "Example wordings for the ‘precise scope’ section of the variation application form") + " (eAF). Only variations for which the guidance provides an example are listed.", italics: true, color: "5B6572" })], spacing: sp({ after: 160 }) }));
       scoped.forEach((x) => {
         const v = x.v;
-        const codeLabel = v.code ? DATA.variantFullCode(v.code, v.variantId) : "Type " + v.type;
+        const codeLabel = v.fullCode || (v.code ? DATA.variantFullCode(v.code, v.variantId) : "Type " + v.type);
         children.push(new Paragraph({
           children: [
             new TextRun({ text: codeLabel, bold: true, font: MONO }),
-            new TextRun({ text: v.title ? " — " + v.title : "" }),
+            new TextRun({ text: v.title ? " — " + (v.fullName || v.title) : "" }),
             new TextRun({ text: "  (Type " + v.type + ")", color: "5B6572" }),
           ],
           spacing: sp({ before: 120, after: 40 }),
