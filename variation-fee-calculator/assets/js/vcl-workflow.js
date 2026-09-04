@@ -1672,13 +1672,28 @@
       if (tg) tg.addEventListener("click", () => { state.summaryShowVariations = !state.summaryShowVariations; rerender(); });
       if (state.summaryShowVariations) {
         // One line per variation (IA -> IB -> II, no sub-headers): code + badge + muted
-        // one-line description.
+        // one-line description. Variations WITHOUT a classification code collapse into one line
+        // per type, with how many of them in front -- they are indistinguishable from each other,
+        // so listing thirteen identical sentences said nothing the header did not already say.
+        // Coded ones stay individual: those really are different from one another.
         const vlist = el("div", "vcl-wf-sum__vlist");
         const sorted = vars.slice().sort((a, b) => typeRankOf(a.type) - typeRankOf(b.type));
+        const items = [];
+        const codelessByType = {};
         sorted.forEach((v) => {
+          if (v.code) { items.push({ v: v, n: 1 }); return; }
+          const key = v.type || "?";
+          // The collapsed line keeps the position of the first of its kind.
+          if (codelessByType[key]) { codelessByType[key].n++; return; }
+          codelessByType[key] = { v: v, n: 1 };
+          items.push(codelessByType[key]);
+        });
+        items.forEach((item) => {
+          const v = item.v;
           const it = el("div", "vcl-wf-sum__vitem1");
           const desc = v.title ? escapeHtml(v.title) : "no classification code";
-          it.innerHTML = `<span class="vcl-wf-sum__vcode">${escapeHtml(v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__vdesc">— ${desc}</span>`;
+          const mult = v.code ? "" : `<span class="vcl-wf-sum__mult">${item.n} &times;</span>`;
+          it.innerHTML = `${mult}<span class="vcl-wf-sum__vcode">${escapeHtml(v.code || "Type " + v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span> <span class="vcl-wf-sum__vdesc">— ${desc}</span>`;
           vlist.appendChild(it);
         });
         card.appendChild(vlist);

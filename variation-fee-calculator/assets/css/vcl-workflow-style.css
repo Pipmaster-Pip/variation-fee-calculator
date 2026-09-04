@@ -879,6 +879,12 @@
   line-height: 1.45;
 }
 .vcl-app .vcl-wf-sum__vitem1:first-child { border-top: none; }
+/* How many code-less variations of one type the summary line stands for -- same green count as
+   the picker in Station A, so both say the same thing the same way. */
+.vcl-app .vcl-wf-sum__mult {
+  font-weight: 600; color: var(--workflow); margin-right: 8px;
+  font-family: var(--figure); font-variant-numeric: tabular-nums;
+}
 
 /* --- Live preview: dates above / key-point markers below the mini timeline --- */
 .vcl-app .vcl-wf-tl-dates { font-size: 11px; color: var(--ink, #222); margin: 0 0 4px; }
