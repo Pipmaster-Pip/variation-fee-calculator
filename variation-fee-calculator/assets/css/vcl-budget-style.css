@@ -348,14 +348,44 @@
 .vcl-app .vcl-bud-brow__matches { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .vcl-app .vcl-bud-brow__match { display: block; width: 100%; text-align: left; padding: 6px 8px; font-size: 12.5px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--panel); cursor: pointer; }
 .vcl-app .vcl-bud-brow__match:hover { border-color: var(--budget); background: var(--budget-tint); }
-.vcl-app .vcl-bud-brow__variants { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .vcl-app .vcl-bud-chip--sm { font-size: 12px; padding: 5px 10px; }
+/* Resolved additional variation: wording flows on the left, the type badge parks at the right
+   edge, so a long name never pushes it out of line. Scoped to rows that actually carry a code
+   -- the "no classification code" row has no wording block and would spread across the width. */
+.vcl-app .vcl-bud-brow--compact .vcl-bud-brow__main:has(> .vcl-bud-brow__text) {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.vcl-app .vcl-bud-brow__text { min-width: 0; }
+
+/* The three "add a variation without a classification code" counters, side by side under the
+   open search row. They add to the LIST, not to this row, so the row stays open and several can
+   be added in a row -- which is why they are counters and no longer one-shot buttons. The shared
+   stepper takes this tool's identity colour here, as it does in the RA-tasks station. */
+.vcl-app .vcl-bud-typecount {
+  margin-top: 10px;
+  --vcl-rat-accent: var(--budget);
+  --vcl-rat-accent-bg: var(--budget-bg);
+  --vcl-rat-accent-tint: var(--budget-tint);
+}
+.vcl-app .vcl-bud-typecount__label { display: block; margin: 0 0 8px; }
+.vcl-app .vcl-bud-typecount__row { display: flex; flex-wrap: wrap; gap: 18px; }
+.vcl-app .vcl-bud-typecount__cell { display: flex; flex-direction: column; gap: 5px; }
+.vcl-app .vcl-bud-typecount__l { font-size: 12.5px; color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
 .vcl-app .vcl-bud-brow__pick { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
 /* Descriptive variant list under a picked classification code (GW-exact, budget colour). */
 .vcl-app .vcl-bud-variants { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .vcl-app .vcl-bud-variant { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
 .vcl-app .vcl-bud-variant:hover { border-color: var(--budget); background: var(--budget-tint); }
 .vcl-app .vcl-bud-variant__label { font-size: 13px; color: var(--ink, #222); }
+/* The Guideline's lettered group above the variants it contains ("(a) Reduction of the shelf
+   life ..."), set like the Classification tool's own .variant-group-heading. */
+.vcl-app .vcl-bud-vgroup { font-size: 12.5px; font-weight: 700; color: var(--ink); margin: 12px 2px 0; }
+.vcl-app .vcl-bud-variants > .vcl-bud-vgroup:first-child { margin-top: 0; }
+/* The variant's own code fragment, in front of its wording -- the number alone under a group
+   heading, since the heading already carries the letter. */
+.vcl-app .vcl-bud-vpre { font-weight: 600; color: var(--budget); margin-right: 6px; font-family: var(--figure); font-variant-numeric: tabular-nums; }
+/* Type badge and Change sit together at the right edge of the picked base row. */
+.vcl-app .vcl-bud-picked__right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .vcl-app .vcl-bud-rm { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: 13px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 7px; width: 32px; height: 32px; cursor: pointer; flex: none; }
 .vcl-app .vcl-bud-rm:hover { border-color: var(--ii); color: var(--ii); }
 .vcl-app .vcl-bud-live-result { margin-top: 4px; border-top: 1px dashed var(--border); padding-top: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 18px; }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Guided Workflow — preview (Change + row alignment fixes)</title>
+<title>Guided Workflow — preview (v1.24.0 codes, names, type counters)</title>
 <link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css?v=137" />
 <link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css?v=137" />
 <link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-workflow-style.css?v=137" />
@@ -17,9 +17,7 @@
 </head>
 <body>
   <p class="note"><b>Preview.</b> Seeded like a Classification&nbsp;→&nbsp;Guided Workflow export:
-  base <code>Q.II.a.1</code> (Type&nbsp;II) plus 5 additional variations. Click <b>Change</b> on the
-  base — the 5 additional variations must stay visible. Also check the text in the white boxes is
-  vertically centred against the ✕ button.</p>
+  base <code>Q.II.e.2.b</code> plus an unresolved <code>Q.II.f.1</code> (group headings + code fragments) and one resolved extra.</p>
   <div class="vcl-app">
     <div id="vcl-wf-col"></div>
     <div class="vclcalc-app" id="vclcalc-app">
@@ -47,12 +45,9 @@
     // Reproduce the reported export scenario: one Type II base + five extra variations
     // (4 x Type IB, 1 x Type IB default), matching the screenshot's tally.
     window.VCL_WORKFLOW.prefill({ variations: [
-      { code: "Q.II.a.1", variantId: undefined, type: "II" },
-      { code: "E.1",      variantId: undefined, type: "IB" },
-      { code: "Q.II.a.2", variantId: undefined, type: "IB" },
-      { code: "Q.II.a.2", variantId: undefined, type: "IB" },
-      { code: "Q.II.a.2", variantId: undefined, type: "IB" },
-      { code: "Q.II.e.1", variantId: undefined, type: "IB" }
+      { code: "Q.II.e.2", variantId: "b", type: "IB" },
+      { code: "Q.II.f.1", variantId: undefined, type: null },
+      { code: "C.11",     variantId: undefined, type: "IB" }
     ] });
   </script>
 </body>

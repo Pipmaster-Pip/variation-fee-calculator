@@ -292,6 +292,22 @@
 }
 .vcl-app .vcl-wf-variant:hover { border-color: var(--workflow); background: var(--workflow-tint); }
 .vcl-app .vcl-wf-variant__label { font-size: 13px; color: var(--ink, #222); }
+/* The Guideline's lettered group above the variants it contains ("(a) Reduction of the shelf
+   life ..."). It is a heading, not an annotation, so it keeps the Guideline's own mixed case.
+   Set like the Classification tool's own .variant-group-heading, so the same list reads the
+   same way in both tools. */
+.vcl-app .vcl-wf-vgroup {
+  font-size: 12.5px; font-weight: 700; color: var(--ink);
+  margin: 12px 2px 0;
+}
+.vcl-app .vcl-wf-variants > .vcl-wf-vgroup:first-child,
+.vcl-app .vcl-wf-brow__pick > .vcl-wf-vgroup:first-child { margin-top: 0; }
+/* The variant's own code fragment, in front of its wording. Under a group heading this is the
+   number alone -- the letter is already in the heading. */
+.vcl-app .vcl-wf-vpre {
+  font-weight: 600; color: var(--workflow); margin-right: 6px;
+  font-family: var(--figure); font-variant-numeric: tabular-nums;
+}
 
 .vcl-app .vcl-wf-picked {
   display: flex;
@@ -305,6 +321,9 @@
   font-size: 13px;
 }
 .vcl-app .vcl-wf-picked__code { font-weight: 600; color: var(--workflow); }
+/* Type badge and Change sit together at the right edge: the badge labels the whole row, so
+   inside the wording it read as part of the variation's name. */
+.vcl-app .vcl-wf-picked__right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .vcl-app .vcl-wf-change {
   font-size: 12px;
   border: 1px solid var(--line, #d8d8d2);
@@ -422,6 +441,26 @@
    above is only needed while a row is expanded into its multi-line search/pick form. */
 .vcl-app .vcl-wf-brow.is-resolved { align-items: center; }
 .vcl-app .vcl-wf-brow__main { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; }
+/* Resolved additional variation: wording flows on the left, the type badge parks at the right
+   edge (same rule as the base row above), so long names never push it out of line. Scoped to
+   rows that actually carry a code -- the "no classification code" row has no wording block and
+   would spread its three words across the whole width. */
+.vcl-app .vcl-wf-brow.is-resolved .vcl-wf-brow__main:has(> .vcl-wf-brow__text) {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.vcl-app .vcl-wf-brow__text { min-width: 0; }
+
+/* The three "add a variation without a classification code" counters, side by side under the
+   open search row. They add to the LIST, not to this row, so the row stays open and several
+   can be added in a row -- which is why they are counters and no longer one-shot buttons. */
+.vcl-app .vcl-wf-typecount { margin-top: 10px; }
+.vcl-app .vcl-wf-typecount__label { display: block; margin: 0 0 8px; }
+.vcl-app .vcl-wf-typecount__row { display: flex; flex-wrap: wrap; gap: 18px; }
+.vcl-app .vcl-wf-typecount__cell { display: flex; flex-direction: column; gap: 5px; }
+.vcl-app .vcl-wf-typecount__l {
+  font-size: 12.5px; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 6px;
+}
 /* Variant chooser inside a grouping row: full-width rows (reuses .vcl-wf-variant), stacked. */
 .vcl-app .vcl-wf-brow__pick { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .vcl-app .vcl-wf-brow__pick .vcl-wf-variant { margin: 0; }
@@ -446,7 +485,6 @@
   color: var(--muted);
 }
 .vcl-app .vcl-wf-brow__match:hover { border-color: var(--workflow); background: var(--workflow-tint); }
-.vcl-app .vcl-wf-brow__variants { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 .vcl-app .vcl-wf-rm {
   font-size: 12px;
   color: var(--muted);

@@ -7008,9 +7008,49 @@ function variantFullCode(entryCode, variantId) {
   return entryCode + "." + suffix;
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, PI_RELEVANT_CODES, variantCodeSuffix, variantFullCode };
+// The variant id split into the Guideline's own code parts: "a1" -> ["a","1"], "b" -> ["b"],
+// and for M.5 the other way round, "2b" -> ["2","b"]. z-variants return null -- their label
+// already opens with "(z)", so they need no fragment of their own.
+function variantCodeParts(variantId) {
+  if (!variantId) return null;
+  const id = String(variantId);
+  if (id === "z" || id.indexOf("z-") === 0) return null;
+  let m = /^([a-z])(\d+)$/.exec(id);
+  if (m) return [m[1], m[2]];
+  m = /^(\d+)([a-z])$/.exec(id);
+  if (m) return [m[1], m[2]];
+  return [id];
 }
 
-  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE: PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY, PI_RELEVANT_CODES: PI_RELEVANT_CODES, variantCodeSuffix: variantCodeSuffix, variantFullCode: variantFullCode };
+// The bracketed fragment shown in front of a variant's wording in a picker: "(a)(1)" on its
+// own, but only "(1)" under a group heading -- the heading already carries the letter, and
+// repeating it there reads as a typo.
+function variantPrefix(variant, underGroup) {
+  let parts = variantCodeParts(variant && variant.id);
+  if (!parts) return "";
+  if (underGroup && parts.length > 1) parts = parts.slice(1);
+  return parts.map(function (p) { return "(" + p + ")"; }).join("");
+}
+
+// The Guideline's lettered group without its leading "(x) ": the letter belongs to the code,
+// which is always shown separately.
+function variantGroupText(variant) {
+  return variant && variant.group ? String(variant.group).replace(/^\s*\([^)]*\)\s*/, "") : "";
+}
+
+// The full name of one classified variation: entry title - group - variant wording. Parts that
+// do not exist (no group, a single unnamed variant) drop out.
+function variantFullName(entry, variant) {
+  const bits = [entry && entry.title ? entry.title : ""];
+  const g = variantGroupText(variant);
+  if (g) bits.push(g);
+  if (variant && variant.label) bits.push(variant.label);
+  return bits.filter(Boolean).join(" - ");
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { CLASSIFICATION_META, CHAPTERS, SECTIONS, ENTRIES, GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY, PI_RELEVANT_CODES, variantCodeSuffix, variantFullCode, variantCodeParts, variantPrefix, variantGroupText, variantFullName };
+}
+
+  window.VCL_DATA = { CLASSIFICATION_META: CLASSIFICATION_META, CHAPTERS: CHAPTERS, SECTIONS: SECTIONS, ENTRIES: ENTRIES, GROUPING_GUIDANCE: GROUPING_GUIDANCE, PRECISE_SCOPE_GUIDANCE: PRECISE_SCOPE_GUIDANCE, REVISION_HISTORY: REVISION_HISTORY, PI_RELEVANT_CODES: PI_RELEVANT_CODES, variantCodeSuffix: variantCodeSuffix, variantFullCode: variantFullCode, variantCodeParts: variantCodeParts, variantPrefix: variantPrefix, variantGroupText: variantGroupText, variantFullName: variantFullName };
 })();

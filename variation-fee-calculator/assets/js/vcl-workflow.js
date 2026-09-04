@@ -446,6 +446,33 @@
     return entry.variants.find((v) => v.id === variantId) || null;
   }
   function variantLabel(v) { return v && v.label ? v.label : ""; }
+  // ---- Guideline code fragments and names for a variant ----
+  // All four live in vcl-data.js next to the code they read, so the Budget tool's line editor
+  // renders its variation lists from the same implementation.
+  function variantPrefix(v, underGroup) { return DATA.variantPrefix ? DATA.variantPrefix(v, underGroup) : ""; }
+  function variantFullName(entry, v) { return DATA.variantFullName ? DATA.variantFullName(entry, v) : (entry && entry.title) || ""; }
+  // Full Guideline code for a picked variation ("Q.II.f.1.b.1"), falling back to the entry code.
+  function fullCodeOf(code, variantId) {
+    return DATA.variantFullCode ? DATA.variantFullCode(code, variantId) : code;
+  }
+  // Renders one entry's variants into `host`, with the Guideline's group headings and the
+  // bracketed code fragment in front of each wording. Shared by the base variation and the
+  // additional-variations rows so both lists read identically.
+  function appendVariantOptions(host, entry, onPick) {
+    let lastGroup = null;
+    (entry && entry.variants ? entry.variants : []).forEach((v) => {
+      if (v.group !== lastGroup) {
+        if (v.group) host.appendChild(el("div", "vcl-wf-vgroup", escapeHtml(v.group)));
+        lastGroup = v.group;
+      }
+      const pre = variantPrefix(v, !!v.group);
+      const row = el("div", "vcl-wf-variant");
+      row.innerHTML = `<span class="vcl-wf-variant__label">${pre ? `<span class="vcl-wf-vpre">${escapeHtml(pre)}</span>` : ""}${escapeHtml(variantLabel(v) || entry.title || v.type)}</span>`
+        + ` <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
+      row.addEventListener("click", () => onPick(v));
+      host.appendChild(row);
+    });
+  }
   function typeBadgeClass(type) {
     if (!type) return "badge";
     if (type.indexOf("IA") === 0) return "badge type-ia";
@@ -463,8 +490,10 @@
   // ---- station gating ----
   function stationIndex(key) { return STATIONS.findIndex((s) => s.key === key); }
   function stationComplete(key) {
-    // Base variation resolved AND no half-entered additional variation left dangling.
-    if (key === "A") return hasVariation() && state.grouping.every(function (g) { return !!g.type; });
+    // Base variation resolved AND no half-entered additional variation left dangling. A row
+    // where nothing has been entered at all is not half-entered -- it is the open search form,
+    // which the type counters deliberately leave standing; it is pruned on leaving the station.
+    if (key === "A") return hasVariation() && state.grouping.every(function (g) { return !!g.type || isBlankRow(g); });
     // Type-IA-only submissions must choose a bundling mode (Super-Grouping /
     // Annual Update) before advancing -- a Type IA is never submitted on its own.
     // Worksharing / Super-Grouping additionally require the lead authority.
@@ -485,11 +514,18 @@
     if (window.VCL_APP && window.VCL_APP.scrollToTop) { window.VCL_APP.scrollToTop(); return; }
     if (container && container.scrollIntoView) container.scrollIntoView({ block: "start", behavior: "auto" });
   }
-  function goto(key) { if (state.reached[key]) { state.station = key; rerender(); jumpTop(); } }
+  // Leaving "Variations" drops any additional-variation row the user opened but never filled
+  // in -- it carries nothing, and keeping it would show as an empty grouping entry elsewhere.
+  function pruneBlankRows(nextKey) {
+    if (state.station !== "A" || nextKey === "A") return;
+    state.grouping = state.grouping.filter(function (g) { return !isBlankRow(g); });
+  }
+  function goto(key) { if (state.reached[key]) { pruneBlankRows(key); state.station = key; rerender(); jumpTop(); } }
   function advance(dir) {
     const i = stationIndex(state.station);
     const j = Math.max(0, Math.min(STATIONS.length - 1, i + dir));
     const key = STATIONS[j].key;
+    pruneBlankRows(key);
     state.reached[key] = true;
     state.station = key;
     rerender();
@@ -564,11 +600,8 @@
       } else if (!variant) {
         buildPickedHeader(body, entry, null);
         const chooser = el("div", "vcl-wf-variants");
-        entry.variants.forEach((v) => {
-          const row = el("div", "vcl-wf-variant");
-          row.innerHTML = `<span class="vcl-wf-variant__label">${escapeHtml(variantLabel(v) || entry.title)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
-          row.addEventListener("click", () => { state.pickedVariantId = v.id; rerender(); });
-          chooser.appendChild(row);
+        appendVariantOptions(chooser, entry, (v) => {
+          state.pickedVariantId = v.id; rerender(); jumpTop();
         });
         body.appendChild(chooser);
       } else {
@@ -632,7 +665,7 @@
     ["IA", "IB", "II"].forEach((t) => {
       const chip = el("button", "vcl-wf-opt vcl-wf-opt--sm", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`);
       chip.type = "button";
-      chip.addEventListener("click", () => { state.typeOnly = t; state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); });
+      chip.addEventListener("click", () => { state.typeOnly = t; state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); jumpTop(); });
       opts.appendChild(chip);
     });
     wrap.appendChild(opts);
@@ -681,6 +714,7 @@
           const only = e.variants && e.variants.length === 1 ? e.variants[0] : null;
           state.pickedVariantId = only ? only.id : undefined;
           rerender();
+          jumpTop();
         });
         host.appendChild(row);
       });
@@ -688,14 +722,20 @@
     }
   }
 
+  // The resolved base variation: full Guideline code, full name (entry - group - variant), and
+  // the type badge parked at the right edge next to Change rather than inside the wording.
   function buildPickedHeader(body, entry, variant) {
     const picked = el("div", "vcl-wf-picked");
-    const badge = variant ? ` <span class="${typeBadgeClass(variant.type)}">${escapeHtml(variant.type)}</span>` : "";
-    picked.innerHTML = `<span><span class="vcl-wf-picked__code">${escapeHtml(entry.code)}</span> &mdash; ${escapeHtml(entry.title)}${badge}</span>`;
+    const code = variant ? fullCodeOf(entry.code, variant.id) : entry.code;
+    const name = variant ? variantFullName(entry, variant) : (entry.title || "");
+    picked.innerHTML = `<span><span class="vcl-wf-picked__code">${escapeHtml(code)}</span> &mdash; ${escapeHtml(name)}</span>`;
+    const right = el("span", "vcl-wf-picked__right");
+    if (variant) right.appendChild(el("span", typeBadgeClass(variant.type), escapeHtml(variant.type)));
     const change = el("button", "vcl-wf-change", "Change");
     change.type = "button";
-    change.addEventListener("click", () => { state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); });
-    picked.appendChild(change);
+    change.addEventListener("click", () => { state.pickedCode = null; state.pickedVariantId = undefined; state.query = ""; rerender(); jumpTop(); });
+    right.appendChild(change);
+    picked.appendChild(right);
     body.appendChild(picked);
   }
 
@@ -839,11 +879,57 @@
 
     const add = el("button", "vcl-wf-add", "＋ Add variation");
     add.type = "button";
-    // Block piling up empty rows: no new variation until the current ones carry a type.
+    // Block piling up open rows: only one search form at a time, as before.
     add.disabled = state.grouping.some((g) => !g.type);
     add.addEventListener("click", () => { state.grouping.push({ code: null, variantId: undefined, type: null, query: "" }); rerender(); });
     panel.appendChild(add);
     host.appendChild(panel);
+  }
+
+  // A row the user opened and never filled in -- carries nothing, so it is dropped silently
+  // when Station A is left rather than blocking Next. The type counters below add their rows
+  // above such a row and leave it open, so one is routinely left behind.
+  function isBlankRow(g) { return !g.type && !g.code && !(g.query || "").trim(); }
+
+  // The three type counters under the open search row: how many code-less variations of each
+  // type are in the list. "+" appends one, "-" removes the last one added this way. The search
+  // row above stays open, so several can be added without reopening it each time.
+  function buildTypeCounters(host) {
+    const wrap = el("div", "vcl-wf-typecount");
+    wrap.appendChild(el("span", "vcl-wf-hint vcl-wf-typecount__label", "or add variations without a classification code:"));
+    const cells = el("div", "vcl-wf-typecount__row");
+    ["IA", "IB", "II"].forEach((t) => {
+      const n = state.grouping.filter((g) => !g.code && g.type === t).length;
+      const cell = el("div", "vcl-wf-typecount__cell");
+      cell.appendChild(el("span", "vcl-wf-typecount__l", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`));
+      const st = el("span", "vcl-rat-stepper");
+      const minus = el("button", null, "&minus;");
+      minus.type = "button"; minus.disabled = n === 0;
+      minus.setAttribute("aria-label", `Remove one Type ${t} variation without a classification code`);
+      minus.addEventListener("click", () => {
+        for (let i = state.grouping.length - 1; i >= 0; i--) {
+          if (!state.grouping[i].code && state.grouping[i].type === t) { state.grouping.splice(i, 1); break; }
+        }
+        rerender();
+      });
+      const plus = el("button", null, "+");
+      plus.type = "button";
+      plus.setAttribute("aria-label", `Add one Type ${t} variation without a classification code`);
+      plus.addEventListener("click", () => {
+        // Insert above the open search row so the counters stay where the cursor left them.
+        const at = state.grouping.findIndex(isBlankRow);
+        const row = { code: null, variantId: undefined, type: t, query: "" };
+        if (at === -1) state.grouping.push(row); else state.grouping.splice(at, 0, row);
+        rerender();
+      });
+      st.appendChild(minus);
+      st.appendChild(el("span", "vcl-rat-stepper__val" + (n === 0 ? " is-zero" : ""), String(n)));
+      st.appendChild(plus);
+      cell.appendChild(st);
+      cells.appendChild(cell);
+    });
+    wrap.appendChild(cells);
+    host.appendChild(wrap);
   }
 
   function buildGroupingRow(g, idx) {
@@ -855,7 +941,10 @@
       // Resolved -- either a classification code or a bare type.
       if (g.code) {
         const e = findEntry(g.code);
-        row.innerHTML = `<span class="vcl-wf-brow__main"><span class="vcl-wf-picked__code">${escapeHtml(g.code)}</span> ${escapeHtml(e ? e.title : "")} <span class="${typeBadgeClass(g.type)}">${escapeHtml(g.type)}</span></span>`;
+        const v = e ? findVariant(e, g.variantId) : null;
+        const code = v ? fullCodeOf(g.code, v.id) : g.code;
+        const name = e ? variantFullName(e, v) : "";
+        row.innerHTML = `<span class="vcl-wf-brow__main"><span class="vcl-wf-brow__text"><span class="vcl-wf-picked__code">${escapeHtml(code)}</span> ${escapeHtml(name)}</span> <span class="${typeBadgeClass(g.type)}">${escapeHtml(g.type)}</span></span>`;
       } else {
         row.innerHTML = `<span class="vcl-wf-brow__main">Type <span class="${typeBadgeClass(g.type)}">${escapeHtml(g.type)}</span> <span class="vcl-wf-sum__muted">&mdash; no classification code</span></span>`;
       }
@@ -868,12 +957,7 @@
       // options line up cleanly down the whole width.
       const chooser = el("div", "vcl-wf-brow__pick");
       chooser.appendChild(el("div", "vcl-wf-hint", "pick the type:"));
-      (e && e.variants ? e.variants : []).forEach((v) => {
-        const opt = el("div", "vcl-wf-variant");
-        opt.innerHTML = `<span class="vcl-wf-variant__label">${escapeHtml(variantLabel(v) || v.type)}</span> <span class="${typeBadgeClass(v.type)}">${escapeHtml(v.type)}</span>`;
-        opt.addEventListener("click", () => { g.variantId = v.id; g.type = v.type; rerender(); });
-        chooser.appendChild(opt);
-      });
+      appendVariantOptions(chooser, e, (v) => { g.variantId = v.id; g.type = v.type; rerender(); jumpTop(); });
       main.appendChild(chooser);
       row.appendChild(main);
     } else {
@@ -884,15 +968,7 @@
       main.appendChild(inp);
       const matches = el("div", "vcl-wf-brow__matches");
       main.appendChild(matches);
-      const quick = el("div", "vcl-wf-brow__variants");
-      quick.innerHTML = '<span class="vcl-wf-hint" style="margin:6px 6px 0 0;">or set the type directly:</span>';
-      ["IA", "IB", "II"].forEach((t) => {
-        const b = el("button", "vcl-wf-opt vcl-wf-opt--sm", `Type ${t} <span class="${typeBadgeClass(t)}">${t}</span>`);
-        b.type = "button";
-        b.addEventListener("click", () => { g.type = t; g.code = null; g.variantId = undefined; rerender(); });
-        quick.appendChild(b);
-      });
-      main.appendChild(quick);
+      buildTypeCounters(main);
       row.appendChild(main);
       renderMatches();
       function renderMatches() {
@@ -909,6 +985,7 @@
             const only = e.variants && e.variants.length === 1 ? e.variants[0] : null;
             if (only) { g.variantId = only.id; g.type = only.type; } else { g.variantId = undefined; g.type = null; }
             rerender();
+            jumpTop();
           });
           matches.appendChild(m);
         });
@@ -2218,13 +2295,18 @@
 
     // Running summary of decisions made so far.
     const chips = el("div", "vcl-wf-live__chips");
-    const variant = pickedVariant();
-    if (variant) {
-      const e = pickedEntry();
-      chips.appendChild(el("span", "vcl-wf-chip", `${escapeHtml(e.code)} <span class="${typeBadgeClass(variant.type)}">${escapeHtml(variant.type)}</span>`));
-    } else if (state.typeOnly) {
-      const ht = highestType() || state.typeOnly;
-      chips.appendChild(el("span", "vcl-wf-chip", `<span class="${typeBadgeClass(ht)}">${escapeHtml(ht)}</span>`));
+    // The variation chip names the single variation in play. In a grouping it would name only
+    // the base one while the tally chip beside it describes the whole submission, so it is
+    // dropped there. The type is spelled out rather than shown as a coloured pill -- a row of
+    // pills next to the tally read as noise.
+    if (!state.submission.grouping) {
+      const variant = pickedVariant();
+      if (variant) {
+        const e = pickedEntry();
+        chips.appendChild(el("span", "vcl-wf-chip", `Type ${escapeHtml(variant.type)} - ${escapeHtml(fullCodeOf(e.code, variant.id))}`));
+      } else if (state.typeOnly) {
+        chips.appendChild(el("span", "vcl-wf-chip", `Type ${escapeHtml(highestType() || state.typeOnly)}`));
+      }
     }
     // Grouping: a type tally of ALL variations -- including the base one, so the chip reads
     // as the whole submission (replaces the old bare "N variations" count).
