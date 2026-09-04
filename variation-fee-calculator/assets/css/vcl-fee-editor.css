@@ -159,6 +159,33 @@
   padding:2px 5px; margin-left:7px; vertical-align:1px; white-space:nowrap;
 }
 
+/* ---- captions: fee code and variant label ------------------------------
+   Both are text rather than amounts, so they carry a dashed border instead of
+   the amount fields' solid one -- one glance separates "a caption" from "a
+   number that is priced". Everything else (hover, focus, the amber
+   is-edited state) follows the amount fields exactly. */
+.vclfe-typecell{display:flex; align-items:center; gap:7px}
+#vclfe-root input.vclfe-label,
+#vclfe-root input.vclfe-codeinput{
+  font-family:var(--figure); min-height:0;
+  border:1px dashed var(--line-strong); border-radius:2px;
+  background:var(--paper); color:var(--ink-soft); box-shadow:none;
+}
+#vclfe-root input.vclfe-label{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+  padding:3px 6px; width:194px;
+}
+#vclfe-root input.vclfe-codeinput{
+  font-size:11.5px; font-variant-numeric:tabular-nums;
+  padding:4px 6px; width:104px;
+}
+#vclfe-root input.vclfe-label:hover,
+#vclfe-root input.vclfe-codeinput:hover{border-color:var(--accent)}
+#vclfe-root input.vclfe-label.is-edited,
+#vclfe-root input.vclfe-codeinput.is-edited{
+  border-style:solid; border-color:var(--amber); background:var(--amber-soft); color:var(--ink);
+}
+
 #vclfe-root input.vclfe-amount{
   font-family:var(--figure); font-size:12.5px; font-variant-numeric:tabular-nums;
   width:82px; min-height:0; text-align:right; padding:5px 6px;
@@ -368,6 +395,12 @@ tr.is-open .vclfe-chev{transform:rotate(90deg)}
   flex:none; width:26px; height:17px; margin-top:1px;
   border:1px solid var(--line); border-left:2px solid color-mix(in srgb, var(--accent) 50%, var(--line));
   border-radius:2px; background:var(--sunk);
+}
+/* The caption legend's swatch shows the dashed border it is talking about,
+   without the coupling legend's accent rail. */
+.vclfe-legend__swatch--text{
+  border:1px dashed var(--line-strong);
+  background:var(--paper);
 }
 
 /* ---- "In einfachen Worten" --------------------------------------------- */

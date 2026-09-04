@@ -270,6 +270,17 @@
   // worksharing", "quality, simple (\"B\" or \"D\")", ...). A literal "standard" label just
   // duplicates the default option, so it is dropped from the list (resolveRow falls back to
   // that row anyway when nothing is chosen).
+  // What a variant key is called on screen. The key stays the value a pick is
+  // stored under (a saved plan must keep pricing the same row); an administrator
+  // who renames a variant in wp-admin changes only this. Where one key appears
+  // under two types the first row's label wins -- one dropdown, one name.
+  function variantLabelFor(cc, role, key) {
+    if (!key) return "";
+    const hit = feeRows().find(
+      (r) => r.cc === cc && r.role === role && r.special === key
+    );
+    return (hit && (hit.label || hit.special)) || key;
+  }
   function specialOptionsFor(cc, role) {
     const types = activeTypes();
     const seen = {}; const out = [];
@@ -1512,16 +1523,16 @@
     }
     const cell = el("div");
     if (collapse) {
-      cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", escapeHtml(current || "Standard")));
+      cell.appendChild(el("span", "vcl-wf-fee-sel vcl-wf-fee-sel--static", escapeHtml(variantLabelFor(cc, role, current) || "Standard")));
     } else {
-      cell.appendChild(specialSelect(opts, current, onPick, withStd));
+      cell.appendChild(specialSelect(opts, current, onPick, withStd, cc, role));
     }
     return cell;
   }
 
   // Small dropdown over the published special-case labels. "Standard" (= no special) is
   // offered only where a plain standard row exists and the list is not worksharing-only.
-  function specialSelect(options, current, onChange, includeStandard) {
+  function specialSelect(options, current, onChange, includeStandard, cc, role) {
     const sel = document.createElement("select");
     sel.className = "vcl-wf-fee-sel";
     if (includeStandard !== false) {
@@ -1531,7 +1542,7 @@
     }
     options.forEach((s) => {
       const o = document.createElement("option");
-      o.value = s; o.textContent = s;
+      o.value = s; o.textContent = variantLabelFor(cc, role, s) || s;
       if (current === s) o.selected = true;
       sel.appendChild(o);
     });

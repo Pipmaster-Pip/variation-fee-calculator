@@ -52,6 +52,19 @@ function vcl_fee_editable_fields() {
 	return $fields;
 }
 
+/** Text columns of the fee table: the fee code printed next to a row and the
+ * label its procedure variant is shown under. Neither is read by the fee
+ * engine -- 'special' stays the row's key, so renaming a variant here does not
+ * invalidate a saved budget plan that picked it. */
+function vcl_fee_text_fields() {
+	return array( 'fee_code', 'label' );
+}
+
+/** A fee code ("3107 / 3125") or a variant label ("quality, complex (Q)") is a
+ * short caption; anything past this is not one, and a runaway paste should not
+ * end up in the table. */
+const VCL_FEE_TEXT_MAX_LEN = 120;
+
 /**
  * Which annual-fee tariffs the plugin ships, as
  * array( '<CC>' => array( '<tariffId>' => bool ) ) where the bool says whether
@@ -141,6 +154,7 @@ function vcl_get_fee_overrides() {
  */
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
+	$text    = array_flip( vcl_fee_text_fields() );
 	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array() );
 	$dropped = 0;
 
@@ -152,6 +166,25 @@ function vcl_sanitize_fee_overrides( $payload ) {
 			}
 			$row_clean = array();
 			foreach ( $fields as $field => $value ) {
+				// Fee code and variant label are captions, not amounts: they go
+				// through the text path and are stored as strings.
+				if ( isset( $text[ $field ] ) ) {
+					if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
+						$dropped++;
+						continue;
+					}
+					$caption = sanitize_text_field( (string) $value );
+					// An empty caption is not a value -- it is the editor saying
+					// "back to what the plugin ships", so it carries no entry.
+					if ( '' === $caption ) {
+						continue;
+					}
+					if ( mb_strlen( $caption ) > VCL_FEE_TEXT_MAX_LEN ) {
+						$caption = mb_substr( $caption, 0, VCL_FEE_TEXT_MAX_LEN );
+					}
+					$row_clean[ $field ] = $caption;
+					continue;
+				}
 				if ( ! isset( $allowed[ $field ] ) || ! is_numeric( $value ) ) {
 					$dropped++;
 					continue;

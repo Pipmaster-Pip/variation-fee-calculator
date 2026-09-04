@@ -263,6 +263,55 @@
     ? window.VCLCALC.shippedFees()
     : { rows: {}, points: {} };
 
+  // ---- captions ----------------------------------------------------------
+  // Fee code and variant label are text, not amounts, and they live in the same
+  // per-row edit map as everything else -- so they are counted, exported,
+  // imported and cleared without a second mechanism. What they are NOT is the
+  // row's key: `special` stays untouched, so renaming a variant here cannot
+  // reprice a budget plan that was saved with the old name.
+  var TEXT_FIELDS = ['fee_code', 'label'];
+  var SHIPPED_TEXT = (window.VCLCALC && typeof window.VCLCALC.shippedText === 'function')
+    ? window.VCLCALC.shippedText()
+    : {};
+
+  function baseText(row, field) {
+    var snap = SHIPPED_TEXT[row.row];
+    var v = snap ? snap[field] : row[field];
+    // fee_code is a number in the data file for codes like 3102.
+    return (v === null || v === undefined) ? '' : String(v);
+  }
+  // What the field shows: the typed caption where one exists, otherwise what the
+  // plugin ships. For the label that fallback is the row's own key -- which is
+  // exactly what the badge showed before this was editable.
+  function textValue(row, field) {
+    var e = edits[row.row];
+    if (e && Object.prototype.hasOwnProperty.call(e, field)) return e[field];
+    if (field === 'label') return baseText(row, 'label') || String(row.special || '');
+    return baseText(row, field);
+  }
+  function textEdited(row, field) {
+    var e = edits[row.row];
+    return !!(e && Object.prototype.hasOwnProperty.call(e, field));
+  }
+  function setText(row, field, raw) {
+    var value = String(raw === null || raw === undefined ? '' : raw).trim();
+    var shipped = (field === 'label')
+      ? (baseText(row, 'label') || String(row.special || ''))
+      : baseText(row, field);
+    if (!edits[row.row]) edits[row.row] = {};
+    // Empty, or typed back to what is shipped, is not an override -- same rule
+    // the amount cells follow, so "n geändert" never counts a non-change.
+    if (value === '' || value === shipped) {
+      delete edits[row.row][field];
+      if (!Object.keys(edits[row.row]).length) delete edits[row.row];
+    } else {
+      edits[row.row][field] = value;
+    }
+    // Same tail as setEdit(): pushes the edit into the engine, so the counter,
+    // the unsaved-changes state and the live example all move with it.
+    applyToEngine();
+  }
+
   function baseValue(row, col, mode) {
     var snap = SHIPPED.rows[row.row];
     var f = fieldName(col, mode);
@@ -971,6 +1020,22 @@
     card.appendChild(scroll);
     sec.appendChild(card);
 
+    // Captions first: the two dashed fields are the only ones on this screen that
+    // are not amounts, so the sentence that says so belongs directly under them.
+    var capLegend = document.createElement('p');
+    capLegend.className = 'vclfe-legend';
+    var capSwatch = document.createElement('span');
+    capSwatch.className = 'vclfe-legend__swatch vclfe-legend__swatch--text';
+    capLegend.appendChild(capSwatch);
+    capLegend.appendChild(document.createTextNode(
+      'Gestrichelt umrandet sind Beschriftungen, keine Beträge: der Fee code und '
+      + 'die Bezeichnung der Verfahrensart. Beide ändern nur, was angezeigt wird — '
+      + 'gerechnet wird unverändert weiter, und bereits gespeicherte Budgetpläne '
+      + 'behalten ihre Auswahl. Feld leeren stellt wieder her, was das Plugin '
+      + 'ausliefert. Der Typ (IA / IB / II) links davon steht fest: er entscheidet, '
+      + 'welche Formel rechnet.'));
+    sec.appendChild(capLegend);
+
     if (rows.some(function (r) { return r.links; })) {
       var legend = document.createElement('p');
       legend.className = 'vclfe-legend';
@@ -1032,7 +1097,7 @@
   function rowShortName(row) {
     var r = ROW_BY_NUMBER[row];
     if (!r) return 'Zeile ' + row;
-    return (TYPE_LABELS[r.type] || r.type) + (r.special ? ' ' + r.special : '') + ' · ' + r.role;
+    return (TYPE_LABELS[r.type] || r.type) + (r.special ? ' ' + textValue(r, 'label') : '') + ' · ' + r.role;
   }
 
   // A row's formulas with every row number stripped, so two rows doing the same
@@ -1548,19 +1613,24 @@
     if (openRow === row.row) tr.className = 'is-open';
 
     var tdType = document.createElement('td');
-    tdType.className = 'vclfe-type';
-    tdType.appendChild(document.createTextNode(TYPE_LABELS[row.type] || row.type));
+    var typeWrap = document.createElement('div');
+    typeWrap.className = 'vclfe-typecell';
+    var typeName = document.createElement('span');
+    typeName.className = 'vclfe-type';
+    typeName.textContent = TYPE_LABELS[row.type] || row.type;
+    typeWrap.appendChild(typeName);
+    // The type itself (IA / IB / II) is not editable: it decides which formula
+    // prices the row. Only the variant beside it is a caption.
     if (row.special) {
-      var sp = document.createElement('span');
-      sp.className = 'vclfe-special';
-      sp.textContent = row.special;
-      tdType.appendChild(sp);
+      typeWrap.appendChild(textInput(row, 'label', 'vclfe-label',
+        'Bezeichnung der Verfahrensart, Zeile ' + row.row));
     }
+    tdType.appendChild(typeWrap);
     tr.appendChild(tdType);
 
     var tdCode = document.createElement('td');
-    tdCode.className = 'vclfe-code';
-    tdCode.textContent = row.fee_code || '—';
+    tdCode.appendChild(textInput(row, 'fee_code', 'vclfe-codeinput',
+      'Fee code, Zeile ' + row.row));
     tr.appendChild(tdCode);
 
     cols.forEach(function (col) {
@@ -1585,6 +1655,24 @@
     tr.appendChild(tdBtn);
 
     return tr;
+  }
+
+  // One caption field. Unlike an amount there is nothing to validate: any short
+  // text is a legitimate fee code or variant name, and emptying it is the
+  // documented way back to what the plugin ships.
+  function textInput(row, field, cls, ariaLabel) {
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = cls + (textEdited(row, field) ? ' is-edited' : '');
+    inp.value = textValue(row, field);
+    inp.setAttribute('aria-label', ariaLabel);
+    inp.title = 'Nur die Beschriftung. Feld leeren stellt wieder her, was das Plugin ausliefert.';
+    inp.addEventListener('change', function () {
+      setText(row, field, inp.value);
+      renderCountry();
+      renderPicker();
+    });
+    return inp;
   }
 
   function amountCell(row, col, mode) {
@@ -1709,7 +1797,7 @@
     var ctx = document.createElement('p');
     ctx.className = 'vclfe-ex__ctx';
     ctx.textContent = (TYPE_LABELS[row.type] || row.type)
-      + (row.special ? ' ' + row.special : '')
+      + (row.special ? ' ' + textValue(row, 'label') : '')
       + ' · ' + (row.role === 'national' ? 'rein national' : 'als ' + row.role);
     aside.appendChild(ctx);
 

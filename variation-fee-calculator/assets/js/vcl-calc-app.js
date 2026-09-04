@@ -145,6 +145,46 @@ const SHIPPED_AMOUNTS = FEE_ROWS.map(r => {
   return snap;
 });
 const SHIPPED_POINT_VALUES = Object.assign({}, POINT_VALUES);
+
+// The two captions of a row that the fee editor may rewrite: the fee code the
+// authority prints next to the fee, and the label its procedure variant is
+// shown under. Deliberately NOT 'special' -- that string is the row's key: the
+// dropdowns offer it, the classification hints are filed under it, and a saved
+// budget plan stores the pick by it. Renaming the key would silently reprice
+// such a plan, so an edited label is carried alongside in 'label' and only the
+// display reads it. Same snapshot discipline as the amounts, for the same
+// reason: the editor re-applies a shrinking or growing edit set on every
+// keystroke.
+const TEXT_COLUMNS = ['fee_code', 'label'];
+const SHIPPED_TEXT = FEE_ROWS.map(r => {
+  const snap = {};
+  TEXT_COLUMNS.forEach(f => { snap[f] = (f in r) ? r[f] : null; });
+  return snap;
+});
+// Keyed by row number as well: applyOverrides() walks the override map, which is
+// keyed that way, and runs on every keystroke in the editor.
+const SHIPPED_TEXT_BY_ROW = {};
+FEE_ROWS.forEach((r, i) => { SHIPPED_TEXT_BY_ROW[r.row] = SHIPPED_TEXT[i]; });
+
+// What a row's procedure variant is called on screen: the edited label where one
+// was typed, otherwise the shipped key. Everything user-facing goes through this
+// -- the dropdowns, the results table, the public fee page, the editor itself --
+// so a rename in wp-admin shows up everywhere at once.
+function variantLabel(r) {
+  if (!r) return '';
+  return r.label || r.special || '';
+}
+
+// Same, addressed the way the pickers hold a variant: by its key. Used where a
+// dropdown carries the key as the option's value and needs the label as its
+// text. Falls back to the key itself, so an unknown one still reads sensibly.
+function variantLabelFor(cc, role, type, special) {
+  if (!special) return '';
+  const hit = FEE_ROWS.find(
+    r => r.cc === cc && r.role === role && r.type === type && r.special === special
+  );
+  return hit ? variantLabel(hit) : special;
+}
 // The change history the workbook ships. Entries written in the fee editor go in
 // front of these, so the snapshot is what applyOverrides() rebuilds from -- same
 // discipline as the amounts above, and for the same reason: this runs again after
@@ -178,6 +218,8 @@ function applyOverrides() {
   FEE_ROWS.forEach((r, i) => {
     const snap = SHIPPED_AMOUNTS[i];
     Object.keys(snap).forEach(f => { r[f] = snap[f]; });
+    const text = SHIPPED_TEXT[i];
+    TEXT_COLUMNS.forEach(f => { r[f] = text[f]; });
   });
   if (POINT_VALUES) {
     Object.keys(POINT_VALUES).forEach(cc => { delete POINT_VALUES[cc]; });
@@ -198,6 +240,14 @@ function applyOverrides() {
         const fields = ov.rows[key];
         if (!fields || typeof fields !== 'object') return;
         Object.keys(fields).forEach(f => {
+          // Captions are applied but do not set `touched`: that flag gates the
+          // re-derivation of the euro columns, and no amount moved here.
+          if (TEXT_COLUMNS.indexOf(f) !== -1) {
+            const caption = (fields[f] === null || fields[f] === undefined)
+              ? '' : String(fields[f]).trim();
+            r[f] = caption || SHIPPED_TEXT_BY_ROW[r.row][f];
+            return;
+          }
           if (!OVERRIDABLE.has(f)) return;
           const raw = fields[f];
           if (raw === null || raw === '') { r[f] = null; touched = true; return; }
@@ -693,6 +743,20 @@ window.VCLCALC = {
     FEE_ROWS.forEach((r, i) => { rows[r.row] = Object.assign({}, SHIPPED_AMOUNTS[i]); });
     return { rows, points: Object.assign({}, SHIPPED_POINT_VALUES) };
   },
+  // The captions as shipped -- fee code and variant label, before any override.
+  // The editor needs them for the same reason it needs shippedFees(): to tell an
+  // edit from an untouched value, and to know what emptying a field restores to.
+  // Shape: { '<rowNo>': { fee_code, label } }.
+  shippedText() {
+    const out = {};
+    FEE_ROWS.forEach((r, i) => { out[r.row] = Object.assign({}, SHIPPED_TEXT[i]); });
+    return out;
+  },
+  // What a row's variant is called on screen -- the edited label where one was
+  // typed in wp-admin, otherwise the shipped key. Tools that render a variant
+  // name go through this instead of reading `special` directly.
+  variantLabel(r) { return variantLabel(r); },
+  variantLabelFor(cc, role, type, special) { return variantLabelFor(cc, role, type, special); },
   computeFees(input) {
     const counts = { IA: 0, IB: 0, II: 0 };
     if (input && input.counts) ['IA', 'IB', 'II'].forEach((t) => { counts[t] = Math.max(0, parseInt(input.counts[t], 10) || 0); });
@@ -1210,7 +1274,7 @@ function renderSpecialPanel() {
                   <td>
                     <select class="field-select" data-special-select="${cc}|${type}">
                       ${hasStandard ? `<option value="" ${current===''?'selected':''}>Standard</option>` : ''}
-                      ${options.map(o => `<option value="${o}" ${current===o?'selected':''}>${o}</option>`).join('')}
+                      ${options.map(o => `<option value="${escapeAttr(o)}" ${current===o?'selected':''}>${escapeHtml(variantLabelFor(cc, cfg.role, type, o))}</option>`).join('')}
                     </select>
                   </td>
                 </tr>`;
@@ -1592,7 +1656,7 @@ function computeCountryBreakdown(cc, full) {
 
   const order = ['II', 'IB', 'IA'].filter(t => (counts[t] || 0) > 0);
   const totalFor = (cnts, str) => (computeCountryResult(cc, Object.assign({}, cfg, { strengths: str }), cnts).total || 0);
-  const labelFor = t => { const r = resolveRow(cc, cfg.role, t, cfg.specialByType[t]); return (r && r.special) ? r.special : ''; };
+  const labelFor = t => variantLabel(resolveRow(cc, cfg.role, t, cfg.specialByType[t]));
   // Whether this country/type offers a variant choice at all -- decides between "standard"
   // and a plain dash in the result's Special case column.
   const hasVariants = t => {
@@ -2370,7 +2434,7 @@ function renderStepFeeData() {
                     aria-label="Type ${escapeAttr(t)} &mdash; special case">
               ${cand.map(r => `<option value="${escapeAttr(r.special || '')}"${
                 (r.special || '') === cur ? ' selected' : ''
-              }>${escapeHtml(r.special || 'standard')}</option>`).join('')}
+              }>${escapeHtml(variantLabel(r) || 'standard')}</option>`).join('')}
             </select>`;
   };
   const qcTypeRow = (t) => `
@@ -2523,7 +2587,7 @@ function renderStepFeeData() {
     const notes = marked.length ? `
       <p class="fd-hint fd-fnotes">
         ${marked.map((r) => {
-          const label = `Type ${escapeHtml(r.type)}${r.special ? ' &middot; ' + escapeHtml(r.special) : ''}`;
+          const label = `Type ${escapeHtml(r.type)}${r.special ? ' &middot; ' + escapeHtml(variantLabel(r)) : ''}`;
           const amount = noteAmount(rowNote[r.row]);
           return `<span class="fd-fnote"><sup class="fd-fnref">${marks[r.row]}</sup> ${label}: ${
             typeof r.F === 'number'
@@ -2556,7 +2620,7 @@ function renderStepFeeData() {
             ${g.rows.map(r => `
               <tr>
                 <td><span class="fd-type"><span class="fd-tname">Type ${escapeHtml(r.type)}</span>${typePillHTML(r.type)}</span></td>
-                ${anySpecial ? `<td class="fd-sc">${escapeHtml(r.special || 'standard')}</td>` : ''}
+                ${anySpecial ? `<td class="fd-sc">${escapeHtml(variantLabel(r) || 'standard')}</td>` : ''}
                 <td class="fd-code">${r.fee_code ? escapeHtml(String(r.fee_code)) : '&ndash;'}</td>
                 ${FEE_COLS.map(c => cell(r, c.key, c.key === 'F' ? marks[r.row] : null)).join('')}
               </tr>`).join('')}
@@ -2657,7 +2721,7 @@ function renderStepFeeData() {
         ${VAR_TYPES.slice().reverse().filter(t => counts[t] > 0).map((t) => {
           const picked = qcRows[t].picked;
           return `<div class="fd-line"><span>${counts[t]}&times; Type ${escapeHtml(t)}</span><span>${
-            picked && picked.special ? escapeHtml(picked.special) : '&ndash;'
+            picked && picked.special ? escapeHtml(variantLabel(picked)) : '&ndash;'
           }</span></div>`;
         }).join('')}
         <div class="fd-line"><span>${strengths} strength${strengths === 1 ? '' : 's'}</span><span>${
