@@ -452,6 +452,12 @@ function vcl_shortcode( $atts ) {
 
 	<header class="app-header">
 	  <div class="app-header__actions">
+	    <?php $vcl_lt = vcl_get_lt_url(); if ( $vcl_lt ) : ?>
+	    <a class="app-header__lt" href="<?php echo esc_url( $vcl_lt ); ?>" title="Legal Toolbox">
+	      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+	      <span>Legal Toolbox</span>
+	    </a>
+	    <?php endif; ?>
 	    <button type="button" class="app-header__summary hidden" id="vcl-summaryHeaderBtn" aria-label="Show the summary of selected variations" title="Summary of selected variations">
 	      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h11"/><path d="M8 12h11"/><path d="M8 18h11"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>
 	      <span>Summary</span>

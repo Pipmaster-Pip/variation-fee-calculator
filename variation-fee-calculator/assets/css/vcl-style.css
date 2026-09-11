@@ -147,6 +147,26 @@
 .vcl-app .app-header__home svg,
 .vcl-app .app-header__guide svg { flex-shrink: 0; }
 
+/* Cross-link to the sibling Legal Toolbox: neutral pill like Home/Guide, but with
+   the Legal Toolbox's teal identity so it reads as "leaves to the other tool". */
+.vcl-app .app-header__lt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.vcl-app .app-header__lt:hover { border-color: var(--accent); }
+.vcl-app .app-header__lt svg { flex-shrink: 0; }
+
 /* Summary action button: filled plum pill (the Summary's own identity color), shown only once a
    variation is selected -- it replaces the old Summary nav tile in the left column, so the running
    selection stays visible in the masthead instead of getting lost among the tool tiles. */

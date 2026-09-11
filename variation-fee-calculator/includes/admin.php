@@ -119,6 +119,15 @@ function vcl_get_contact_email() {
 }
 
 /**
+ * URL of the sibling Legal Toolbox, shown as a header link in this toolbox.
+ * Editable on the Einstellungen tab (option `vcl_lt_url`); empty hides the link.
+ */
+const VCL_DEFAULT_LT_URL = 'https://www.pharmazulassung.de/ra-toolbox/legal-toolbox/';
+function vcl_get_lt_url() {
+	return (string) get_option( 'vcl_lt_url', VCL_DEFAULT_LT_URL );
+}
+
+/**
  * The contact address split into local part and domain, which is the shape handed
  * to the front end. wp_localize_script() prints VCL_CONFIG into the page as plain
  * JSON, so shipping the address whole would put a literal "name@domain.tld" in the
@@ -332,6 +341,35 @@ function vcl_render_settings_tab() {
 		</table>
 		<?php submit_button( 'Excel-Link speichern' ); ?>
 	</form>
+
+	<hr>
+
+	<h2>Legal Toolbox — Header-Link</h2>
+
+	<?php if ( $vcl_status === 'lt_saved' ) : ?>
+		<div class="notice notice-success is-dismissible"><p>Legal-Toolbox-Link gespeichert.</p></div>
+	<?php endif; ?>
+
+	<p style="max-width:46em;">
+		Die Toolbox zeigt im Kopfbereich eine Verknüpfung „Legal Toolbox“ zur Schwester-Toolbox
+		(EU-Pharmagesetzgebung). Trage hier deren Seiten-URL ein; der Link öffnet im selben Tab.
+		Feld leer lassen = kein Link.
+	</p>
+
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'vcl_save_lt_url_action', 'vcl_save_lt_url_nonce' ); ?>
+		<input type="hidden" name="action" value="vcl_save_lt_url">
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="vcl_lt_url">Legal Toolbox URL</label></th>
+				<td>
+					<input type="url" id="vcl_lt_url" name="vcl_lt_url" value="<?php echo esc_attr( vcl_get_lt_url() ); ?>" class="regular-text" placeholder="<?php echo esc_attr( VCL_DEFAULT_LT_URL ); ?>">
+					<p class="description" style="margin-top:8px;">Standard: <code><?php echo esc_html( VCL_DEFAULT_LT_URL ); ?></code></p>
+				</td>
+			</tr>
+		</table>
+		<?php submit_button( 'Legal-Toolbox-Link speichern' ); ?>
+	</form>
 	<?php
 }
 
@@ -407,3 +445,21 @@ function vcl_handle_save_contact() {
 	exit;
 }
 add_action( 'admin_post_vcl_save_contact', 'vcl_handle_save_contact' );
+
+/**
+ * Saves the sibling Legal Toolbox URL (see vcl_get_lt_url). Stored empty when
+ * cleared, which hides the header link.
+ */
+function vcl_handle_save_lt_url() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Keine Berechtigung.' );
+	}
+	check_admin_referer( 'vcl_save_lt_url_action', 'vcl_save_lt_url_nonce' );
+
+	$url = isset( $_POST['vcl_lt_url'] ) ? esc_url_raw( trim( wp_unslash( $_POST['vcl_lt_url'] ) ) ) : '';
+	update_option( 'vcl_lt_url', $url );
+
+	wp_safe_redirect( add_query_arg( array( 'vcl_status' => 'lt_saved' ), vcl_toolbox_page_url( 'settings' ) ) );
+	exit;
+}
+add_action( 'admin_post_vcl_save_lt_url', 'vcl_handle_save_lt_url' );
