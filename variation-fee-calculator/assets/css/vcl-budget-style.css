@@ -210,7 +210,9 @@
 .vcl-app .vcl-bud-detail__grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 26px; }
 .vcl-app .vcl-bud-detail__sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; margin: 12px 0 4px; }
 .vcl-app .vcl-bud-detail__item { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid var(--border-soft); }
-.vcl-app .vcl-bud-detail__h { font-family:var(--figure); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vcl-app .vcl-bud-detail__h { font-family:var(--figure); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+/* Cost-summary value columns: right-align the headline figure so it lines up with the band below it. */
+.vcl-app .vcl-bud-detail__sub > span:last-child { text-align: right; }
 .vcl-app .vcl-bud-detail__sub { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; font-weight: 600; color: var(--budget); padding: 5px 0 2px; }
 .vcl-app .vcl-bud-detail__total { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-top: 10px; padding-top: 8px; border-top: 1.5px solid var(--budget); font-variant-numeric: tabular-nums; }
 
