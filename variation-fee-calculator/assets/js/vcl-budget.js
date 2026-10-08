@@ -698,11 +698,11 @@
       }
       costRow("Official fees", escapeHtml(fmtEUR(r.fee)));
       costRow("Internal RA costs · " + Math.round(r.hours.expected) + " h × " + escapeHtml(fmtEUR(rateVal())) + "/h",
-        escapeHtml(fmtEUR(lc.internal.expected)) + ' <span class="vcl-bud-detail__band">' + costBand(lc.internal) + "</span>");
+        escapeHtml(fmtEUR(lc.internal.expected)) + '<span class="vcl-bud-detail__band">' + costBand(lc.internal) + "</span>");
       if (state.trackExternal) costRow("External costs", escapeHtml(fmtEUR(lc.external)));
       var ctot = el("div", "vcl-bud-detail__sub");
       ctot.appendChild(el("span", null, "Total cost"));
-      ctot.appendChild(el("span", null, escapeHtml(fmtEUR(lc.total.expected)) + ' <span class="vcl-bud-detail__band">' + costBand(lc.total) + "</span>"));
+      ctot.appendChild(el("span", null, escapeHtml(fmtEUR(lc.total.expected)) + '<span class="vcl-bud-detail__band">' + costBand(lc.total) + "</span>"));
       right.appendChild(ctot);
     }
 
@@ -876,10 +876,10 @@
       var lc = costOf(r, line);
       var raCostCell, totalCostCell;
       if (r.complete && lc.hasRate) {
-        raCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(lc.raCost.expected)) +
-          '<div class="vcl-bud-hours-band">' + costBand(lc.raCost) + "</div></td>";
-        totalCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(lc.total.expected)) +
-          '<div class="vcl-bud-hours-band">' + costBand(lc.total) + "</div></td>";
+        // Single headline figure in the table -- the min-max band lives in the expanded Cost summary
+        // (keeping the two new columns calm; the Hours column keeps its band).
+        raCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(lc.raCost.expected)) + "</td>";
+        totalCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(lc.total.expected)) + "</td>";
       } else {
         raCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">—</td>';
         totalCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">—</td>';

@@ -104,8 +104,8 @@
 .vcl-app .vcl-bud-costsw .vcl-rat-toggle__thumb { width: 18px; height: 18px; top: 3px; left: 3px; }
 .vcl-app .vcl-bud-costsw .vcl-rat-toggle.is-on .vcl-rat-toggle__thumb { transform: translateX(18px); }
 
-/* Cost-summary band in the expanded detail row. */
-.vcl-app .vcl-bud-detail__band { color: var(--ink-faint); font-weight: 400; font-size: 11.5px; }
+/* Cost-summary band in the expanded detail row: a muted second line under the figure. */
+.vcl-app .vcl-bud-detail__band { display: block; text-align: right; color: var(--ink-faint); font-weight: 400; font-size: 11.5px; margin-top: 2px; }
 /* WordPress themes routinely add vertical cell borders to every <table>; force this table's own
    clean look -- only horizontal row rules, never dangling vertical column lines. */
 .vcl-app table.vcl-bud-table th,
