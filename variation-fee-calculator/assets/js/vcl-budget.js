@@ -147,7 +147,7 @@
   // annualLines: the second "Plan lines" table (annual maintenance fees) -- persisted alongside the
   // variation lines but priced by a wholly separate pure function (computeAnnualRow), so it gets no
   // resultsById cache: each render just calls the (cheap, pure) engine fresh per row.
-  var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc", breakdownMode: "combined" };
+  var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, internalRate: plan.internalRate || "", trackExternal: !!plan.trackExternal, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc", breakdownMode: "combined" };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
   // Annual "Add product" editor (Task 7) -- a second, independent takeover, mutually exclusive with
@@ -354,7 +354,7 @@
   }
 
   function saveState() {
-    var ok = BUD.savePlan(window.localStorage, { version: 3, hoursPerHead: state.hoursPerHead, lines: state.lines, annualLines: state.annualLines });
+    var ok = BUD.savePlan(window.localStorage, { version: 4, hoursPerHead: state.hoursPerHead, internalRate: state.internalRate, trackExternal: state.trackExternal, lines: state.lines, annualLines: state.annualLines });
     if (!ok && state.storageOk) { state.storageOk = false; rerender(); }
     else if (ok && !state.storageOk) { state.storageOk = true; }
   }
@@ -419,6 +419,15 @@
   function fmtEUR(v) {
     return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
   }
+  // ---- cost helpers (v4: internal + optional external, see the 2026-10-08 budget-cost design) ----
+  // The plan-wide internal RA rate as a number, or null when unset/invalid ("—" everywhere).
+  function rateVal() { return BUD.parseRate(state.internalRate); }
+  // The money view of one line (internal / external / RA-side / total), delegating to the engine.
+  function costOf(r, line) { return BUD.lineCost(r, line, rateVal(), state.trackExternal); }
+  // "(€1,890 – €3,510)" band for a {min,max} cost.
+  function costBand(mm) { return "(" + escapeHtml(fmtEUR(mm.min)) + " – " + escapeHtml(fmtEUR(mm.max)) + ")"; }
+  // Header for the combined RA-cost column: external folded in only when the plan tracks it.
+  function raCostLabel() { return state.trackExternal ? "Int./ext. RA costs" : "Int. RA costs"; }
   // Plain "12,345 CCY" formatting for the annual fee cell's local-currency line (no currency
   // symbol -- fmtEUR already owns the €-prefixed number, this is the muted secondary amount).
   function fmtLocalAmount(v, ccy) {
@@ -493,20 +502,18 @@
   function renderRollupTiles(rollup, annualRollup) {
     var wrap = el("div", "vcl-bud-rollup");
 
-    // Agency fees card (Proposal 2): one-off variation fees + recurring annual maintenance fees,
-    // stacked as three rows with a divider before the combined "Total this year".
-    var agencyTile = el("div", "vcl-bud-tile vcl-bud-agency");
+    // Agency fees card: the combined one-off + recurring total as the headline figure (same type
+    // treatment as the FTE tile), with the Variations / Annual fee breakdown spelled out below it.
+    var agencyTile = el("div", "vcl-bud-tile vcl-bud-tile--fte vcl-bud-agency");
     agencyTile.appendChild(el("p", "vcl-bud-tile__label", "Agency fees · " + escapeHtml(planYearLabel())));
     var totalThisYear = rollup.totals.fee + annualRollup.totalEur;
-    var rowsHtml =
+    agencyTile.appendChild(el("p", "vcl-bud-tile__value", fmtEUR(totalThisYear)));
+    var agencyRows =
       '<div class="vcl-bud-agency__row"><span>Variations</span><span class="vcl-bud-agency__val">' +
       escapeHtml(fmtEUR(rollup.totals.fee)) + "</span></div>" +
       '<div class="vcl-bud-agency__row"><span>Annual fee</span><span class="vcl-bud-agency__val">' +
-      escapeHtml(fmtEUR(annualRollup.totalEur)) + "</span></div>" +
-      '<div class="vcl-bud-agency__divider"></div>' +
-      '<div class="vcl-bud-agency__row vcl-bud-agency__row--total"><span>Total this year</span><span class="vcl-bud-agency__val">' +
-      escapeHtml(fmtEUR(totalThisYear)) + "</span></div>";
-    agencyTile.appendChild(el("div", "vcl-bud-agency__rows", rowsHtml));
+      escapeHtml(fmtEUR(annualRollup.totalEur)) + "</span></div>";
+    agencyTile.appendChild(el("div", "vcl-bud-agency__rows", agencyRows));
     wrap.appendChild(agencyTile);
 
     var hoursTile = el("div", "vcl-bud-tile");
@@ -537,6 +544,49 @@
     sub.appendChild(document.createTextNode(" h / head / year"));
     fteTile.appendChild(sub);
     wrap.appendChild(fteTile);
+
+    // Total cost tile: official fees + internal RA cost (hours x rate) + optional external costs.
+    // The plan-wide rate lives here (like the FTE tile's hours-per-head), plus a "track external
+    // costs" switch. Without a rate the headline is "—" -- no fabricated number.
+    var hasRate = rollup.totals.hasRate;
+    var tcTile = el("div", "vcl-bud-tile vcl-bud-tile--fte vcl-bud-tile--totalcost");
+    tcTile.appendChild(el("p", "vcl-bud-tile__label", "Total cost · " + escapeHtml(planYearLabel())));
+    tcTile.appendChild(el("p", "vcl-bud-tile__value", hasRate ? fmtEUR(rollup.totals.totalCostExpected + annualRollup.totalEur) : "—"));
+    if (hasRate) {
+      var parts = "Fees " + fmtEUR(rollup.totals.fee + annualRollup.totalEur) + " · intern " + fmtEUR(rollup.totals.internalExpected);
+      if (state.trackExternal) parts += " · extern " + fmtEUR(rollup.totals.externalTotal);
+      tcTile.appendChild(el("p", "vcl-bud-tile__sub", escapeHtml(parts)));
+    } else {
+      tcTile.appendChild(el("p", "vcl-bud-tile__sub", "Set an internal RA rate to see internal and total cost."));
+    }
+    // Rate input (same control pattern as the FTE tile's hours-per-head).
+    var rateSub = el("p", "vcl-bud-tile__sub");
+    rateSub.appendChild(document.createTextNode("Internal RA rate "));
+    var rateInput = el("input", "vcl-bud-fte-input");
+    rateInput.type = "text";
+    rateInput.value = state.internalRate;
+    rateInput.placeholder = "e.g. 90";
+    rateInput.addEventListener("change", function () {
+      state.internalRate = rateInput.value.trim();
+      saveState();
+      rerender();
+    });
+    rateSub.appendChild(rateInput);
+    rateSub.appendChild(document.createTextNode(" €/h"));
+    tcTile.appendChild(rateSub);
+    // Track-external-costs switch (reuses the RA-tasks toggle look).
+    var swRow = el("div", "vcl-bud-costsw");
+    var sw = el("button", "vcl-rat-toggle" + (state.trackExternal ? " is-on" : ""));
+    sw.type = "button";
+    sw.setAttribute("aria-pressed", state.trackExternal ? "true" : "false");
+    sw.setAttribute("aria-label", "Track external costs");
+    sw.innerHTML = '<span class="vcl-rat-toggle__track"><span class="vcl-rat-toggle__thumb"></span></span>';
+    sw.addEventListener("click", function (e) { e.preventDefault(); state.trackExternal = !state.trackExternal; saveState(); rerender(); });
+    swRow.appendChild(sw);
+    swRow.appendChild(el("span", "vcl-bud-costsw__label", "Track external costs"));
+    tcTile.appendChild(swRow);
+    wrap.appendChild(tcTile);
+
     return wrap;
   }
 
@@ -574,7 +624,7 @@
   // <tr> appended under the line row.
   function renderDetailRow(line, r) {
     var tr = el("tr", "vcl-bud-detail-row");
-    var td = el("td"); td.colSpan = 8;
+    var td = el("td"); td.colSpan = 10;
     var box = el("div", "vcl-bud-detail");
 
     if (!r.complete || !r.hoursDetail) {
@@ -626,6 +676,29 @@
     feeSub.appendChild(el("span", null, escapeHtml(fmtEUR(r.fee))));
     right.appendChild(feeSub);
 
+    // Cost summary (read-only): official fees -> internal (hours x rate) -> external (if tracked)
+    // -> total cost. Only shown once a plan-wide rate is set; the input lives in the dashboard tile
+    // and (for external) the line editor.
+    var lc = costOf(r, line);
+    if (lc.hasRate) {
+      right.appendChild(el("div", "vcl-bud-detail__sec", "Cost summary"));
+      function costRow(label, valueHtml) {
+        var row = el("div", "vcl-bud-detail__item");
+        row.appendChild(el("span", null, escapeHtml(label)));
+        row.appendChild(el("span", "vcl-bud-detail__h", valueHtml));
+        right.appendChild(row);
+        return row;
+      }
+      costRow("Official fees", escapeHtml(fmtEUR(r.fee)));
+      costRow("Internal · " + Math.round(r.hours.expected) + " h × " + escapeHtml(fmtEUR(rateVal())) + "/h",
+        escapeHtml(fmtEUR(lc.internal.expected)) + ' <span class="vcl-bud-detail__band">' + costBand(lc.internal) + "</span>");
+      if (state.trackExternal) costRow("External costs", escapeHtml(fmtEUR(lc.external)));
+      var ctot = el("div", "vcl-bud-detail__sub");
+      ctot.appendChild(el("span", null, "Total cost"));
+      ctot.appendChild(el("span", null, escapeHtml(fmtEUR(lc.total.expected)) + ' <span class="vcl-bud-detail__band">' + costBand(lc.total) + "</span>"));
+      right.appendChild(ctot);
+    }
+
     var p = (line.probability == null) ? 100 : line.probability;
     right.appendChild(el("div", "vcl-bud-detail__sec", "Expected value (× " + p + "% probability)"));
     var ef = el("div", "vcl-bud-detail__item");
@@ -636,6 +709,12 @@
     eh.appendChild(el("span", null, "Expected hours"));
     eh.appendChild(el("span", "vcl-bud-detail__h", Math.round(r.hours.expected * p / 100) + " h"));
     right.appendChild(eh);
+    if (lc.hasRate) {
+      var etc = el("div", "vcl-bud-detail__item");
+      etc.appendChild(el("span", null, "Expected total cost"));
+      etc.appendChild(el("span", "vcl-bud-detail__h", escapeHtml(fmtEUR(lc.total.expected * p / 100))));
+      right.appendChild(etc);
+    }
     grid.appendChild(right);
 
     box.appendChild(grid);
@@ -715,9 +794,9 @@
       return '<span class="vcl-bud-sortarrow" aria-hidden="true">' + (state.sortDir === "desc" ? "▾" : "▴") + "</span>";
     }
     table.innerHTML =
-      '<colgroup><col style="width:14%"><col style="width:12%"><col style="width:17%">' +
-      '<col style="width:17%"><col style="width:6%"><col style="width:9%">' +
-      '<col style="width:12%"><col style="width:13%"></colgroup>' +
+      '<colgroup><col style="width:13%"><col style="width:10%"><col style="width:14%">' +
+      '<col style="width:14%"><col style="width:6%"><col style="width:8%">' +
+      '<col style="width:10%"><col style="width:12%"><col style="width:12%"><col></colgroup>' +
       "<thead><tr>" +
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="product">Product' + sortArrow("product") + '</th>' +
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="mode">Mode' + sortArrow("mode") + '</th>' +
@@ -725,6 +804,8 @@
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="quarter">Quarter' + sortArrow("quarter") + '</th>' +
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="fee" style="text-align:right">Fee' + sortArrow("fee") + '</th>' +
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="hours" style="text-align:right">Hours (PERT)' + sortArrow("hours") + '</th>' +
+      '<th class="vcl-bud-cost-th" style="text-align:right">' + escapeHtml(raCostLabel()) + '</th>' +
+      '<th class="vcl-bud-cost-th" style="text-align:right">Total cost</th>' +
       '<th></th></tr></thead>';
     var tbody = el("tbody");
     function sortValue(line, key) {
@@ -784,6 +865,18 @@
         ? '<td class="vcl-bud-num">' + Math.round(r.hours.expected) + ' h<div class="vcl-bud-hours-band">(' +
           Math.round(r.hours.min) + " – " + Math.round(r.hours.max) + " h)</div></td>"
         : '<td class="vcl-bud-num">—</td>';
+      // Int. (/ext.) RA cost + total cost cells. "—" when the line is incomplete or no rate is set.
+      var lc = costOf(r, line);
+      var raCostCell, totalCostCell;
+      if (r.complete && lc.hasRate) {
+        raCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(lc.raCost.expected)) +
+          '<div class="vcl-bud-hours-band">' + costBand(lc.raCost) + "</div></td>";
+        totalCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(lc.total.expected)) +
+          '<div class="vcl-bud-hours-band">' + costBand(lc.total) + "</div></td>";
+      } else {
+        raCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">—</td>';
+        totalCostCell = '<td class="vcl-bud-num vcl-bud-cost-td">—</td>';
+      }
       // The whole row is the expand toggle (handled in onTableClick, which excludes the action
       // buttons); only one row is open at a time -- no chevron affordance (removed per request).
       // Action icons are inline SVG (not glyph characters) so they render identically on every
@@ -794,7 +887,7 @@
         "<td>" + variationsSummary(sub) + "</td>" +
         "<td class=\"vcl-bud-proc-summary\">" + proceduresSummary(sub) + "</td>" +
         "<td>" + escapeHtml(line.quarter ? line.quarter + " " + line.year : (line.year ? String(line.year) : "—")) + "</td>" +
-        feeCell + hoursCell +
+        feeCell + hoursCell + raCostCell + totalCostCell +
         '<td class="vcl-bud-row-actions">' +
         '<button type="button" class="vcl-bud-icon-btn" data-act="duplicate" aria-label="Duplicate" title="Duplicate">' + ICON.duplicate + "</button>" +
         '<button type="button" class="vcl-bud-icon-btn" data-act="edit" aria-label="Edit" title="Edit">' + ICON.edit + "</button>" +
@@ -811,12 +904,20 @@
     // Sums come from the rollup the caller already computed, not a second recompute here.
     var tfoot = el("tfoot");
     var totalTr = el("tr");
+    var ft = rollup.totals;
+    var raCostFoot = ft.hasRate
+      ? '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(ft.internalExpected + (state.trackExternal ? ft.externalTotal : 0))) + "</td>"
+      : '<td class="vcl-bud-num vcl-bud-cost-td">—</td>';
+    var totalCostFoot = ft.hasRate
+      ? '<td class="vcl-bud-num vcl-bud-cost-td">' + escapeHtml(fmtEUR(ft.totalCostExpected)) + "</td>"
+      : '<td class="vcl-bud-num vcl-bud-cost-td">—</td>';
     totalTr.innerHTML =
       '<td colspan="5">Total</td>' +
       '<td class="vcl-bud-num">' + escapeHtml(fmtEUR(rollup.totals.fee)) + "</td>" +
       '<td class="vcl-bud-num">' + Math.round(rollup.totals.hoursExpected) +
         ' h<div class="vcl-bud-hours-band">(' + Math.round(rollup.totals.hoursMin) + " – " +
         Math.round(rollup.totals.hoursMax) + " h)</div></td>" +
+      raCostFoot + totalCostFoot +
       "<td></td>";
     tfoot.appendChild(totalTr);
     table.appendChild(tfoot);
@@ -1007,7 +1108,7 @@
     // soft overlay above the dimmed dashboard (syncOverlay, at the end of this function) rather than
     // replacing it -- so the user keeps their bearings, guide-modal style.
 
-    var rollup = BUD.computeRollup(state.lines, state.resultsById);
+    var rollup = BUD.computeRollup(state.lines, state.resultsById, { rate: state.internalRate, trackExternal: state.trackExternal });
     var annualRollup = BUD.computeAnnualRollup(state.annualLines, annualCountries(), fxByCurrency());
     var header = el("div", "vcl-bud-header");
     var left = el("div", "vcl-bud-header__intro");
@@ -1267,8 +1368,9 @@
     note.innerHTML = '<span aria-hidden="true">⚠</span> In MRP/DCP procedures, only this single strengths figure is applied — regardless of the strengths approved in the individual CMS. This may slightly skew the total.';
     host.appendChild(note);
 
-    // Year / Quarter / Probability row.
-    var metaRow = el("div", "vcl-bud-meta-row vcl-bud-meta-row--triple");
+    // Year / Quarter / Probability row -- and, when the plan tracks external costs, a 4th External
+    // costs field (the base template is 4-up; --triple drops back to 3 when external is hidden).
+    var metaRow = el("div", "vcl-bud-meta-row" + (state.trackExternal ? "" : " vcl-bud-meta-row--triple"));
 
     if (!d.year) d.year = new Date().getFullYear() + 1;
     var yCol = el("div", "vcl-bud-field");
@@ -1311,6 +1413,23 @@
     pSelect.addEventListener("change", function () { d.probability = parseInt(pSelect.value, 10); rerender(); });
     pCol.appendChild(pSelect);
     metaRow.appendChild(pCol);
+
+    // External costs (consultant / agency / local rep) for this submission -- only when the plan
+    // tracks them. A line attribute like Probability; commit on change so the cost recompute fires.
+    if (state.trackExternal) {
+      var xCol = el("div", "vcl-bud-field");
+      xCol.appendChild(el("label", "vcl-bud-field-label", "External costs (€)"));
+      var xInput = el("input", "vcl-bud-input");
+      xInput.type = "number"; xInput.min = "0"; xInput.step = "1"; xInput.placeholder = "0";
+      xInput.value = (typeof d.externalCost === "number" && d.externalCost > 0) ? String(d.externalCost) : "";
+      xInput.addEventListener("change", function () {
+        var n = parseFloat(xInput.value);
+        d.externalCost = (isFinite(n) && n > 0) ? n : 0;
+        rerender();
+      });
+      xCol.appendChild(xInput);
+      metaRow.appendChild(xCol);
+    }
 
     host.appendChild(metaRow);
   }
@@ -2093,7 +2212,7 @@
       alert("Excel export library not loaded. Please check your internet connection and try again.");
       return;
     }
-    var rollup = BUD.computeRollup(state.lines, state.resultsById);
+    var rollup = BUD.computeRollup(state.lines, state.resultsById, { rate: state.internalRate, trackExternal: state.trackExternal });
     var countries = annualCountries();
     var fx = fxByCurrency();
     var annualRollup = BUD.computeAnnualRollup(state.annualLines, countries, fx);

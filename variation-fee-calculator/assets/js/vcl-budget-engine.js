@@ -44,7 +44,7 @@
   }
 
   function newLine(id) {
-    return { id: id, product: "", year: defaultPlanYear(), quarter: null, probability: 100, submission: emptySubmission() };
+    return { id: id, product: "", year: defaultPlanYear(), quarter: null, probability: 100, externalCost: 0, submission: emptySubmission() };
   }
 
   // engines = { SUB, computeFees, countries, feeRows, workload, workloadData, sgLogic } —
@@ -80,10 +80,44 @@
       .sort(function (a, b) { return b.value - a.value; });
   }
 
+  // A valid plan-wide internal RA rate (€/h), parsed from the stored string, or null when unset/
+  // invalid. Accepts a comma or dot decimal. Null means "no internal/total cost" (shown as "—").
+  function parseRate(raw) {
+    var n = parseFloat(String(raw == null ? "" : raw).replace(",", "."));
+    return (isFinite(n) && n > 0) ? n : null;
+  }
+
+  // Money view of ONE plan line: internal RA cost (hours x rate, with a band from the hours range),
+  // the per-line external cost (only when the plan tracks it), the combined RA-side cost (internal
+  // + external), and the total (fee + RA-side). Pure. internal/raCost/total are null without a rate
+  // -- the UI then shows "—" rather than a fabricated number. external is known even without a rate.
+  function lineCost(result, line, rate, trackExternal) {
+    var r = (typeof rate === "number" && isFinite(rate) && rate > 0) ? rate : null;
+    var extRaw = line && typeof line.externalCost === "number" && isFinite(line.externalCost) ? line.externalCost : 0;
+    var ext = trackExternal ? Math.max(0, extRaw) : 0;
+    var out = { hasRate: !!r, external: ext, internal: null, raCost: null, total: null };
+    if (!r) return out;
+    var h = (result && result.hours) || {};
+    var internal = { expected: (h.expected || 0) * r, min: (h.min || 0) * r, max: (h.max || 0) * r };
+    var fee = (result && result.fee) || 0;
+    out.internal = internal;
+    // RA-side cost column: internal, plus external when tracked. The band shifts by the external
+    // point value (external carries no band of its own).
+    out.raCost = { expected: internal.expected + ext, min: internal.min + ext, max: internal.max + ext };
+    out.total = { expected: fee + out.raCost.expected, min: fee + out.raCost.min, max: fee + out.raCost.max };
+    return out;
+  }
+
   // resultsById: { [line.id]: computeLineResult(...) }, precomputed by the caller (Task 4) so
-  // this stays pure and doesn't need the engines itself.
-  function computeRollup(lines, resultsById) {
-    var totals = { fee: 0, hoursMin: 0, hoursMax: 0, hoursExpected: 0 };
+  // this stays pure and doesn't need the engines itself. opts = { rate, trackExternal } adds the
+  // cost rollup (internal/external/total); omitted or rateless, only fee/hours accumulate.
+  function computeRollup(lines, resultsById, opts) {
+    opts = opts || {};
+    var rate = parseRate(opts.rate);
+    var trackExternal = !!opts.trackExternal;
+    var totals = { fee: 0, hoursMin: 0, hoursMax: 0, hoursExpected: 0,
+      hasRate: !!rate, internalExpected: 0, internalMin: 0, internalMax: 0, externalTotal: 0,
+      totalCostExpected: 0, totalCostMin: 0, totalCostMax: 0 };
     var byMarket = {}, byProduct = {};
     (lines || []).forEach(function (line) {
       var r = resultsById[line.id];
@@ -97,6 +131,16 @@
       r.feeByCountry.forEach(function (c) {
         byMarket[c.cc] = (byMarket[c.cc] || 0) + c.total;
       });
+      var lc = lineCost(r, line, rate, trackExternal);
+      totals.externalTotal += lc.external;
+      if (rate) {
+        totals.internalExpected += lc.internal.expected;
+        totals.internalMin += lc.internal.min;
+        totals.internalMax += lc.internal.max;
+        totals.totalCostExpected += lc.total.expected;
+        totals.totalCostMin += lc.total.min;
+        totals.totalCostMax += lc.total.max;
+      }
     });
     return { totals: totals, byMarket: sortDesc(byMarket), byProduct: sortDesc(byProduct) };
   }
@@ -118,7 +162,7 @@
     }).slice(0, 20);
   }
 
-  function defaultPlan() { return { version: 3, hoursPerHead: 1500, lines: [], annualLines: [] }; }
+  function defaultPlan() { return { version: 4, hoursPerHead: 1500, internalRate: "", trackExternal: false, lines: [], annualLines: [] }; }
 
   // v1 lines carried RA-task flags in `modules` (booleans only) plus top-level `piDocs`/
   // `activeSubstance`; the v2 Submission moves all of that under `submission.raTasks`.
@@ -205,6 +249,9 @@
       year: (typeof raw.year === "number" && raw.year > 0) ? raw.year : defaultPlanYear(),
       quarter: (typeof raw.quarter === "string" || raw.quarter === null) ? raw.quarter : null,
       probability: typeof raw.probability === "number" ? raw.probability : 100,
+      // Per-line external cost (consultant / agency / local rep), in EUR. Only surfaced when the
+      // plan tracks external costs, but always preserved across save/reload. Defaults to 0.
+      externalCost: (typeof raw.externalCost === "number" && isFinite(raw.externalCost) && raw.externalCost >= 0) ? raw.externalCost : 0,
       submission: submission,
     };
   }
@@ -212,7 +259,12 @@
   // Funnels every successful loadPlan() return through the v2->v3 migration: stamps version 3
   // and normalizes annualLines (defaulting to [] when absent/malformed).
   function withAnnual(plan, rawAnnual) {
-    plan.version = 3;
+    plan.version = 4;
+    // v4 adds plan-wide cost settings: the internal RA rate (stored as the raw string the user
+    // typed, "" when unset) and the external-cost tracking flag (off by default). A v3 plan loads
+    // with these defaults, each line's externalCost defaulting to 0 via normalizeLine.
+    plan.internalRate = (typeof plan.internalRate === "string") ? plan.internalRate : (plan.internalRate != null ? String(plan.internalRate) : "");
+    plan.trackExternal = !!plan.trackExternal;
     var arr = Array.isArray(rawAnnual) ? rawAnnual : [];
     plan.annualLines = arr.map(function (a, i) { return normalizeAnnualLine(a, "annual-recovered-" + i); });
     return plan;
@@ -414,6 +466,8 @@
     computeLineResult: computeLineResult,
     computeRollup: computeRollup,
     computeFte: computeFte,
+    parseRate: parseRate,
+    lineCost: lineCost,
     searchEntries: searchEntries,
     defaultPlan: defaultPlan,
     normalizeLine: normalizeLine,
