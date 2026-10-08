@@ -549,15 +549,22 @@
     // The plan-wide rate lives here (like the FTE tile's hours-per-head), plus a "track external
     // costs" switch. Without a rate the headline is "—" -- no fabricated number.
     var hasRate = rollup.totals.hasRate;
+    var agencyTotal = rollup.totals.fee + annualRollup.totalEur;
+    var extTotal = rollup.totals.externalTotal;
+    var showExternal = state.trackExternal && extTotal > 0;
+    // Hero: the total cost when a rate is set, otherwise just the agency fees (the only cost yet).
+    var heroVal = hasRate ? (rollup.totals.totalCostExpected + annualRollup.totalEur) : agencyTotal;
     var tcTile = el("div", "vcl-bud-tile vcl-bud-tile--fte vcl-bud-tile--totalcost");
     tcTile.appendChild(el("p", "vcl-bud-tile__label", "Total cost · " + escapeHtml(planYearLabel())));
-    tcTile.appendChild(el("p", "vcl-bud-tile__value", hasRate ? fmtEUR(rollup.totals.totalCostExpected + annualRollup.totalEur) : "—"));
+    tcTile.appendChild(el("p", "vcl-bud-tile__value", fmtEUR(heroVal)));
+    // Breakdown under the hero -- each line only when that component contributes. With no rate there
+    // is no internal/external cost, so no breakdown at all (the hero is simply the agency fees).
     if (hasRate) {
-      var parts = "Fees " + fmtEUR(rollup.totals.fee + annualRollup.totalEur) + " · intern " + fmtEUR(rollup.totals.internalExpected);
-      if (state.trackExternal) parts += " · extern " + fmtEUR(rollup.totals.externalTotal);
-      tcTile.appendChild(el("p", "vcl-bud-tile__sub", escapeHtml(parts)));
-    } else {
-      tcTile.appendChild(el("p", "vcl-bud-tile__sub", "Set an internal RA rate to see internal and total cost."));
+      var bd = "";
+      bd += '<div class="vcl-bud-agency__row"><span>Agency fees</span><span class="vcl-bud-agency__val">' + escapeHtml(fmtEUR(agencyTotal)) + "</span></div>";
+      bd += '<div class="vcl-bud-agency__row"><span>Internal RA costs</span><span class="vcl-bud-agency__val">' + escapeHtml(fmtEUR(rollup.totals.internalExpected)) + "</span></div>";
+      if (showExternal) bd += '<div class="vcl-bud-agency__row"><span>External costs</span><span class="vcl-bud-agency__val">' + escapeHtml(fmtEUR(extTotal)) + "</span></div>";
+      tcTile.appendChild(el("div", "vcl-bud-agency__rows", bd));
     }
     // Rate input (same control pattern as the FTE tile's hours-per-head).
     var rateSub = el("p", "vcl-bud-tile__sub");
@@ -690,7 +697,7 @@
         return row;
       }
       costRow("Official fees", escapeHtml(fmtEUR(r.fee)));
-      costRow("Internal · " + Math.round(r.hours.expected) + " h × " + escapeHtml(fmtEUR(rateVal())) + "/h",
+      costRow("Internal RA costs · " + Math.round(r.hours.expected) + " h × " + escapeHtml(fmtEUR(rateVal())) + "/h",
         escapeHtml(fmtEUR(lc.internal.expected)) + ' <span class="vcl-bud-detail__band">' + costBand(lc.internal) + "</span>");
       if (state.trackExternal) costRow("External costs", escapeHtml(fmtEUR(lc.external)));
       var ctot = el("div", "vcl-bud-detail__sub");
@@ -794,9 +801,9 @@
       return '<span class="vcl-bud-sortarrow" aria-hidden="true">' + (state.sortDir === "desc" ? "▾" : "▴") + "</span>";
     }
     table.innerHTML =
-      '<colgroup><col style="width:13%"><col style="width:10%"><col style="width:14%">' +
-      '<col style="width:14%"><col style="width:6%"><col style="width:8%">' +
-      '<col style="width:10%"><col style="width:12%"><col style="width:12%"><col></colgroup>' +
+      '<colgroup><col style="width:15%"><col style="width:9%"><col style="width:10%">' +
+      '<col style="width:13%"><col style="width:8%"><col style="width:9%">' +
+      '<col style="width:10%"><col style="width:9%"><col style="width:9%"><col style="width:8%"></colgroup>' +
       "<thead><tr>" +
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="product">Product' + sortArrow("product") + '</th>' +
       '<th class="vcl-bud-sortable" role="button" tabindex="0" data-sort="mode">Mode' + sortArrow("mode") + '</th>' +
