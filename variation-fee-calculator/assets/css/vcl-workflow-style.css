@@ -588,6 +588,37 @@
   margin-top: 4px;
 }
 
+/* --- Station E: Cost inputs (opt-in internal cost) --- */
+.vcl-app .vcl-wf-costin {
+  --vcl-rat-accent: var(--workflow);
+  border: 0.5px solid var(--line, #e4e4de);
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 14px;
+  margin: 14px 0 10px;
+}
+.vcl-app .vcl-wf-costin__switch { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.vcl-app .vcl-wf-costin__label { font-weight: 600; color: var(--ink, #222); }
+.vcl-app .vcl-wf-costin__rate {
+  display: flex; align-items: center; gap: 10px; font-size: 12.5px;
+  margin-top: 12px; padding-top: 12px; border-top: 0.5px solid var(--line, #eee);
+}
+.vcl-app .vcl-wf-costin__l { flex: 0 0 150px; color: var(--ink, #222); }
+.vcl-app .vcl-wf-costin__in {
+  width: 110px; font: inherit; font-size: 12.5px; padding: 5px 8px;
+  border: 1px solid var(--border, #d8d8d2); border-radius: 7px;
+}
+.vcl-app .vcl-wf-costin__suf { color: var(--muted); }
+.vcl-app .vcl-wf-costin__hint { font-size: 11px; color: var(--ink-faint, #8a8a83); margin: 10px 0 0; }
+.vcl-app .vcl-wf-costin__off { font-size: 12px; color: var(--ink-faint, #8a8a83); font-style: italic; margin: 10px 0 0; }
+
+/* The derivation footnote under the Internal/Total cost rows in the summary card. */
+.vcl-app .vcl-wf-sum__costnote {
+  font-size: 11px; color: var(--ink-faint, #8a8a83); line-height: 1.5;
+  padding: 4px 0 2px; padding-left: 134px;
+}
+@media (max-width: 560px) { .vcl-app .vcl-wf-sum__costnote { padding-left: 0; } }
+
 /* --- Station C: timeline --- */
 .vcl-app .vcl-wf-slider { margin: 14px 0 4px; }
 .vcl-app .vcl-wf-slider label { display: block; font-size: 12px; margin-bottom: 4px; color: var(--ink, #222); }

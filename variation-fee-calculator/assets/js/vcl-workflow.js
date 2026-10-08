@@ -91,6 +91,13 @@
     // Single-variation pricing (Station D, non-worksharing): per-line fee-category picks
     // (e.g. DE Type II "simple" vs "complex"), keyed "cc|role".
     specials: {},
+    // Station E -- optional internal-cost output. The gate is OFF by default, so the Fees
+    // station reads exactly as before for anyone who only wants the official fee. When on, the
+    // RA hours are multiplied by this hourly rate and added to the fees. The rate is kept only
+    // for the browser session (sessionStorage); nothing persists beyond it (see the 2026-10-08
+    // internal-/total-cost design).
+    includeInternalCost: false,
+    internalRate: loadInternalRate(),
   };
 
   let container = null;
@@ -410,6 +417,39 @@
   // the exact superset (parts/items/sections/total/expected + flat min/max) the transparency box
   // consumes -- a thin pass-through.
   function raEffort() { return window.VCL_SUBMISSION.computeSubmissionHours(submissionFromState(), subEngines()); }
+
+  // ---- internal cost (Station E, opt-in) ----
+  // The RA hourly rate is remembered for the browser session only -- a reload keeps it, a new
+  // session starts empty. It never touches localStorage or the server, so it stays out of
+  // TTDSG consent scope (a business figure, not personal data, held only for this session).
+  const INTERNAL_RATE_KEY = "vclcalc_wf_internal_rate";
+  function loadInternalRate() {
+    try { return window.sessionStorage.getItem(INTERNAL_RATE_KEY) || ""; } catch (e) { return ""; }
+  }
+  function saveInternalRate(v) {
+    try {
+      if (v) window.sessionStorage.setItem(INTERNAL_RATE_KEY, v);
+      else window.sessionStorage.removeItem(INTERNAL_RATE_KEY);
+    } catch (e) { /* private mode or blocked storage -- the session still works, just no reload memory */ }
+  }
+  // The parsed hourly rate (accepts a comma or dot decimal), or NaN when unset/invalid.
+  function internalRateValue() { return parseFloat(String(state.internalRate).replace(",", ".")); }
+  // Internal cost in EUR from the RA hours and the rate. Returns null when the gate is off or no
+  // positive rate is set -- the summary then shows only the official fees, exactly as before.
+  // Otherwise { expected, min, max, rate, hours } where the band comes from the RA-hours range.
+  function internalCost(ra) {
+    if (!state.includeInternalCost) return null;
+    const rate = internalRateValue();
+    if (!ra || !isFinite(rate) || rate <= 0) return null;
+    const mm = ra.total || {};
+    return {
+      expected: (ra.expected || 0) * rate,
+      min: (mm.min || 0) * rate,
+      max: (mm.max || 0) * rate,
+      rate: rate,
+      hours: ra.expected || 0,
+    };
+  }
   // Format a {min,max} hour band for display: whole hours (ceil each end), collapsed to a single
   // figure when both ends coincide.
   function raRangeText(mm) {
@@ -1468,7 +1508,47 @@
       body.appendChild(el("p", "vcl-wf-hint", "Fees are per country and per procedure; grouped variations share a procedure, worksharing repeats the change across procedures. Live rates apply where a country charges in local currency."));
     }
 
+    if (anyCountries) buildCostInputs(body);
+
     buildSummaryCard(body, grand, anyCountries);
+  }
+
+  // Station E "Cost inputs" card: the opt-in gate for internal cost plus the hourly-rate field.
+  // Default off, so the station is unchanged for fee-only use. Reuses the Station "RA tasks"
+  // toggle look (vcl-rat-toggle) so the switch is one visual vocabulary across the tool.
+  function buildCostInputs(host) {
+    const card = el("div", "vcl-wf-costin");
+    const row = el("div", "vcl-wf-costin__switch");
+    const sw = el("button", "vcl-rat-toggle" + (state.includeInternalCost ? " is-on" : ""));
+    sw.type = "button";
+    sw.setAttribute("aria-pressed", state.includeInternalCost ? "true" : "false");
+    sw.setAttribute("aria-label", "Include internal cost");
+    sw.innerHTML = '<span class="vcl-rat-toggle__track"><span class="vcl-rat-toggle__thumb"></span></span>';
+    sw.addEventListener("click", (e) => { e.preventDefault(); state.includeInternalCost = !state.includeInternalCost; rerender(); });
+    row.appendChild(sw);
+    row.appendChild(el("label", "vcl-wf-costin__label", "Include internal cost"));
+    card.appendChild(row);
+
+    if (state.includeInternalCost) {
+      const rateRow = el("div", "vcl-wf-costin__rate");
+      rateRow.appendChild(el("span", "vcl-wf-costin__l", "Internal RA rate"));
+      const inp = document.createElement("input");
+      inp.type = "number"; inp.min = "0"; inp.step = "1"; inp.inputMode = "decimal";
+      inp.className = "vcl-wf-costin__in"; inp.placeholder = "e.g. 90";
+      inp.value = state.internalRate;
+      // Keep state in sync while typing (without a rerender, so the cursor stays put); refresh the
+      // summary figures on blur/enter. Persist to the session on every keystroke.
+      inp.addEventListener("input", () => { state.internalRate = inp.value; saveInternalRate(inp.value); });
+      inp.addEventListener("change", () => { state.internalRate = inp.value; saveInternalRate(inp.value); rerender(); });
+      rateRow.appendChild(inp);
+      rateRow.appendChild(el("span", "vcl-wf-costin__suf", "&euro;/h"));
+      card.appendChild(rateRow);
+      card.appendChild(el("p", "vcl-wf-costin__hint", "Rate &times; expected RA hours. Applies to this session only; nothing is stored permanently."));
+    } else {
+      card.appendChild(el("p", "vcl-wf-costin__off", "Off &mdash; only the official fees are shown, exactly as today."));
+    }
+
+    host.appendChild(card);
   }
 
   // The lead's one-off fee (Station D): the lead authority is charged exactly once, here,
@@ -1778,6 +1858,23 @@
     }
     if (anyCountries) line("Total fees", `<span class="vcl-wf-sum__fig">${escapeHtml(fmtEUR(grand))}</span>`);
 
+    // Internal & total cost (opt-in): only when the gate is on, a positive rate is set, and there
+    // are priced fees to add to. The band mirrors the RA-workload row -- expected value with a
+    // min-max range -- because the uncertainty comes from the RA hours; the fee total is a point.
+    const ic = anyCountries ? internalCost(ra) : null;
+    if (ic) {
+      const costBand = (lo, hi) => `(${escapeHtml(fmtEUR(lo))} – ${escapeHtml(fmtEUR(hi))})`;
+      line("Internal cost",
+        `<span class="vcl-wf-sum__fig">&asymp; ${escapeHtml(fmtEUR(ic.expected))}</span> <span class="vcl-wf-sum__muted">${costBand(ic.min, ic.max)}</span>`);
+      line("Total cost",
+        `<span class="vcl-wf-sum__fig">&asymp; ${escapeHtml(fmtEUR(grand + ic.expected))}</span> <span class="vcl-wf-sum__muted">${costBand(grand + ic.min, grand + ic.max)}</span>`);
+      const foot = el("div", "vcl-wf-sum__costnote");
+      foot.innerHTML = `Total cost = ${escapeHtml(fmtEUR(grand))} official fees + internal cost `
+        + `(${escapeHtml(raExpectedText(ra)).replace(" h", "")} expected RA h &times; ${escapeHtml(fmtEUR(ic.rate))}/h) `
+        + `&middot; band from the RA-hours range (${escapeHtml(raRangeBare(ra.total))})`;
+      card.appendChild(foot);
+    }
+
     // Export link: mirrors the whole summary into a .docx plus the variations table in the
     // three Letter-of-Intent columns (Number / Title / Type). Reuses the existing dashed-green
     // xlink style (the retired calculator hand-off used it) -- no new UI vocabulary. The label
@@ -1880,6 +1977,14 @@
       children.push(kv("RA workload", [new TextRun(raText)]));
     }
     if (anyCountries) children.push(kv("Total fees", [new TextRun({ text: fmtEUR(grand), bold: true })]));
+
+    // Internal & total cost -- only when the opt-in gate is on and a positive rate is set.
+    const icx = anyCountries ? internalCost(ra) : null;
+    if (icx) {
+      children.push(kv("Internal cost", [new TextRun("≈ " + fmtEUR(icx.expected) + " (" + fmtEUR(icx.min) + " – " + fmtEUR(icx.max) + ")")]));
+      children.push(kv("Total cost", [new TextRun({ text: "≈ " + fmtEUR(grand + icx.expected) + " (" + fmtEUR(grand + icx.min) + " – " + fmtEUR(grand + icx.max) + ")", bold: true })]));
+      children.push(kv("", [new TextRun({ text: "Total cost = " + fmtEUR(grand) + " official fees + internal cost (" + Math.round(ra.expected) + " expected RA h × " + fmtEUR(icx.rate) + "/h); band from the RA-hours range (" + raRangeBare(ra.total) + ").", italics: true, size: 18 })]));
+    }
 
     // ---- Annual Update / Super-Grouping block (absent for Worksharing and no-mode-selected) ----
     if (annualUpdateActive()) {
