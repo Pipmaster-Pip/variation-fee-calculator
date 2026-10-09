@@ -179,7 +179,7 @@ function vcl_render_sources_tab() {
 		'grouping'       => array( 'Grouping of Variations', '' ),
 		'precisescope'   => array( 'Precise Scope Wording', '' ),
 		'qa'             => array(
-			'Q&amp;A on Variations',
+			'CMDh Q&amp;A on Variations',
 			'Der Q&amp;A-Inhalt selbst wird aus dem Quell-PDF erzeugt (<code>python extract_qa.py &lt;pdf&gt;</code> &rarr; <code>assets/js/vcl-qa-data.js</code>). Eine neue Revision heißt: Skript neu laufen lassen, nicht hier Text ändern.',
 		),
 		'pam'            => array(

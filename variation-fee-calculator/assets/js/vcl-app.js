@@ -112,6 +112,7 @@
     pamSort: false, // sort hits by most-recently-revised first (flat mode)
     pamRecentOnly: false, // show only nodes revised in the last 12 months (flat mode)
     pamNewOnly: false, // show only NEW nodes (flat mode)
+    pamRevAll: false, // revision-history box: reveal all months beyond the newest 24
     art5OpenGroup: null, // section key of the Art. 5 archive whose recommendations are expanded
     art5Query: "", // the Art. 5 view's own filter box
     ttType: "ia", // "ia" | "ib" | "ii" -- active tab in the Timetables view
@@ -1063,7 +1064,7 @@
 
     el.qaCol.innerHTML =
       '<div class="grouping-head">' +
-      "<h3>Q&amp;A on Variations</h3>" +
+      "<h3>CMDh Q&amp;A on Variations</h3>" +
       "<p>" + escapePreciseScopeText(m.docTitle) + ".</p>" +
       '<p class="ref-line">Reference: ' + referenceText("qa", m.docRef + " (" + m.docDate + ")") + "</p>" +
       '<p class="ref-updated">Last updated in Variation Toolbox: ' + lastUpdated("qa", m.lastUpdated) + "</p>" +
@@ -1266,14 +1267,20 @@
     const chapterTitle = {};
     PAM_DATA.chapters.forEach((c) => (chapterTitle[c.key] = c.title));
 
+    // Toggle chips, not checkboxes -- the Toolbox never uses tick-boxes; this is the same pill
+    // pattern as the PI-filter chip and the summary pill, re-tinted to the Guidance ("--group")
+    // blue when active.
+    const chip = (key, on, label) =>
+      '<button type="button" class="pam-chip' + (on ? " pam-chip--on" : "") + '" data-pam-filter="' +
+      key + '" aria-pressed="' + (on ? "true" : "false") + '">' + label + "</button>";
     const controls =
       '<div class="qa-controls pam-controls">' +
       '<input type="text" id="vcl-pamSearch" class="qa-search" placeholder="Filter questions and answers…" autocomplete="off" value="' +
       escapePreciseScopeText(state.pamQuery) + '" />' +
-      '<div class="pam-filters">' +
-      '<label class="pam-toggle"><input type="checkbox" id="vcl-pamSort"' + (state.pamSort ? " checked" : "") + " /> Most recently changed first</label>" +
-      '<label class="pam-toggle"><input type="checkbox" id="vcl-pamRecent"' + (state.pamRecentOnly ? " checked" : "") + " /> Revised in the last 12 months</label>" +
-      '<label class="pam-toggle"><input type="checkbox" id="vcl-pamNew"' + (state.pamNewOnly ? " checked" : "") + " /> New questions only</label>" +
+      '<div class="pam-chips">' +
+      chip("sort", state.pamSort, "Most recently changed") +
+      chip("recent", state.pamRecentOnly, "Revised in the last 12 months") +
+      chip("new", state.pamNewOnly, "New questions only") +
       "</div></div>";
 
     const head =
@@ -1358,7 +1365,10 @@
       }).join("");
     }
 
-    el.pamCol.innerHTML = head + controls + listHtml + source;
+    // The revision-history box only makes sense in the browse (tree) mode: in filter/sort mode
+    // the list itself already is "what changed", so showing it there would just repeat the view.
+    const revBox = pamFiltering() ? "" : pamRevisionsHtml();
+    el.pamCol.innerHTML = head + controls + listHtml + revBox + source;
 
     el.pamCol.querySelectorAll("[data-pam-chapter]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1367,6 +1377,11 @@
         renderPAM();
       });
     });
+    el.pamCol.querySelectorAll("[data-pam-jump]").forEach((btn) => {
+      btn.addEventListener("click", () => pamJumpToNode(btn.dataset.pamJump));
+    });
+    const revMore = el.pamCol.querySelector("#vcl-pamRevMore");
+    if (revMore) revMore.addEventListener("click", () => { state.pamRevAll = !state.pamRevAll; renderPAM(); });
     el.pamCol.querySelectorAll("[data-pam-toggle]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.pamToggle;
@@ -1390,13 +1405,86 @@
         }
       });
     }
-    const bind = (sel, key) => {
-      const cb = el.pamCol.querySelector(sel);
-      if (cb) cb.addEventListener("change", () => { state[key] = cb.checked; renderPAM(); });
+    const chipKey = { sort: "pamSort", recent: "pamRecentOnly", new: "pamNewOnly" };
+    el.pamCol.querySelectorAll("[data-pam-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = chipKey[btn.dataset.pamFilter];
+        state[key] = !state[key];
+        renderPAM();
+      });
+    });
+  }
+
+  // The revision-history box -- the Guidance Q&A has one (qaRevisionsHtml) built from the CMDh
+  // source's own revision table. The EMA source has NO such table, and publishes no per-revision
+  // date either (only the document-level "Rev. 119"), so this box is derived from the per-question
+  // dates: dated nodes grouped by revision month, newest first, each month listing the questions
+  // it touched (NEW/Rev, each a chip that jumps to the question). There is deliberately no
+  // per-row revision number (none is sourceable -- ~119 revisions exist but only ~53 change
+  // months); the current revision is shown once as a caption instead. Newest 12 months show until
+  // "… N more months" reveals the rest.
+  function pamRevisionsHtml() {
+    const byMonth = {};
+    pamWalk(PAM_DATA.nodes).forEach((n) => {
+      if (!n.rev) return;
+      (byMonth[n.rev.sort] = byMonth[n.rev.sort] || { date: n.rev.date, items: [] }).items.push(n);
+    });
+    const months = Object.keys(byMonth).sort().reverse();
+    if (!months.length) return "";
+    // Default to the last 12 months (relative to the document's own date, so it does not drift);
+    // "… N more months" reveals the full history. monthIndex turns a "YYYY-MM" key into a number.
+    const monthIndex = (k) => { const p = k.split("-"); return (+p[0]) * 12 + (+p[1]) - 1; };
+    const cutoff = pamRecentCutoff();
+    const shown = state.pamRevAll ? months : months.filter((k) => monthIndex(k) >= cutoff);
+    const hidden = months.length - shown.length;
+
+    const idChip = (n) =>
+      '<button type="button" class="pam-rev-id pam-rev-id--' + (n.rev.type === "new" ? "new" : "rev") +
+      '" data-pam-jump="' + n.id + '" title="Go to question ' + n.id + '">' + n.id + "</button>";
+    const row = (key, i) => {
+      const g = byMonth[key];
+      // Natural question order within a month (1.2 before 1.10, 7.3 before 7.3.1).
+      const items = g.items.slice().sort((a, b) =>
+        a.id.localeCompare(b.id, undefined, { numeric: true }));
+      return (
+        '<tr' + (i === 0 ? ' class="is-latest"' : "") + '>' +
+        '<th scope="row"><span class="qa-rev-no" title="' + items.length +
+        (items.length === 1 ? " change" : " changes") + '">' + items.length + "</span>" +
+        (i === 0 ? ' <span class="qa-rev-latest">Latest</span>' : "") + "</th>" +
+        '<td><div class="pam-rev-ids">' + items.map(idChip).join("") + "</div></td>" +
+        '<td class="qa-rev-date">' + g.date + "</td></tr>"
+      );
     };
-    bind("#vcl-pamSort", "pamSort");
-    bind("#vcl-pamRecent", "pamRecentOnly");
-    bind("#vcl-pamNew", "pamNewOnly");
+    const more = hidden > 0 || state.pamRevAll
+      ? '<div class="pam-rev-more"><button type="button" id="vcl-pamRevMore">' +
+        (state.pamRevAll ? "Show fewer months" : "… " + hidden + " more months") + "</button></div>"
+      : "";
+    // The source gives only the document-level revision, not one per change month -- shown once
+    // here rather than invented per row. Pull "Rev. N" out of docRef ("EMEA-H-19984/03 Rev. 119").
+    const revNo = (/Rev\.?\s*\d+/i.exec(PAM_DATA.meta.docRef) || [PAM_DATA.meta.docRef])[0];
+    return (
+      '<div class="qa-revisions pam-revisions"><h4>Revision history of the source document</h4>' +
+      '<p class="pam-rev-ref">Current revision: ' + revNo + " (" + PAM_DATA.meta.docDate + ")</p>" +
+      '<div class="qa-revisions__wrap"><table>' +
+      '<thead><tr><th scope="col">Changes</th><th scope="col">What changed</th>' +
+      '<th scope="col" class="qa-rev-date">Date</th></tr></thead><tbody>' +
+      shown.map(row).join("") +
+      "</tbody></table></div>" + more + "</div>"
+    );
+  }
+
+  // Jump from a revision-box chip to the question itself: clear any filter, open its chapter and
+  // every ancestor sub-section, expand the question, re-render and scroll it into view.
+  function pamJumpToNode(id) {
+    state.pamQuery = "";
+    state.pamSort = state.pamRecentOnly = state.pamNewOnly = false;
+    state.pamOpenChapter = id.split(".")[0];
+    const segs = id.split(".");
+    for (let i = 2; i < segs.length; i++) state.pamOpen[segs.slice(0, i).join(".")] = true;
+    state.pamOpen[id] = true;
+    renderPAM();
+    const target = el.pamCol.querySelector('[data-pam-toggle="' + id + '"]');
+    if (target) target.scrollIntoView({ block: "center" });
   }
 
   // ==========================================================================================
@@ -2676,7 +2764,7 @@
 
       guidanceRow(GROUPING_GUIDANCE.title, "grouping");
       guidanceRow(PRECISE_SCOPE_GUIDANCE.title, "precisescope");
-      if (QA_DATA) guidanceRow("Q&A on Variations", "qa");
+      if (QA_DATA) guidanceRow("CMDh Q&A on Variations", "qa");
       if (PAM_DATA) guidanceRow("EMA Post-Authorisation Procedural Advice", "pam");
     }
   }
@@ -4119,7 +4207,7 @@
       { dest: "grouping", label: GROUPING_GUIDANCE.title, desc: "Which changes may be grouped into one submission." },
       { dest: "precisescope", label: PRECISE_SCOPE_GUIDANCE.title, desc: "Example wordings for the application form's scope field." },
     ];
-    if (QA_DATA) docs.push({ dest: "qa", label: "Q&A on Variations", desc: "The CMDh questions and answers on submitting variations." });
+    if (QA_DATA) docs.push({ dest: "qa", label: "CMDh Q&A on Variations", desc: "The CMDh questions and answers on submitting variations." });
     if (PAM_DATA) docs.push({ dest: "pam", label: "EMA Post-Authorisation Procedural Advice", desc: "EMA's procedural Q&A for the centralised post-authorisation phase." });
     const cards = docs.map((d) => `
       <button type="button" class="guide-overview__card" data-dest="${d.dest}" style="--card-accent: var(--group)">
