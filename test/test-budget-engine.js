@@ -156,10 +156,11 @@ var store = fakeStorage();
 eq(BUD.loadPlan(store), BUD.defaultPlan(), "loadPlan: empty storage returns defaultPlan()");
 var emptyPlan = { version: 2, hoursPerHead: 1600, lines: [] };
 eq(BUD.savePlan(store, emptyPlan), true, "savePlan: succeeds against working storage");
-// loadPlan migrates every successful read to v3 (stamps version 3, adds annualLines: []) --
-// see Task 4's withAnnual() -- so the round-tripped plan is not byte-identical to what was saved.
-eq(BUD.loadPlan(store), { version: 3, hoursPerHead: 1600, lines: [], annualLines: [] },
-  "loadPlan: round-trips an empty plan (no lines -> normalizeLine not invoked) and migrates to v3");
+// loadPlan migrates every successful read to v4 (stamps version 4, adds annualLines: [] and the
+// cost settings internalRate/trackExternal) -- see withAnnual() -- so the round-tripped plan is not
+// byte-identical to what was saved.
+eq(BUD.loadPlan(store), { version: 4, hoursPerHead: 1600, lines: [], internalRate: "", trackExternal: false, annualLines: [] },
+  "loadPlan: round-trips an empty plan (no lines -> normalizeLine not invoked) and migrates to v4");
 eq(BUD.loadPlan(throwingStorage()), BUD.defaultPlan(), "loadPlan: falls back to defaultPlan() when storage throws");
 eq(BUD.savePlan(throwingStorage(), emptyPlan), false, "savePlan: returns false when storage throws");
 eq(BUD.loadPlan({ getItem: function () { return "not json"; } }), BUD.defaultPlan(),
@@ -188,7 +189,7 @@ eq(BUD.normalizeLine(v2line, "fb3").submission.mode, "worksharing", "v2: mode pr
 var v1Store = fakeStorage();
 v1Store.setItem("vcl_budget_plan_v1", JSON.stringify({ version: 1, hoursPerHead: 1700, lines: [v1line] }));
 var migrated = BUD.loadPlan(v1Store);
-eq(migrated.version, 3, "loadPlan: migrating from v1 key returns version 3");
+eq(migrated.version, 4, "loadPlan: migrating from v1 key returns version 4");
 eq(migrated.lines[0].submission.variations, [{ code: "C.I.2", variantId: null, type: "IB" }],
   "loadPlan: v1-key migration normalizes each line via normalizeLine");
 
