@@ -52,6 +52,7 @@ function vcl_get_last_updated() {
 		'grouping'       => '2026-07-03',
 		'precisescope'   => '2026-07-13',
 		'qa'             => '2026-07-17',
+		'pam'            => '2026-10-09',
 		'art5'           => '2026-07-17',
 		'timetables'     => '2026-07-03',
 	);
@@ -75,6 +76,7 @@ function vcl_get_reference_text() {
 		'grouping'       => 'CMDh/173/2010, Rev. 25 (March 2026)',
 		'precisescope'   => 'EMA/220707/2017, Rev. 1.1 (10 July 2026)',
 		'qa'             => 'CMDh/132/2009, Rev. 66 (June 2026)',
+		'pam'            => 'EMEA-H-19984/03 Rev. 119 (October 2026)',
 		'art5'           => 'CMDh/172/2010, Rev. 17 (October 2025)',
 		'timetables'     => 'CMDh Best Practice Guide, Chapters 3–5',
 	);
@@ -179,6 +181,10 @@ function vcl_render_sources_tab() {
 		'qa'             => array(
 			'Q&amp;A on Variations',
 			'Der Q&amp;A-Inhalt selbst wird aus dem Quell-PDF erzeugt (<code>python extract_qa.py &lt;pdf&gt;</code> &rarr; <code>assets/js/vcl-qa-data.js</code>). Eine neue Revision heißt: Skript neu laufen lassen, nicht hier Text ändern.',
+		),
+		'pam'            => array(
+			'EMA Post-Authorisation Procedural Advice',
+			'Der Inhalt wird aus dem Quell-PDF erzeugt (<code>python extract_pam.py &lt;pdf&gt;</code> &rarr; <code>assets/js/vcl-pam-data.js</code>). Eine neue Revision heißt: Skript neu laufen lassen, nicht hier Text ändern.',
 		),
 		'art5'           => array(
 			'Art. 5 Recommendations',
@@ -352,7 +358,7 @@ function vcl_handle_save_dates() {
 	$dates      = array();
 	$ref_input  = isset( $_POST['vcl_reference_text'] ) && is_array( $_POST['vcl_reference_text'] ) ? wp_unslash( $_POST['vcl_reference_text'] ) : array();
 	$refs       = array();
-	foreach ( array( 'classification', 'grouping', 'precisescope', 'qa', 'art5', 'timetables' ) as $key ) {
+	foreach ( array( 'classification', 'grouping', 'precisescope', 'qa', 'pam', 'art5', 'timetables' ) as $key ) {
 		$date_value = isset( $date_input[ $key ] ) ? sanitize_text_field( $date_input[ $key ] ) : '';
 		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_value ) ) {
 			$dates[ $key ] = $date_value;

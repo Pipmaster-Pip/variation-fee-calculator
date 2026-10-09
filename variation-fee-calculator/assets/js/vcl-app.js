@@ -7,6 +7,10 @@
   // are simply left out when the script isn't enqueued, rather than the whole guide failing.
   const QA_DATA = window.VCL_QA_DATA || null;
 
+  // Same optional-generated-file arrangement for the EMA post-authorisation procedural advice
+  // (see vcl-pam-data.js). Its nav row and view are omitted when the script isn't enqueued.
+  const PAM_DATA = window.VCL_PAM_DATA || null;
+
   // Same optional-generated-file arrangement for the Art. 5 tracking table (see vcl-art5-data.js).
   const ART5_DATA = window.VCL_ART5_DATA || null;
 
@@ -102,6 +106,12 @@
     qaOpenQuestion: null, // id ("3.12") of the single Q&A whose answer is expanded
     qaQuery: "", // the Q&A view's own filter box -- separate from the global `query`, which drives Classification
     qaShowDeleted: false, // the source keeps withdrawn questions in place; hidden unless asked for
+    pamOpenChapter: null, // chapter key of the EMA PAM tree view -- one-at-a-time accordion
+    pamOpen: {}, // set of expanded PAM node ids (sub-sections + questions); nesting needs several at once
+    pamQuery: "", // the PAM view's own filter box (separate from the global `query`)
+    pamSort: false, // sort hits by most-recently-revised first (flat mode)
+    pamRecentOnly: false, // show only nodes revised in the last 12 months (flat mode)
+    pamNewOnly: false, // show only NEW nodes (flat mode)
     art5OpenGroup: null, // section key of the Art. 5 archive whose recommendations are expanded
     art5Query: "", // the Art. 5 view's own filter box
     ttType: "ia", // "ia" | "ib" | "ii" -- active tab in the Timetables view
@@ -163,6 +173,7 @@
     groupingCol: document.getElementById("vcl-groupingCol"),
     preciseScopeCol: document.getElementById("vcl-preciseScopeCol"),
     qaCol: document.getElementById("vcl-qaCol"),
+    pamCol: document.getElementById("vcl-pamCol"),
     art5Col: document.getElementById("vcl-art5Col"),
     timetablesCol: document.getElementById("vcl-timetablesCol"),
     workflowCol: document.getElementById("vcl-workflowCol"),
@@ -227,7 +238,7 @@
     if (state.view === "calculator") return "calculator";
     if (state.view === "workflow") return "workflow";
     if (state.view === "budget") return "budget";
-    if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.guidanceHub) {
+    if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.view === "pam" || state.guidanceHub) {
       return "guidance";
     }
     return "classification";
@@ -243,7 +254,7 @@
     if (state.view === "calculator") return "calculator";
     if (state.view === "workflow") return "workflow";
     if (state.view === "budget") return "budget";
-    if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.guidanceHub) {
+    if (state.view === "grouping" || state.view === "precisescope" || state.view === "qa" || state.view === "pam" || state.guidanceHub) {
       return "guidance";
     }
     // "browse" covers both the Welcome/overview screen (classifyOpen/guidanceOpen both false,
@@ -269,7 +280,8 @@
       state.view === "art5" ||
       state.view === "grouping" ||
       state.view === "precisescope" ||
-      state.view === "qa"
+      state.view === "qa" ||
+      state.view === "pam"
     );
   }
 
@@ -282,16 +294,18 @@
     const isGrouping = state.view === "grouping";
     const isPreciseScope = state.view === "precisescope";
     const isQa = state.view === "qa";
+    const isPam = state.view === "pam";
     const isArt5 = state.view === "art5";
     const isTimetables = state.view === "timetables";
     const isWorkflow = state.view === "workflow";
     const isBudget = state.view === "budget";
     const isCalculator = state.view === "calculator";
-    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isArt5 || isTimetables || isWorkflow || isBudget || isCalculator);
+    el.detailCol.classList.toggle("hidden", isSummary || isGrouping || isPreciseScope || isQa || isPam || isArt5 || isTimetables || isWorkflow || isBudget || isCalculator);
     el.summaryCol.classList.toggle("hidden", !isSummary);
     el.groupingCol.classList.toggle("hidden", !isGrouping);
     el.preciseScopeCol.classList.toggle("hidden", !isPreciseScope);
     if (el.qaCol) el.qaCol.classList.toggle("hidden", !isQa);
+    if (el.pamCol) el.pamCol.classList.toggle("hidden", !isPam);
     if (el.art5Col) el.art5Col.classList.toggle("hidden", !isArt5);
     el.timetablesCol.classList.toggle("hidden", !isTimetables);
     if (el.workflowCol) el.workflowCol.classList.toggle("hidden", !isWorkflow);
@@ -1165,6 +1179,224 @@
         .join("") +
       "</tbody></table></div></div>"
     );
+  }
+
+  // ==========================================================================================
+  // EMA post-authorisation procedural advice (EMEA-H-19984/03) -- the fourth document in the
+  // Guidance branch. Unlike the CMDh Q&A it carries a revision date PER node (Rev./NEW + month),
+  // so each dated node shows a badge and can be sorted/filtered by recency. The source is a tree
+  // (chapter -> optional sub-section with its own intro + date -> questions), so the view is a
+  // nested accordion. When a filter or the date sort is active it flattens to a ranked hit list
+  // instead -- every dated node (questions, sub-sections, the rare dated sub-question) is a hit.
+  // No Classification code chips here: the PAM does not cross-reference the Guideline that way.
+  // ==========================================================================================
+
+  function pamText(text) {
+    return escapePreciseScopeText(text);
+  }
+
+  function pamAnswerHtml(node) {
+    let html = "";
+    let list = [];
+    const flushList = () => {
+      if (list.length) html += '<ul class="qa-bullets">' + list.join("") + "</ul>";
+      list = [];
+    };
+    node.a.forEach((p) => {
+      if (p.t === "li") {
+        list.push("<li>" + pamText(p.text) + "</li>");
+        return;
+      }
+      flushList();
+      html += "<p>" + pamText(p.text) + "</p>";
+    });
+    flushList();
+    return html;
+  }
+
+  // "Rev. Oct 2026" in subdued blue, "NEW Oct 2026" in green -- the two are kept colour-separate
+  // (user decision) so a brand-new question reads differently from a revised one at a glance.
+  function pamBadge(rev) {
+    if (!rev) return "";
+    const cls = rev.type === "new" ? "pam-badge pam-badge--new" : "pam-badge pam-badge--rev";
+    const label = rev.type === "new" ? "NEW " + rev.date : "Rev. " + rev.date;
+    return '<span class="' + cls + '">' + label + "</span>";
+  }
+
+  // Depth-first over the whole tree, yielding each node once (pre-order = document order).
+  function pamWalk(nodes, out) {
+    out = out || [];
+    nodes.forEach((n) => {
+      out.push(n);
+      if (n.children) pamWalk(n.children, out);
+    });
+    return out;
+  }
+
+  function pamMatches(node, needle) {
+    if (!needle) return true;
+    const hay = (node.id + " " + node.title + " " + node.a.map((p) => p.text).join(" ")).toLowerCase();
+    return needle.split(/\s+/).every((w) => hay.includes(w));
+  }
+
+  // "Recently revised" = within 12 months of the source document's own date. Derived from
+  // meta.docDate ("October 2026") rather than today's clock, so the filter means the same thing
+  // whenever it is read and does not drift as the calendar advances.
+  function pamRecentCutoff() {
+    const m = /([A-Za-z]{3,9})\s+(\d{4})/.exec(PAM_DATA.meta.docDate || "");
+    const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const now = m ? new Date(+m[2], months[m[1].slice(0, 3).toLowerCase()] || 0, 1) : new Date();
+    const cut = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+    return cut.getFullYear() * 12 + cut.getMonth();
+  }
+
+  function pamRevMonths(rev) {
+    // rev.sort is "YYYY-MM" -> a comparable month index.
+    const p = rev.sort.split("-");
+    return (+p[0]) * 12 + (+p[1]) - 1;
+  }
+
+  function pamFiltering() {
+    return !!state.pamQuery.trim() || state.pamSort || state.pamRecentOnly || state.pamNewOnly;
+  }
+
+  function renderPAM() {
+    if (!PAM_DATA || !el.pamCol) return;
+    const m = PAM_DATA.meta;
+    const chapterTitle = {};
+    PAM_DATA.chapters.forEach((c) => (chapterTitle[c.key] = c.title));
+
+    const controls =
+      '<div class="qa-controls pam-controls">' +
+      '<input type="text" id="vcl-pamSearch" class="qa-search" placeholder="Filter questions and answers…" autocomplete="off" value="' +
+      escapePreciseScopeText(state.pamQuery) + '" />' +
+      '<div class="pam-filters">' +
+      '<label class="pam-toggle"><input type="checkbox" id="vcl-pamSort"' + (state.pamSort ? " checked" : "") + " /> Most recently changed first</label>" +
+      '<label class="pam-toggle"><input type="checkbox" id="vcl-pamRecent"' + (state.pamRecentOnly ? " checked" : "") + " /> Revised in the last 12 months</label>" +
+      '<label class="pam-toggle"><input type="checkbox" id="vcl-pamNew"' + (state.pamNewOnly ? " checked" : "") + " /> New questions only</label>" +
+      "</div></div>";
+
+    const head =
+      '<div class="grouping-head">' +
+      "<h3>EMA Post-Authorisation Procedural Advice</h3>" +
+      "<p>" + escapePreciseScopeText(m.docTitle) + ".</p>" +
+      '<p class="ref-line">Reference: ' + referenceText("pam", m.docRef + " (" + m.docDate + ")") + "</p>" +
+      '<p class="ref-updated">Last updated in Variation Toolbox: ' + lastUpdated("pam", m.lastUpdated) + "</p>" +
+      "</div>";
+
+    const source =
+      '<p class="grouping-source">Source: ' + m.docRef + " (" + m.docDate + ") &mdash; " +
+      '<a href="' + m.url + '" target="_blank" rel="noopener noreferrer">ema.europa.eu</a>. ' +
+      "Reproduced for reference; the original document remains authoritative.</p>";
+
+    // A single node row: the toggle button (id + title + badge), and its body when expanded.
+    // In the tree an expanded sub-section shows its intro answer followed by its children; an
+    // expanded leaf shows its answer. depth drives the indentation class.
+    const nodeRow = (n, depth, inTree) => {
+      const isOpen = !!state.pamOpen[n.id];
+      const hasKids = inTree && n.children && n.children.length;
+      let body = "";
+      if (isOpen) {
+        body = '<div class="qa-a pam-a">' + pamAnswerHtml(n) + "</div>";
+        if (hasKids) body += '<div class="pam-children">' + n.children.map((c) => nodeRow(c, depth + 1, true)).join("") + "</div>";
+      }
+      return (
+        '<div class="qa-item pam-item pam-item--d' + depth + '">' +
+        '<button type="button" class="qa-q pam-q' + (isOpen ? " qa-q--open" : "") + '" data-pam-toggle="' + n.id + '">' +
+        '<span class="qa-no">' + n.id + "</span>" +
+        '<span class="qa-title">' + pamText(n.title) + "</span>" +
+        pamBadge(n.rev) +
+        "</button>" +
+        body +
+        "</div>"
+      );
+    };
+
+    let listHtml;
+    if (pamFiltering()) {
+      // Flat, ranked hit list. Every node is considered on its own (option A): a dated
+      // sub-section is as much a hit as a leaf question. Children surface as their own rows.
+      const needle = state.pamQuery.trim().toLowerCase();
+      const cutoff = pamRecentCutoff();
+      let hits = pamWalk(PAM_DATA.nodes).filter((n) =>
+        pamMatches(n, needle) &&
+        (!state.pamNewOnly || (n.rev && n.rev.type === "new")) &&
+        (!state.pamRecentOnly || (n.rev && pamRevMonths(n.rev) >= cutoff))
+      );
+      if (state.pamSort) {
+        hits = hits.slice().sort((a, b) => {
+          const as = a.rev ? a.rev.sort : "";
+          const bs = b.rev ? b.rev.sort : "";
+          return as < bs ? 1 : as > bs ? -1 : 0; // newest first; undated sinks to the bottom
+        });
+      }
+      listHtml =
+        '<p class="results-meta results-meta--detail">' + hits.length +
+        (hits.length === 1 ? " question matches" : " questions match") + "</p>" +
+        (hits.length === 0
+          ? '<p class="classification-empty-hint">No matching question. Try a different keyword or filter.</p>'
+          : '<div class="qa-list pam-flat">' +
+            hits.map((n) => '<div class="pam-hit-ch">' + escapePreciseScopeText(chapterTitle[n.ch] || "") + "</div>" + nodeRow(n, 0, false)).join("") +
+            "</div>");
+    } else {
+      // Nested chapter accordion. One chapter open at a time.
+      listHtml = PAM_DATA.chapters.map((ch) => {
+        const roots = PAM_DATA.nodes.filter((n) => String(n.ch) === ch.key);
+        if (!roots.length) return "";
+        const isOpen = state.pamOpenChapter === ch.key;
+        return (
+          '<div class="grouping-section">' +
+          '<button type="button" class="grouping-section__title" data-pam-chapter="' + ch.key +
+          '" aria-expanded="' + (isOpen ? "true" : "false") + '">' +
+          '<span class="grouping-section__key">' + ch.key + "</span>" +
+          '<span class="grouping-section__badge grouping-section__badge--alt">' + escapePreciseScopeText(ch.title) + "</span>" +
+          '<span class="grouping-section__count">' + roots.length + "</span>" +
+          "</button>" +
+          (isOpen ? '<div class="qa-list">' + roots.map((n) => nodeRow(n, 0, true)).join("") + "</div>" : "") +
+          "</div>"
+        );
+      }).join("");
+    }
+
+    el.pamCol.innerHTML = head + controls + listHtml + source;
+
+    el.pamCol.querySelectorAll("[data-pam-chapter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.pamChapter;
+        state.pamOpenChapter = state.pamOpenChapter === key ? null : key;
+        renderPAM();
+      });
+    });
+    el.pamCol.querySelectorAll("[data-pam-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.pamToggle;
+        if (state.pamOpen[id]) delete state.pamOpen[id];
+        else state.pamOpen[id] = true;
+        renderPAM();
+        const again = el.pamCol.querySelector('[data-pam-toggle="' + id + '"]');
+        if (again && state.pamOpen[id]) again.scrollIntoView({ block: "nearest" });
+      });
+    });
+
+    const search = el.pamCol.querySelector("#vcl-pamSearch");
+    if (search) {
+      search.addEventListener("input", () => {
+        state.pamQuery = search.value;
+        renderPAM();
+        const next = el.pamCol.querySelector("#vcl-pamSearch");
+        if (next) {
+          next.focus();
+          next.setSelectionRange(next.value.length, next.value.length);
+        }
+      });
+    }
+    const bind = (sel, key) => {
+      const cb = el.pamCol.querySelector(sel);
+      if (cb) cb.addEventListener("change", () => { state[key] = cb.checked; renderPAM(); });
+    };
+    bind("#vcl-pamSort", "pamSort");
+    bind("#vcl-pamRecent", "pamRecentOnly");
+    bind("#vcl-pamNew", "pamNewOnly");
   }
 
   // ==========================================================================================
@@ -2434,6 +2666,7 @@
           // Its two siblings are static and rendered once at init; this one carries state
           // (open chapter/question, filter, deleted toggle) and so repaints on entry.
           if (view === "qa") renderQA();
+          if (view === "pam") renderPAM();
           // Scroll all the way to the top (masthead), not just to the tool heading: the large
           // hero image that used to sit above is gone, so landing at the very top reads calmer.
           jumpToTop();
@@ -2444,6 +2677,7 @@
       guidanceRow(GROUPING_GUIDANCE.title, "grouping");
       guidanceRow(PRECISE_SCOPE_GUIDANCE.title, "precisescope");
       if (QA_DATA) guidanceRow("Q&A on Variations", "qa");
+      if (PAM_DATA) guidanceRow("EMA Post-Authorisation Procedural Advice", "pam");
     }
   }
 
@@ -3682,6 +3916,7 @@
     else if (dest === "grouping") { state.view = "grouping"; state.guidanceOpen = true; }
     else if (dest === "precisescope") { state.view = "precisescope"; state.guidanceOpen = true; }
     else if (dest === "qa") { state.view = "qa"; state.guidanceOpen = true; }
+    else if (dest === "pam") { state.view = "pam"; state.guidanceOpen = true; }
     else if (dest === "timetables") state.view = "timetables";
     else if (dest === "workflow") state.view = "workflow";
     else if (dest === "budget") state.view = "budget";
@@ -3692,6 +3927,7 @@
     switchViewVisibility();
     if (dest === "timetables") renderTimetables();
     else if (dest === "qa") renderQA();
+    else if (dest === "pam") renderPAM();
     else if (dest === "workflow") { if (window.VCL_WORKFLOW) window.VCL_WORKFLOW.render(el.workflowCol); }
     else if (dest === "budget") { state.view = "budget"; if (window.VCL_BUDGET) window.VCL_BUDGET.render(el.budgetCol); }
     else if (dest === "calculator") fillCalcHead();
@@ -3884,6 +4120,7 @@
       { dest: "precisescope", label: PRECISE_SCOPE_GUIDANCE.title, desc: "Example wordings for the application form's scope field." },
     ];
     if (QA_DATA) docs.push({ dest: "qa", label: "Q&A on Variations", desc: "The CMDh questions and answers on submitting variations." });
+    if (PAM_DATA) docs.push({ dest: "pam", label: "EMA Post-Authorisation Procedural Advice", desc: "EMA's procedural Q&A for the centralised post-authorisation phase." });
     const cards = docs.map((d) => `
       <button type="button" class="guide-overview__card" data-dest="${d.dest}" style="--card-accent: var(--group)">
         <span class="guide-overview__title"><span class="guide-overview__dot"></span>${d.label}</span>

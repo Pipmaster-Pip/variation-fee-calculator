@@ -68,6 +68,20 @@ function vcl_register_assets() {
 		true
 	);
 
+	// EMA post-authorisation procedural advice -- generated from the source PDF by extract_pam.py,
+	// its own file for the same reason as the Q&A data. vcl-app.js treats window.VCL_PAM_DATA as
+	// optional and simply omits the view without it.
+	$pam_data_file = VFC_PLUGIN_DIR . 'assets/js/vcl-pam-data.js';
+	$pam_data_ver  = file_exists( $pam_data_file ) ? filemtime( $pam_data_file ) : VFC_VERSION;
+
+	wp_register_script(
+		'vcl-pam-data',
+		VFC_PLUGIN_URL . 'assets/js/vcl-pam-data.js',
+		array(),
+		$pam_data_ver,
+		true
+	);
+
 	// Art. 5 tracking table -- generated from the source .xls by extract_art5.py, its own file
 	// for the same reason as the Q&A data. vcl-app.js treats window.VCL_ART5_DATA as optional.
 	$art5_data_file = VFC_PLUGIN_DIR . 'assets/js/vcl-art5-data.js';
@@ -98,7 +112,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-app',
 		VFC_PLUGIN_URL . 'assets/js/vcl-app.js',
-		array( 'vcl-data', 'vcl-qa-data', 'vcl-art5-data', 'vcl-docx' ),
+		array( 'vcl-data', 'vcl-qa-data', 'vcl-pam-data', 'vcl-art5-data', 'vcl-docx' ),
 		$app_ver,
 		true
 	);
@@ -558,6 +572,10 @@ function vcl_shortcode( $atts ) {
 	  <!-- Q&A on Variations: reuses .grouping-col (same grid cell, same one-of-many
 	       visibility rule) -- only its inner qa-* markup is its own. -->
 	  <div class="grouping-col hidden" id="vcl-qaCol"></div>
+
+	  <!-- EMA post-authorisation procedural advice: reuses .grouping-col like the Q&A, with its
+	       own inner pam-* markup. -->
+	  <div class="grouping-col hidden" id="vcl-pamCol"></div>
 
 	  <!-- Art. 5 recommendations: the fifth Classification chapter, same shared grid cell. -->
 	  <div class="grouping-col hidden" id="vcl-art5Col"></div>
