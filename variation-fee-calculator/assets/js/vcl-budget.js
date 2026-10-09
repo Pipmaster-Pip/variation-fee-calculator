@@ -2225,23 +2225,45 @@
     var annualRollup = BUD.computeAnnualRollup(state.annualLines, countries, fx);
 
     var wb = XLSX.utils.book_new();
+    var r2 = function (n) { return Math.round((n || 0) * 100) / 100; };
+
+    // Cost columns mirror the on-screen table: internal RA cost and total cost appear only when a
+    // plan-wide rate is set (rollup.totals.hasRate); the external-cost column appears only while the
+    // plan tracks external costs. Without a rate the sheet is exactly as before.
+    var rate = rateVal();
+    var hasRate = rollup.totals.hasRate;
+    var trackExt = state.trackExternal;
 
     // "Fee (EUR)" is renamed to make clear it is the one-off variation fee, distinct from the
     // recurring annual maintenance fees on the second sheet.
-    var linesRows = [["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "Variation Fee (EUR)", "Hours (min)", "Hours (max)", "Hours (expected)", "Hours (own adjustment)"]];
+    var linesHeader = ["Product", "Mode", "Variations", "Procedures", "Year", "Quarter", "Probability", "Variation Fee (EUR)"];
+    if (hasRate) linesHeader.push("Int. RA cost (EUR)");
+    if (trackExt) linesHeader.push("Ext. cost (EUR)");
+    if (hasRate) linesHeader.push("Total cost (EUR)");
+    linesHeader = linesHeader.concat(["Hours (min)", "Hours (max)", "Hours (expected)", "Hours (own adjustment)"]);
+    var linesRows = [linesHeader];
     state.lines.forEach(function (line) {
       var r = state.resultsById[line.id];
       var sub = line.submission;
       var mode = SUB.displayMode(sub);
+      var lc = costOf(r, line);
       // Incomplete lines (countries not fully specified) still show Mode/Variations/Procedures --
       // only the priced columns collapse to 0, mirroring the on-screen table's "Countries
       // incomplete" cell (r.complete === false).
-      linesRows.push([
+      var row = [
         line.product || "", MODE_LABEL[mode] || mode, variationsText(sub), proceduresText(sub),
-        line.year || "", line.quarter || "", line.probability, r.complete ? Math.round(r.fee * 100) / 100 : 0,
+        line.year || "", line.quarter || "", line.probability, r.complete ? r2(r.fee) : 0,
+      ];
+      // Internal/total cost follow the on-screen gate (r.complete && hasRate). External cost is a
+      // manual per-line field, independent of pricing completeness, so it is always carried.
+      if (hasRate) row.push((r.complete && lc.internal) ? r2(lc.internal.expected) : 0);
+      if (trackExt) row.push(r2(lc.external));
+      if (hasRate) row.push((r.complete && lc.total) ? r2(lc.total.expected) : 0);
+      row.push(
         r.complete ? Math.round(r.hours.min) : 0, r.complete ? Math.round(r.hours.max) : 0, r.complete ? Math.round(r.hours.expected) : 0,
-        r.complete ? ownAdjustTotal(r) : 0,
-      ]);
+        r.complete ? ownAdjustTotal(r) : 0
+      );
+      linesRows.push(row);
     });
     var wsLines = XLSX.utils.aoa_to_sheet(linesRows);
     XLSX.utils.book_append_sheet(wb, wsLines, "Variations");
@@ -2272,11 +2294,23 @@
     var wsAnnual = XLSX.utils.aoa_to_sheet(annualRows);
     XLSX.utils.book_append_sheet(wb, wsAnnual, "Annual maintenance fees");
 
-    var r2 = function (n) { return Math.round((n || 0) * 100) / 100; };
     var rollupRows = [
       ["Variation fees (EUR)", r2(rollup.totals.fee)],
       ["Annual fees (EUR/yr)", r2(annualRollup.totalEur)],
       ["Total agency spend this year (EUR)", r2(rollup.totals.fee + annualRollup.totalEur)],
+    ];
+    // Cost summary (mirrors the dashboard "Total cost" tile): internal RA cost and total cost only
+    // when a rate is set; external cost only while tracking. Total cost = agency fees (variation +
+    // annual) + internal RA cost + external cost, matching the on-screen hero figure.
+    if (hasRate) {
+      rollupRows.push(["Internal RA cost (EUR)", r2(rollup.totals.internalExpected)]);
+      if (trackExt) rollupRows.push(["External cost (EUR)", r2(rollup.totals.externalTotal)]);
+      rollupRows.push(["Total cost (fees + RA, EUR)", r2(rollup.totals.totalCostExpected + annualRollup.totalEur)]);
+      rollupRows.push(["Internal RA rate (EUR/h)", r2(rate)]);
+    } else if (trackExt) {
+      rollupRows.push(["External cost (EUR)", r2(rollup.totals.externalTotal)]);
+    }
+    rollupRows = rollupRows.concat([
       ["Annual RA hours (expected)", Math.round(rollup.totals.hoursExpected)],
       ["Annual RA hours (min)", Math.round(rollup.totals.hoursMin)],
       ["Annual RA hours (max)", Math.round(rollup.totals.hoursMax)],
@@ -2285,7 +2319,7 @@
       [], ["By market (combined agency spend, EUR)", "Fee (EUR)"],
     ].concat(mergeBreakdown(rollup.byMarket, annualRollup.byMarket).map(function (r) { return [r.key, r2(r.value)]; }))
      .concat([[], ["By product (combined agency spend, EUR)", "Fee (EUR)"]])
-     .concat(mergeBreakdown(rollup.byProduct, annualRollup.byProduct).map(function (r) { return [r.key, r2(r.value)]; }));
+     .concat(mergeBreakdown(rollup.byProduct, annualRollup.byProduct).map(function (r) { return [r.key, r2(r.value)]; })));
     var wsRollup = XLSX.utils.aoa_to_sheet(rollupRows);
     XLSX.utils.book_append_sheet(wb, wsRollup, "Rollup");
 
