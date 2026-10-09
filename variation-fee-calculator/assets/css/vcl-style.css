@@ -2100,12 +2100,14 @@
   color: var(--ink);
 }
 .vcl-app .qa-revisions__wrap {
-  overflow-x: auto;
+  /* No horizontal scrollbar: the fixed table layout wraps content into the columns, so the only
+     overflow is a few pixels when the card is pathologically narrow -- clipped, not scrolled. */
+  overflow-x: hidden;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
 }
-.vcl-app .qa-revisions table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 0; }
+.vcl-app .qa-revisions table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12.5px; margin: 0; }
 .vcl-app .qa-revisions thead th {
   font-family:var(--figure); font-variant-numeric:tabular-nums;
   font-size: 10.5px;
@@ -2132,7 +2134,12 @@
 }
 .vcl-app .qa-revisions tbody tr:first-child th,
 .vcl-app .qa-revisions tbody tr:first-child td { border-top: 0; }
-.vcl-app .qa-revisions tbody th { width: 1%; white-space: nowrap; }
+/* Fixed layout (set on the table above): the two outer columns get explicit widths, the middle
+   column takes whatever is left, so its chips/prose wrap within it instead of forcing the table
+   wider than its card (which produced a horizontal scrollbar under the auto layout). "Latest"
+   wraps under the count pill when the column is narrow. */
+.vcl-app .qa-revisions thead th:first-child,
+.vcl-app .qa-revisions tbody th { width: 96px; }
 .vcl-app .qa-rev-no {
   display: inline-block;
   font-family:var(--figure);
@@ -2156,7 +2163,7 @@
 }
 .vcl-app .qa-revisions thead th.qa-rev-date { text-align: left; }
 .vcl-app .qa-rev-date {
-  width: 92px;
+  width: 104px;
   white-space: nowrap;
   color: var(--ink-faint);
   text-align: left;

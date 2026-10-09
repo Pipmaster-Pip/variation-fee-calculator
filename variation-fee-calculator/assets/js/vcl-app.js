@@ -109,7 +109,6 @@
     pamOpenChapter: null, // chapter key of the EMA PAM tree view -- one-at-a-time accordion
     pamOpen: {}, // set of expanded PAM node ids (sub-sections + questions); nesting needs several at once
     pamQuery: "", // the PAM view's own filter box (separate from the global `query`)
-    pamSort: false, // sort hits by most-recently-revised first (flat mode)
     pamRecentOnly: false, // show only nodes revised in the last 12 months (flat mode)
     pamNewOnly: false, // show only NEW nodes (flat mode)
     pamRevAll: false, // revision-history box: reveal all months beyond the newest 24
@@ -1258,7 +1257,7 @@
   }
 
   function pamFiltering() {
-    return !!state.pamQuery.trim() || state.pamSort || state.pamRecentOnly || state.pamNewOnly;
+    return !!state.pamQuery.trim() || state.pamRecentOnly || state.pamNewOnly;
   }
 
   function renderPAM() {
@@ -1278,7 +1277,6 @@
       '<input type="text" id="vcl-pamSearch" class="qa-search" placeholder="Filter questions and answers…" autocomplete="off" value="' +
       escapePreciseScopeText(state.pamQuery) + '" />' +
       '<div class="pam-chips">' +
-      chip("sort", state.pamSort, "Most recently changed") +
       chip("recent", state.pamRecentOnly, "Revised in the last 12 months") +
       chip("new", state.pamNewOnly, "New questions only") +
       "</div></div>";
@@ -1325,18 +1323,13 @@
       // sub-section is as much a hit as a leaf question. Children surface as their own rows.
       const needle = state.pamQuery.trim().toLowerCase();
       const cutoff = pamRecentCutoff();
-      let hits = pamWalk(PAM_DATA.nodes).filter((n) =>
+      // "New questions only" is scoped to the last 12 months too (like "revised in the last 12
+      // months") -- older NEW markers go back to 2013 and are not what the filter is asking for.
+      const hits = pamWalk(PAM_DATA.nodes).filter((n) =>
         pamMatches(n, needle) &&
-        (!state.pamNewOnly || (n.rev && n.rev.type === "new")) &&
+        (!state.pamNewOnly || (n.rev && n.rev.type === "new" && pamRevMonths(n.rev) >= cutoff)) &&
         (!state.pamRecentOnly || (n.rev && pamRevMonths(n.rev) >= cutoff))
       );
-      if (state.pamSort) {
-        hits = hits.slice().sort((a, b) => {
-          const as = a.rev ? a.rev.sort : "";
-          const bs = b.rev ? b.rev.sort : "";
-          return as < bs ? 1 : as > bs ? -1 : 0; // newest first; undated sinks to the bottom
-        });
-      }
       listHtml =
         '<p class="results-meta results-meta--detail">' + hits.length +
         (hits.length === 1 ? " question matches" : " questions match") + "</p>" +
@@ -1405,7 +1398,7 @@
         }
       });
     }
-    const chipKey = { sort: "pamSort", recent: "pamRecentOnly", new: "pamNewOnly" };
+    const chipKey = { recent: "pamRecentOnly", new: "pamNewOnly" };
     el.pamCol.querySelectorAll("[data-pam-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = chipKey[btn.dataset.pamFilter];
@@ -1448,8 +1441,8 @@
         a.id.localeCompare(b.id, undefined, { numeric: true }));
       return (
         '<tr' + (i === 0 ? ' class="is-latest"' : "") + '>' +
-        '<th scope="row"><span class="qa-rev-no" title="' + items.length +
-        (items.length === 1 ? " change" : " changes") + '">' + items.length + "</span>" +
+        '<th scope="row"><span class="qa-rev-no">' + items.length +
+        (items.length === 1 ? " change" : " changes") + "</span>" +
         (i === 0 ? ' <span class="qa-rev-latest">Latest</span>' : "") + "</th>" +
         '<td><div class="pam-rev-ids">' + items.map(idChip).join("") + "</div></td>" +
         '<td class="qa-rev-date">' + g.date + "</td></tr>"
@@ -1466,7 +1459,7 @@
       '<div class="qa-revisions pam-revisions"><h4>Revision history of the source document</h4>' +
       '<p class="pam-rev-ref">Current revision: ' + revNo + " (" + PAM_DATA.meta.docDate + ")</p>" +
       '<div class="qa-revisions__wrap"><table>' +
-      '<thead><tr><th scope="col">Changes</th><th scope="col">What changed</th>' +
+      '<thead><tr><th scope="col">Changes</th><th scope="col">Which questions changed?</th>' +
       '<th scope="col" class="qa-rev-date">Date</th></tr></thead><tbody>' +
       shown.map(row).join("") +
       "</tbody></table></div>" + more + "</div>"
@@ -1477,7 +1470,7 @@
   // every ancestor sub-section, expand the question, re-render and scroll it into view.
   function pamJumpToNode(id) {
     state.pamQuery = "";
-    state.pamSort = state.pamRecentOnly = state.pamNewOnly = false;
+    state.pamRecentOnly = state.pamNewOnly = false;
     state.pamOpenChapter = id.split(".")[0];
     const segs = id.split(".");
     for (let i = 2; i < segs.length; i++) state.pamOpen[segs.slice(0, i).join(".")] = true;
