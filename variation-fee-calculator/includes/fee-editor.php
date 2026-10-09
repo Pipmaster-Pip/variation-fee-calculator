@@ -446,6 +446,7 @@ function vcl_toolbox_tabs() {
 		'fees'     => 'Gebühren',
 		'sources'  => 'Datenstand & Quellen',
 		'settings' => 'Einstellungen',
+		'intro'    => 'Einleitungstexte',
 	);
 }
 
@@ -491,6 +492,8 @@ function vcl_render_toolbox_page() {
 			vcl_render_sources_tab();
 		} elseif ( $current === 'settings' ) {
 			vcl_render_settings_tab();
+		} elseif ( $current === 'intro' ) {
+			vcl_render_intro_tab();
 		} else {
 			vcl_render_fees_tab();
 		}

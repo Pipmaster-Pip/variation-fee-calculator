@@ -445,6 +445,10 @@ function vcl_shortcode( $atts ) {
 		// Same admin-editable/fallback pattern for the free-text guideline reference shown
 		// next to it (see vcl_get_reference_text() in includes/admin.php).
 		'referenceText' => vcl_get_reference_text(),
+		// Admin-editable per-tool intro paragraph (the one under each tool's heading), resolved to
+		// override-or-default. The tools read their own id from here and escape it on output; the
+		// masthead intro above is rendered server-side via vcl_intro_text('masthead').
+		'introText'     => vcl_intro_texts_resolved(),
 		// Download link to the workbook behind Workload Planning's RA-hours factors -- shown in that
 		// tool's "How this estimate is built" panel (see vcl_get_workload_excel_url()).
 		'workloadExcelUrl' => vcl_get_workload_excel_url(),
@@ -483,7 +487,7 @@ function vcl_shortcode( $atts ) {
 	      <span>Start</span>
 	    </button>
 	  </div>
-	  <h1>Variation Toolbox</h1>
+	  <h1>Variation Toolbox <span class="app-header__tagline">&ndash; Plan, Assess &amp; Manage Regulatory Variations</span></h1>
 	  <p class="app-header__copyright">
 	    &copy; Dr. Tom Deutschle
 	    <!-- Filled by vcl-app.js (fillContactSlots): the address is assembled in the browser
@@ -491,9 +495,7 @@ function vcl_shortcode( $atts ) {
 	    <span id="vcl-contactSlot"></span>
 	  </p>
 	  <p>
-	    Calculation of official fees for variations and annual fees across EU-27, EMA, CH, IS, NO, UK
-	    and RS, as well as the classification of variations, budget planning, calculation of RA
-	    workload and visualisation of timetables for variations.
+	    <?php echo esc_html( vcl_intro_text( 'masthead' ) ); ?>
 	  </p>
 	</header>
 

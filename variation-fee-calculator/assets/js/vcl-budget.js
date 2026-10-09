@@ -375,6 +375,15 @@
     });
   }
 
+  // Admin-editable Budget intro paragraph: resolved override-or-default from VCL_CONFIG.introText
+  // (plain text -> escaped). Falls back to the inline default when no config is present (dev harness).
+  function budgetIntroHtml() {
+    var cfg = window.VCL_CONFIG && window.VCL_CONFIG.introText;
+    var def = "Portfolio-wide annual plan: fees &amp; RA effort across all products and markets.";
+    if (!cfg || cfg.budget == null) return def;
+    return escapeHtml(cfg.budget);
+  }
+
   // Reference / "Last updated" note for the budget headers -- Budget Planning prices the same
   // official fees as the Fee Calculator, so it mirrors the calculator's admin-editable VCL_CONFIG
   // keys with the fee-data date as the fallback (same pattern as the Guided Workflow head).
@@ -1126,7 +1135,9 @@
     // The heading names the year(s) the plan actually covers, derived from the lines' own Year field
     // (empty plan falls back to next year, the usual budgeting horizon).
     left.appendChild(el("h2", null, 'Budget Planning <span class="vcl-bud-year">for ' + escapeHtml(planYearLabel()) + "</span>"));
-    left.appendChild(el("p", null, "Portfolio-wide annual plan: fees &amp; RA effort across all products and markets."));
+    // Admin-editable intro paragraph (resolved override-or-default via VCL_CONFIG.introText, plain
+    // text -> escaped); the inline default is the fallback when no config is present (dev harness).
+    left.appendChild(el("p", null, budgetIntroHtml()));
     appendCalcRefLines(left);
     header.appendChild(left);
     var actions = el("div", "vcl-bud-header__actions");

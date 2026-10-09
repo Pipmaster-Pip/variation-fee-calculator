@@ -36,6 +36,16 @@
     return (window.VCL_CONFIG && window.VCL_CONFIG.referenceText && window.VCL_CONFIG.referenceText[key]) || fallback;
   }
 
+  // Admin-editable intro paragraph under a tool's heading (see vcl_intro_text() / VCL_CONFIG
+  // .introText in includes/admin.php). The config value is already resolved to override-or-default
+  // and is plain text, so it is HTML-escaped here before going into innerHTML. `fallbackHtml` is the
+  // inline default markup, used only when no config is present (standalone / dev harness).
+  function introHtml(key, fallbackHtml) {
+    var cfg = window.VCL_CONFIG && window.VCL_CONFIG.introText;
+    if (!cfg || cfg[key] == null) return fallbackHtml;
+    return String(cfg[key]).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
   const SELECTIONS_STORAGE_KEY = "variationLookupSelections";
 
   // Selection shape: state.selections["E.1|a"] = { qty: number, units: [unit, unit, ...] }
@@ -170,7 +180,7 @@
   // toggles with vcl-detailPanel as before (see renderDetail()).
   el.detailHead.innerHTML = `
     <h3>Classification of Variations</h3>
-    <p>Search or browse variation codes from the EU Variation Classification Guideline. Pick a matching entry to see the conditions, required documentation and resulting procedure type.</p>
+    <p>${introHtml("classification", "Search or browse variation codes from the EU Variation Classification Guideline. Pick a matching entry to see the conditions, required documentation and resulting procedure type.")}</p>
     <p class="ref-line">Reference: ${referenceText("classification", `${CLASSIFICATION_META.guidelineRef}, applicable from ${CLASSIFICATION_META.applicableFrom}`)}</p>
     <p class="ref-updated">Last updated in Variation Toolbox: ${lastUpdated("classification", CLASSIFICATION_META.lastUpdated)}</p>
   `;
@@ -184,7 +194,7 @@
     const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     el.calcHead.innerHTML = `
       <h3>Variation Fee Calculator</h3>
-      <p>Calculate the official regulatory fees for variation applications (Type IA / IB / II) across one or more markets &mdash; EU-27, EMA, CH, IS, NO, UK and RS. Select markets and roles, set the number of strengths, then choose the variations.</p>
+      <p>${introHtml("calculator", "Calculate the official regulatory fees for variation applications (Type IA / IB / II) across one or more markets &mdash; EU-27, EMA, CH, IS, NO, UK and RS. Select markets and roles, set the number of strengths, then choose the variations.")}</p>
       <p class="ref-line">Reference: ${referenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).")}</p>
       <p class="ref-updated">Last updated in Variation Toolbox: ${lastUpdated("calculator", calcUpdated)}</p>
       <p class="calc-head-actions"><button type="button" class="calc-feedata-btn" id="vcl-calcFeeDataBtn">Fee data &mdash; country details</button></p>
@@ -1604,7 +1614,7 @@
     root.innerHTML = `
       <div class="tt-head">
         <h3>Timetables for Variation Procedures</h3>
-        <p>Day 0 to the End of Procedure, on a real calendar-day axis — drag the clock-stop slider to see what an authority pause actually costs. Day numbers stay as the guide numbers them (the clock-stop is not counted). Click any milestone to highlight it below.</p>
+        <p>${introHtml("timetables", "Day 0 to the End of Procedure, on a real calendar-day axis — drag the clock-stop slider to see what an authority pause actually costs. Day numbers stay as the guide numbers them (the clock-stop is not counted). Click any milestone to highlight it below.")}</p>
         <p class="ref-line">Reference: ${referenceText("timetables", TT_REFERENCE)}</p>
         <p class="ref-updated">Last updated in Variation Toolbox: ${lastUpdated("timetables", TT_LAST_UPDATED)}</p>
       </div>
@@ -2424,7 +2434,9 @@
           // Its two siblings are static and rendered once at init; this one carries state
           // (open chapter/question, filter, deleted toggle) and so repaints on entry.
           if (view === "qa") renderQA();
-          jumpToContentTop();
+          // Scroll all the way to the top (masthead), not just to the tool heading: the large
+          // hero image that used to sit above is gone, so landing at the very top reads calmer.
+          jumpToTop();
         });
         guidanceBranch.appendChild(row);
       };
@@ -3883,7 +3895,7 @@
       <div class="guide-overview">
         <div class="guide-overview__head guide-overview__head--group">
           <h3 class="guide-overview__heading">Guidance on Variations</h3>
-          <p class="guide-overview__intro">Procedural guidance and Q&amp;A on variations &mdash; pick a document.</p>
+          <p class="guide-overview__intro">${introHtml("guidance", "Procedural guidance and Q&amp;A on variations &mdash; pick a document.")}</p>
         </div>
         <div class="guide-overview__grid">${cards}</div>
       </div>`;
@@ -4127,13 +4139,10 @@
 
   window.VCL_CONTACT = { link: buildContactLink, address: contactAddress };
 
+  // The "Suggest an improvement" masthead link was removed on request; the slot is left empty.
   function fillContactSlots() {
     const slot = document.getElementById("vcl-contactSlot");
-    if (!slot) return;
-    const link = buildContactLink("Suggest an improvement", null);
-    if (!link) return;
-    slot.appendChild(document.createTextNode(" · "));
-    slot.appendChild(link);
+    if (slot) slot.textContent = "";
   }
 
   // Home button in the masthead: returns to the first-load welcome overview (browse view, no

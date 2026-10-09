@@ -215,6 +215,14 @@
   margin: 0 0 8px;
 }
 
+/* Tagline after the en dash in the masthead heading: same serif, but smaller and muted so it
+   reads as a subtitle to "Variation Toolbox" rather than part of the title. */
+.vcl-app .app-header h1 .app-header__tagline {
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .vcl-app .app-header p.app-header__copyright {
   margin: 0 0 10px;
   font-size: 12px;

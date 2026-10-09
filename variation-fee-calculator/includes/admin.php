@@ -263,47 +263,7 @@ function vcl_render_sources_tab() {
 function vcl_render_settings_tab() {
 	$vcl_status         = isset( $_GET['vcl_status'] ) ? sanitize_key( $_GET['vcl_status'] ) : '';
 	$workload_excel_url = vcl_get_workload_excel_url();
-	$contact_email      = (string) get_option( 'vcl_contact_email', '' );
-	$contact_effective  = vcl_get_contact_email();
 	?>
-	<h2>Kontakt für Verbesserungsvorschläge</h2>
-
-	<?php if ( $vcl_status === 'contact_saved' ) : ?>
-		<div class="notice notice-success is-dismissible"><p>Kontaktadresse gespeichert.</p></div>
-	<?php endif; ?>
-
-	<p style="max-width:46em;">
-		Die Toolbox zeigt im Kopfbereich einen dezenten Link „Suggest an improvement“ und im
-		Workload-Abschnitt „How this estimate is built“ einen Hinweis, falls jemandem eine Zahl
-		falsch vorkommt. Beide öffnen eine E-Mail an diese Adresse, mit vorausgefülltem Betreff
-		inklusive des Tools, aus dem der Vorschlag kommt.
-	</p>
-	<p>
-		Leer lassen = Standardadresse <code><?php echo esc_html( VCL_DEFAULT_CONTACT_EMAIL ); ?></code>.
-		Aktuell verwendet: <code><?php echo esc_html( $contact_effective !== '' ? $contact_effective : 'keine — die Links werden ausgeblendet' ); ?></code>
-	</p>
-
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-		<?php wp_nonce_field( 'vcl_save_contact_action', 'vcl_save_contact_nonce' ); ?>
-		<input type="hidden" name="action" value="vcl_save_contact">
-		<table class="form-table" role="presentation">
-			<tr>
-				<th scope="row"><label for="vcl_contact_email">E-Mail-Adresse</label></th>
-				<td>
-					<input type="email" id="vcl_contact_email" name="vcl_contact_email" value="<?php echo esc_attr( $contact_email ); ?>" class="regular-text" placeholder="<?php echo esc_attr( VCL_DEFAULT_CONTACT_EMAIL ); ?>">
-					<p class="description" style="margin-top:8px;">
-						Die Adresse steht nicht im Quelltext der Seite — sie wird geteilt ausgeliefert
-						und erst im Browser zusammengesetzt. Das hält einfache Adress-Sammler ab, ist
-						aber kein echter Schutz.
-					</p>
-				</td>
-			</tr>
-		</table>
-		<?php submit_button( 'Kontaktadresse speichern' ); ?>
-	</form>
-
-	<hr>
-
 	<h2>Workload Planning — Excel-Datei zum Download</h2>
 
 	<?php if ( $vcl_status === 'wl_excel_saved' ) : ?>
@@ -463,3 +423,133 @@ function vcl_handle_save_lt_url() {
 	exit;
 }
 add_action( 'admin_post_vcl_save_lt_url', 'vcl_handle_save_lt_url' );
+
+// ---------------------------------------------------------------------------
+// Tab: Einleitungstexte
+// ---------------------------------------------------------------------------
+
+/**
+ * Default intro paragraph shown under each tool's heading, as plain text (real
+ * "—"/"&", no HTML entities -- the front end escapes on output). Single source of
+ * truth for both the admin prefill and the resolved values handed to the tools.
+ * Keyed by a stable id; see vcl_intro_text() and VCL_CONFIG.introText in lookup.php.
+ */
+function vcl_intro_defaults() {
+	return array(
+		'masthead'       => 'Calculation of official fees for variations and annual fees across EU-27, EMA, CH, IS, NO, UK and RS, as well as the classification of variations, budget planning, calculation of RA workload and visualisation of timetables for variations.',
+		'classification' => 'Search or browse variation codes from the EU Variation Classification Guideline. Pick a matching entry to see the conditions, required documentation and resulting procedure type.',
+		'calculator'     => 'Calculate the official regulatory fees for variation applications (Type IA / IB / II) across one or more markets — EU-27, EMA, CH, IS, NO, UK and RS. Select markets and roles, set the number of strengths, then choose the variations.',
+		'timetables'     => 'Day 0 to the End of Procedure, on a real calendar-day axis — drag the clock-stop slider to see what an authority pause actually costs. Day numbers stay as the guide numbers them (the clock-stop is not counted). Click any milestone to highlight it below.',
+		'guidedworkflow' => 'The Guided Workflow helps to plan single variations, grouped variations and/or variations submitted under the Worksharing Procedure from classification through procedures and timelines to fees. The live preview below updates as you go.',
+		'budget'         => 'Portfolio-wide annual plan: fees & RA effort across all products and markets.',
+		'guidance'       => 'Procedural guidance and Q&A on variations — pick a document.',
+	);
+}
+
+/**
+ * Admin-facing label for each intro-text id (German admin UI).
+ */
+function vcl_intro_labels() {
+	return array(
+		'masthead'       => 'Haupteinleitung (Kopfbereich)',
+		'classification' => 'Classification of Variations',
+		'calculator'     => 'Variation Fee Calculator',
+		'timetables'     => 'Timetables',
+		'guidedworkflow' => 'Guided Workflow',
+		'budget'         => 'Budget Planning',
+		'guidance'       => 'Guidance on Variations (Übersicht)',
+	);
+}
+
+/**
+ * Resolves one intro text: the saved override when it is a non-empty string,
+ * otherwise the shipped default. Unknown id -> empty string.
+ */
+function vcl_intro_text( $id ) {
+	$defaults  = vcl_intro_defaults();
+	$overrides = get_option( 'vcl_intro_texts', array() );
+	if ( is_array( $overrides ) && isset( $overrides[ $id ] ) && is_string( $overrides[ $id ] ) && trim( $overrides[ $id ] ) !== '' ) {
+		return $overrides[ $id ];
+	}
+	return isset( $defaults[ $id ] ) ? $defaults[ $id ] : '';
+}
+
+/**
+ * The resolved intro texts for every id, for VCL_CONFIG.introText (the front-end
+ * tools read their own id and escape it on output).
+ */
+function vcl_intro_texts_resolved() {
+	$out = array();
+	foreach ( array_keys( vcl_intro_defaults() ) as $id ) {
+		$out[ $id ] = vcl_intro_text( $id );
+	}
+	return $out;
+}
+
+/**
+ * Renders the "Einleitungstexte" tab: one textarea per tool, prefilled with the
+ * resolved text so the admin edits the existing wording. Clearing a field (or
+ * restoring the default text) drops the override and reverts to the default.
+ */
+function vcl_render_intro_tab() {
+	$vcl_status = isset( $_GET['vcl_status'] ) ? sanitize_key( $_GET['vcl_status'] ) : '';
+	$labels     = vcl_intro_labels();
+	$defaults   = vcl_intro_defaults();
+	?>
+	<h2>Einleitungstexte der Tools</h2>
+
+	<?php if ( $vcl_status === 'intro_saved' ) : ?>
+		<div class="notice notice-success is-dismissible"><p>Einleitungstexte gespeichert.</p></div>
+	<?php endif; ?>
+
+	<p style="max-width:48em;">
+		Hier bearbeitest Du den einleitenden Absatz, der unter der Überschrift jedes Tools steht.
+		Überschrift, „Reference“- und „Last updated“-Zeile bleiben unberührt. Ein Feld leer lassen
+		(oder den Standardtext stehen lassen) = der ausgelieferte Standardtext wird verwendet.
+	</p>
+
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php wp_nonce_field( 'vcl_save_intro_action', 'vcl_save_intro_nonce' ); ?>
+		<input type="hidden" name="action" value="vcl_save_intro">
+		<table class="form-table" role="presentation">
+			<?php foreach ( $labels as $id => $label ) : ?>
+				<tr>
+					<th scope="row"><label for="vcl_intro_<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $label ); ?></label></th>
+					<td>
+						<textarea id="vcl_intro_<?php echo esc_attr( $id ); ?>" name="vcl_intro[<?php echo esc_attr( $id ); ?>]" rows="3" class="large-text" placeholder="<?php echo esc_attr( $defaults[ $id ] ); ?>"><?php echo esc_textarea( vcl_intro_text( $id ) ); ?></textarea>
+						<p class="description" style="margin-top:6px;">Leer lassen = Standardtext.</p>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+		</table>
+		<?php submit_button( 'Einleitungstexte speichern' ); ?>
+	</form>
+	<?php
+}
+
+/**
+ * Saves the intro-text overrides. Only non-empty values that differ from the
+ * shipped default are stored, so a field left at (or cleared back to) the default
+ * carries no override and the front end falls back to vcl_intro_defaults().
+ */
+function vcl_handle_save_intro() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Keine Berechtigung.' );
+	}
+	check_admin_referer( 'vcl_save_intro_action', 'vcl_save_intro_nonce' );
+
+	$input    = isset( $_POST['vcl_intro'] ) && is_array( $_POST['vcl_intro'] ) ? wp_unslash( $_POST['vcl_intro'] ) : array();
+	$defaults = vcl_intro_defaults();
+	$store    = array();
+	foreach ( array_keys( $defaults ) as $id ) {
+		$val = isset( $input[ $id ] ) ? sanitize_textarea_field( $input[ $id ] ) : '';
+		if ( trim( $val ) !== '' && $val !== $defaults[ $id ] ) {
+			$store[ $id ] = $val;
+		}
+	}
+	update_option( 'vcl_intro_texts', $store );
+
+	wp_safe_redirect( add_query_arg( array( 'vcl_status' => 'intro_saved' ), vcl_toolbox_page_url( 'intro' ) ) );
+	exit;
+}
+add_action( 'admin_post_vcl_save_intro', 'vcl_handle_save_intro' );

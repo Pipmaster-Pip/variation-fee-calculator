@@ -2587,7 +2587,7 @@
     // fee-data date as the fallback -- see fillCalcHead() in vcl-app.js.
     const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
     head.innerHTML = "<h3>Guided Workflow</h3>"
-      + "<p>The Guided Workflow helps to plan single variations, grouped variations and/or variations submitted under the Worksharing Procedure from classification through procedures and timelines to fees. The live preview below updates as you go.</p>"
+      + "<p>" + cfgIntro("guidedworkflow", "The Guided Workflow helps to plan single variations, grouped variations and/or variations submitted under the Worksharing Procedure from classification through procedures and timelines to fees. The live preview below updates as you go.") + "</p>"
       + '<p class="ref-line">Reference: ' + cfgReferenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).") + "</p>"
       + '<p class="ref-updated">Last updated in Variation Toolbox: ' + cfgLastUpdated("calculator", calcUpdated) + "</p>";
     root.appendChild(head);
@@ -2616,6 +2616,13 @@
   }
   function cfgReferenceText(key, fallback) {
     return (window.VCL_CONFIG && window.VCL_CONFIG.referenceText && window.VCL_CONFIG.referenceText[key]) || fallback;
+  }
+  // Admin-editable intro paragraph (resolved override-or-default, plain text -> HTML-escaped).
+  // fallbackHtml is the inline default, used only when no config is present (dev harness).
+  function cfgIntro(key, fallbackHtml) {
+    var cfg = window.VCL_CONFIG && window.VCL_CONFIG.introText;
+    if (!cfg || cfg[key] == null) return fallbackHtml;
+    return String(cfg[key]).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function escapeHtml(s) {
