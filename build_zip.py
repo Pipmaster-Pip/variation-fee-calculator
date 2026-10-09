@@ -53,6 +53,7 @@ FILES = [
     "assets/js/vcl-annual-data.js",
     "assets/js/vcl-annual-overrides.js",
     "assets/js/vcl-budget-engine.js",
+    "assets/js/vcl-budget-import.js",
     "assets/js/vcl-budget.js",
     "assets/css/vcl-budget-style.css",
     "assets/css/vcl-ra-tasks.css",

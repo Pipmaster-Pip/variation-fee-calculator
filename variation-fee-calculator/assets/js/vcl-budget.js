@@ -154,6 +154,9 @@
   // modalState (only one editor is ever open at a time). null when closed, else
   // { editingId, draft, station:"A"|"B", reached:{A,B}, collision:<id>|null }.
   var annualEditor = null;
+  // Excel-import takeover (a third mutually-exclusive overlay). null when closed, else
+  // { stage:"pick"|"preview", fileName, aoa, detection, manualMap, rawLines, grouped, target, error }.
+  var importState = null;
 
   // Editor overlay: a single persistent layer (created lazily, parented to the tool's own .vcl-app
   // so its .vcl-app-scoped styles apply and it survives the container.innerHTML wipe on every
@@ -231,7 +234,7 @@
   }
 
   function syncOverlay() {
-    var node = modalState ? renderEditor() : annualEditor ? renderAnnualEditor() : null;
+    var node = modalState ? renderEditor() : annualEditor ? renderAnnualEditor() : importState ? renderImport() : null;
     if (!node) { hideOverlay(); return; }
 
     var host = ensureOverlayHost();
@@ -292,6 +295,7 @@
   function doOverlayClose() {
     if (modalState) closeModal();
     else if (annualEditor) closeAnnualEditor();
+    else if (importState) closeImport();
   }
 
   // Guarded close: with unsaved work, ask before discarding; otherwise close straight away.
@@ -1128,6 +1132,7 @@
     var actions = el("div", "vcl-bud-header__actions");
     actions.innerHTML =
       '<button type="button" class="vcl-bud-btn" data-act="clear-plan">Clear plan</button>' +
+      '<button type="button" class="vcl-bud-btn" data-act="import">⭡ Import from Excel</button>' +
       '<button type="button" class="vcl-bud-btn" data-act="export">⭳ Export to Excel</button>' +
       '<button type="button" class="vcl-bud-btn vcl-bud-btn--primary" data-act="new-line">+ Add variation line</button>';
     header.appendChild(actions);
@@ -2195,6 +2200,330 @@
     rerender();
   }
 
+  // ---- Excel import (takeover) ------------------------------------------------------------
+  // All client-side: the file is read with FileReader + XLSX.read (the already-loaded SheetJS),
+  // mapped by the pure VCL_BUDGET_IMPORT module, previewed, then written through BUD.normalizeLine.
+  // Nothing is uploaded. See docs/superpowers/specs/2026-10-09-budget-excel-import-design.md.
+  var IMP = window.VCL_BUDGET_IMPORT;
+  var IMPORT_FIELDS = [
+    { key: "product", label: "Product" }, { key: "procedure", label: "Procedure" },
+    { key: "countries", label: "Countries" }, { key: "procNo", label: "Procedure No." },
+    { key: "strengths", label: "Strengths" }, { key: "typeIA", label: "Type IA" },
+    { key: "typeIB", label: "Type IB" }, { key: "typeII", label: "Type II" },
+    { key: "date", label: "Year" }, { key: "quarter", label: "Quarter" },
+  ];
+
+  function importValidCountries() {
+    return (window.VCLCALC && window.VCLCALC.countries)
+      ? window.VCLCALC.countries().map(function (c) { return c.cc; }) : [];
+  }
+  function importOpts() {
+    return { validCountries: importValidCountries(), defaultYear: new Date().getFullYear() + 1 };
+  }
+
+  function openImport() {
+    importState = { stage: "pick", fileName: null, aoa: null, detection: null, manualMap: {},
+      rawLines: null, grouped: null, target: "append", error: null };
+    rerender();
+    scrollToTop();
+  }
+  function closeImport() { importState = null; rerender(); scrollToTop(); }
+
+  function reparseImport() {
+    var det = IMP.detectColumns(importState.aoa, importOpts());
+    Object.keys(importState.manualMap).forEach(function (f) {
+      var c = importState.manualMap[f];
+      if (c !== "" && c != null) det.map[f] = parseInt(c, 10);
+    });
+    det.unmatchedRequired = ["product", "procedure", "countries"].filter(function (f) { return det.map[f] == null; });
+    if (!["typeIA", "typeIB", "typeII"].some(function (f) { return det.map[f] != null; })) det.unmatchedRequired.push("types");
+    importState.detection = det;
+    var parsed = IMP.parseRows(importState.aoa, det, importOpts());
+    importState.rawLines = parsed.rawLines;
+    importState.grouped = IMP.groupLines(parsed.rawLines);
+  }
+
+  function onImportFile(file) {
+    if (!file || !importState) return;
+    if (typeof XLSX === "undefined") {
+      importState.error = "The Excel library isn't loaded. Please check your connection and reload.";
+      rerender(); return;
+    }
+    importState.fileName = file.name;
+    importState.error = null;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        importState.aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false });
+        importState.manualMap = {};
+        reparseImport();
+        importState.stage = "preview";
+      } catch (err) {
+        importState.error = "The file couldn't be read: " + (err && err.message ? err.message : err);
+      }
+      rerender();
+    };
+    reader.onerror = function () { importState.error = "The file couldn't be read."; rerender(); };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function downloadImportTemplate() {
+    if (typeof XLSX === "undefined") return;
+    var ws = XLSX.utils.aoa_to_sheet(IMP.buildTemplateAoa());
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Variations");
+    XLSX.writeFile(wb, "budget-import-template.xlsx");
+  }
+
+  function importNewId() { return "line-import-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7); }
+
+  function splitImportLine(lineId) {
+    var arr = importState.grouped.lines;
+    var idx = arr.findIndex(function (l) { return l.id === lineId; });
+    if (idx === -1 || arr[idx].submission.mode !== "worksharing") return;
+    var line = arr[idx];
+    var singles = line.submission.procedures.map(function (p) {
+      return { id: importNewId(), product: line.product, year: line.year, quarter: line.quarter,
+        probability: 100, externalCost: 0, _incomplete: line._incomplete, _warnings: (line._warnings || []).slice(),
+        submission: { mode: null, variations: JSON.parse(JSON.stringify(line.submission.variations)),
+          procedures: [p], strengths: JSON.parse(JSON.stringify(line.submission.strengths)) } };
+    });
+    arr.splice.apply(arr, [idx, 1].concat(singles));
+    rerender();
+  }
+
+  function mergeImportProduct(product) {
+    var arr = importState.grouped.lines;
+    var members = arr.filter(function (l) { return l.product === product && l.submission.mode === null; });
+    if (members.length < 2) return;
+    var procs = [];
+    members.forEach(function (m) { m.submission.procedures.forEach(function (p) { procs.push(p); }); });
+    procs.sort(function (a, b) { return (a.kind === "mrpdcp" ? -1 : 0) - (b.kind === "mrpdcp" ? -1 : 0); });
+    var merged = { id: importNewId(), product: product, year: members[0].year, quarter: members[0].quarter,
+      probability: 100, externalCost: 0, _incomplete: members.some(function (m) { return m._incomplete; }),
+      _warnings: members.reduce(function (a, m) { return a.concat(m._warnings || []); }, []),
+      submission: { mode: "worksharing", variations: JSON.parse(JSON.stringify(members[0].submission.variations)),
+        procedures: procs, strengths: JSON.parse(JSON.stringify(members[0].submission.strengths)) } };
+    var firstIdx = arr.indexOf(members[0]);
+    importState.grouped.lines = arr.filter(function (l) { return members.indexOf(l) === -1; });
+    importState.grouped.lines.splice(firstIdx, 0, merged);
+    importState.grouped.groupWarnings = importState.grouped.groupWarnings.filter(function (w) { return w.product !== product; });
+    rerender();
+  }
+
+  function confirmImport() {
+    var lines = (importState.grouped && importState.grouped.lines) || [];
+    if (!lines.length) { closeImport(); return; }
+    if (importState.target === "replace") {
+      state.lines = []; state.resultsById = {}; state.annualLines = []; state.expandedId = null;
+    }
+    lines.forEach(function (raw) {
+      var line = BUD.normalizeLine(raw, raw.id);
+      state.lines.push(line);
+      recomputeLine(line);
+      seedAnnualForLine(line);
+    });
+    if (window.VCL_USAGE) window.VCL_USAGE.track("budget", "import");
+    importState = null;
+    saveState();
+    rerender();
+    scrollToTop();
+  }
+
+  // Human-readable one-liner for a line's procedures + variation types (preview only).
+  function importProcSummary(line) {
+    var parts = line.submission.procedures.map(function (p) {
+      if (p.kind === "national") return "nat " + (p.nat ? ccShort(p.nat) : "?");
+      if (p.kind === "cp") return "CP";
+      return "RMS " + (p.rms ? ccShort(p.rms) : "?") + (p.cms && p.cms.length ? " +" + p.cms.length + " CMS" : "");
+    });
+    var counts = {};
+    line.submission.variations.forEach(function (v) { counts[v.type] = (counts[v.type] || 0) + 1; });
+    var types = ["IA", "IB", "II"].filter(function (t) { return counts[t]; })
+      .map(function (t) { return counts[t] + "×" + t; }).join(", ");
+    return parts.join(" / ") + (types ? "  ·  " + types : "");
+  }
+
+  function renderImportLineCard(line) {
+    var isWs = line.submission.mode === "worksharing";
+    var card = el("div", "vcl-bud-imp-line" + (line._incomplete ? " is-incomplete" : ""));
+    var head = el("div", "vcl-bud-imp-line__head");
+    head.innerHTML =
+      '<span class="vcl-bud-mode-pill vcl-bud-mode-pill--' + (isWs ? "worksharing" : "single") + '">' +
+      (isWs ? "Worksharing" : "Single") + "</span>" +
+      '<span class="vcl-bud-imp-line__prod">' + escapeHtml(line.product || "(no product)") + "</span>" +
+      '<span class="vcl-bud-imp-line__meta">' + escapeHtml(importProcSummary(line)) +
+      "  ·  " + line.year + (line.quarter ? "  ·  " + escapeHtml(line.quarter) : "") + "</span>";
+    if (isWs) {
+      var sp = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "Ungroup");
+      sp.type = "button";
+      sp.addEventListener("click", function () { splitImportLine(line.id); });
+      head.appendChild(sp);
+    }
+    card.appendChild(head);
+    if (line._incomplete) {
+      var uniq = (line._warnings || []).filter(function (m, i, a) { return a.indexOf(m) === i; });
+      card.appendChild(el("div", "vcl-bud-imp-line__warn",
+        '<span class="vcl-bud-imp-badge">incomplete</span> ' +
+        escapeHtml(uniq.join(" ")) + " — editable in the editor after import."));
+    }
+    return card;
+  }
+
+  function renderImport() {
+    var wrap = el("div", "vcl-bud-import");
+    var head = el("div", "vcl-bud-editor__head");
+    var titleWrap = el("div");
+    titleWrap.appendChild(el("h2", null, "Import from Excel"));
+    head.appendChild(titleWrap);
+    var close = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "✕");
+    close.type = "button";
+    close.setAttribute("aria-label", "Cancel and return to plan");
+    close.addEventListener("click", requestOverlayClose);
+    head.appendChild(close);
+    wrap.appendChild(head);
+
+    // Transparency notice (always shown).
+    wrap.appendChild(el("div", "vcl-bud-imp-privacy",
+      "<strong>Everything runs in your browser.</strong> The file is read locally — " +
+      "nothing is uploaded, no server is involved, no AI runs in the background, and " +
+      "your IP address is not stored. Full transparency."));
+
+    if (importState.error) wrap.appendChild(el("div", "vcl-bud-warn", escapeHtml(importState.error)));
+
+    if (importState.stage === "pick") {
+      wrap.appendChild(el("p", "vcl-bud-imp-intro",
+        "Choose an .xlsx file with products and planned variations. " +
+        "Column names are detected tolerantly (DE/EN, any order). Expected format:"));
+      wrap.appendChild(buildExampleTable());
+
+      var picker = el("div", "vcl-bud-imp-pickrow");
+      var fileLabel = el("label", "vcl-bud-btn vcl-bud-btn--primary", "Choose file …");
+      var input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".xlsx,.xls";
+      input.className = "vcl-bud-imp-file";
+      input.addEventListener("change", function (e) { onImportFile(e.target.files && e.target.files[0]); });
+      fileLabel.appendChild(input);
+      picker.appendChild(fileLabel);
+      var tpl = el("button", "vcl-bud-btn", "⭳ Download template");
+      tpl.type = "button";
+      tpl.addEventListener("click", downloadImportTemplate);
+      picker.appendChild(tpl);
+      wrap.appendChild(picker);
+      return wrap;
+    }
+
+    // --- preview stage ---
+    var det = importState.detection || { unmatchedRequired: [], ignored: [], map: {} };
+    var fileRow = el("div", "vcl-bud-imp-filerow");
+    fileRow.innerHTML = '<span class="vcl-bud-imp-filename">📄 ' + escapeHtml(importState.fileName || "") + "</span>";
+    var again = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "Other file");
+    again.type = "button";
+    again.addEventListener("click", function () { importState.stage = "pick"; importState.error = null; rerender(); });
+    fileRow.appendChild(again);
+    wrap.appendChild(fileRow);
+
+    // Stufe-2 mapping fallback for unmatched required columns.
+    if (det.unmatchedRequired.length) {
+      wrap.appendChild(el("div", "vcl-bud-imp-maphead",
+        "Some required columns weren't detected. Please map them:"));
+      var headerRow = importState.aoa[det.headerRowIndex] || [];
+      det.unmatchedRequired.forEach(function (field) {
+        if (field === "types") {
+          wrap.appendChild(el("div", "vcl-bud-imp-maprow",
+            '<span class="vcl-bud-imp-maplabel">Type IA / IB / II</span> ' +
+            '<span class="vcl-bud-imp-maphint">At least one type column (IA/IB/II) is required.</span>'));
+          return;
+        }
+        var row = el("div", "vcl-bud-imp-maprow");
+        var labelObj = IMPORT_FIELDS.filter(function (f) { return f.key === field; })[0];
+        row.appendChild(el("span", "vcl-bud-imp-maplabel", (labelObj ? labelObj.label : field)));
+        var sel = document.createElement("select");
+        sel.className = "vcl-bud-imp-mapsel";
+        sel.innerHTML = '<option value="">— Choose column —</option>' +
+          headerRow.map(function (h, i) {
+            return '<option value="' + i + '">' + escapeHtml(String(h == null ? "(Column " + (i + 1) + ")" : h)) + "</option>";
+          }).join("");
+        sel.value = importState.manualMap[field] != null ? String(importState.manualMap[field]) : "";
+        sel.addEventListener("change", function () {
+          importState.manualMap[field] = sel.value;
+          reparseImport();
+          rerender();
+        });
+        row.appendChild(sel);
+        wrap.appendChild(row);
+      });
+    }
+
+    var lines = (importState.grouped && importState.grouped.lines) || [];
+    var rowCount = (importState.rawLines || []).length;
+    wrap.appendChild(el("div", "vcl-bud-imp-summary",
+      "<strong>" + lines.length + "</strong> budget line(s) detected from " + rowCount + " data row(s)." +
+      (det.ignored && det.ignored.length ? '  <span class="vcl-bud-imp-ignored">Ignored columns: ' +
+        escapeHtml(det.ignored.join(", ")) + "</span>" : "")));
+
+    // Target toggle.
+    var target = el("div", "vcl-bud-imp-target");
+    target.innerHTML = "<span>Import as:</span>";
+    [["append", "Add to plan"], ["replace", "Replace plan"]].forEach(function (opt) {
+      var lab = el("label", "vcl-bud-imp-radio");
+      var r = document.createElement("input");
+      r.type = "radio"; r.name = "vcl-imp-target"; r.value = opt[0];
+      r.checked = importState.target === opt[0];
+      r.addEventListener("change", function () { importState.target = opt[0]; });
+      lab.appendChild(r);
+      lab.appendChild(document.createTextNode(" " + opt[1]));
+      target.appendChild(lab);
+    });
+    wrap.appendChild(target);
+
+    // Group warnings (merge hints / inconsistencies).
+    (importState.grouped && importState.grouped.groupWarnings || []).forEach(function (w) {
+      var box = el("div", "vcl-bud-imp-hint");
+      box.appendChild(el("span", null, "⚠ " + escapeHtml(w.message || "")));
+      if (/ungrouped|group manually/i.test(w.message || "") && w.product) {
+        var mg = el("button", "vcl-bud-btn vcl-bud-btn--ghost", "Group anyway");
+        mg.type = "button";
+        mg.addEventListener("click", function () { mergeImportProduct(w.product); });
+        box.appendChild(mg);
+      }
+      wrap.appendChild(box);
+    });
+
+    var list = el("div", "vcl-bud-imp-list");
+    lines.forEach(function (line) { list.appendChild(renderImportLineCard(line)); });
+    wrap.appendChild(list);
+
+    var foot = el("div", "vcl-bud-imp-foot");
+    var cancel = el("button", "vcl-bud-btn", "Cancel");
+    cancel.type = "button";
+    cancel.addEventListener("click", function () { closeImport(); });
+    var go = el("button", "vcl-bud-btn vcl-bud-btn--primary", "Import " + lines.length + " line(s)");
+    go.type = "button";
+    if (!lines.length) go.disabled = true;
+    go.addEventListener("click", confirmImport);
+    foot.appendChild(cancel);
+    foot.appendChild(go);
+    wrap.appendChild(foot);
+    return wrap;
+  }
+
+  function buildExampleTable() {
+    var rows = IMP.EXAMPLE_ROWS;
+    var html = '<div class="vcl-bud-imp-example"><table class="vcl-bud-imp-extable"><thead><tr>' +
+      rows[0].map(function (h) { return "<th>" + escapeHtml(String(h)) + "</th>"; }).join("") +
+      "</tr></thead><tbody>" +
+      rows.slice(1).map(function (r) {
+        return "<tr>" + r.map(function (c) {
+          return "<td>" + escapeHtml(c == null || c === "" ? "" : String(c)) + "</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>";
+    return el("div", null, html);
+  }
+
   // Plain-text "Special case / tariff" note for the Annual maintenance fees export sheet -- mirrors
   // annualTariffCell's on-screen logic (per-country tariff pick, or a no-fee/turnover-based note)
   // but as one flat string, since a spreadsheet cell can't hold the <select>/chip markup.
@@ -2374,6 +2703,7 @@
     if (!btn) return;
     if (btn.dataset.act === "new-line") openModalFor(null);
     if (btn.dataset.act === "export") exportExcel(); // Task 6
+    if (btn.dataset.act === "import") openImport();
     if (btn.dataset.act === "clear-plan") clearPlan();
     // "+ Add product" (annual table): opens the two-station manual editor (Task 7) on a fresh draft.
     if (btn.dataset.act === "add-annual") openAnnualEditorFor(null);
