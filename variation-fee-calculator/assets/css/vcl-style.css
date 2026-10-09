@@ -2139,9 +2139,10 @@
    wider than its card (which produced a horizontal scrollbar under the auto layout). "Latest"
    wraps under the count pill when the column is narrow. */
 .vcl-app .qa-revisions thead th:first-child,
-.vcl-app .qa-revisions tbody th { width: 96px; }
+.vcl-app .qa-revisions tbody th { width: 158px; white-space: nowrap; }
 .vcl-app .qa-rev-no {
   display: inline-block;
+  white-space: nowrap;
   font-family:var(--figure);
   font-size: 11.5px;
   font-weight: 600;
