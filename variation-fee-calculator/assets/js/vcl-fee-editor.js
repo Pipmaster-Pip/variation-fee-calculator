@@ -431,10 +431,20 @@
     var e = edits[row.row];
     return !!(e && Object.prototype.hasOwnProperty.call(e, fieldName(col, mode)));
   }
+  // True when the country carries any amount override, saved or not -- a lasting
+  // "this country deviates from the shipped table" mark for the picker pills.
   function countryEdited(cc) {
     if (pointEdits[cc] !== undefined) return true;
     if (annualEditCount(cc) > 0) return true;
     return rowsFor(cc).some(function (r) { return edits[r.row] && Object.keys(edits[r.row]).length; });
+  }
+  // True when this country changed in THIS session and is not yet saved -- what
+  // the masthead's "ungespeicherte Änderungen" bit reflects, so it clears after
+  // a save. Reuses changedSinceLoad(), which already diffs amounts and
+  // provenance per country against the loaded baseline.
+  function countryUnsaved(cc) {
+    var ch = changedSinceLoad();
+    return ch.amounts.indexOf(cc) > -1 || ch.prov.indexOf(cc) > -1;
   }
   function editCount() {
     var n = Object.keys(pointEdits).length;
@@ -458,6 +468,54 @@
   /** Everything this page maintains. An installation on which only dates and
    *  sources were entered is not "unchanged". */
   function overrideCount() { return editCount() + provCount(); }
+
+  /** Changes made in THIS session that are not yet saved -- what the masthead
+   *  badge and the "dirty" state reflect, so the number clears after a save
+   *  (the page reloads and the working state equals the saved baseline again).
+   *  Distinct from overrideCount(), which counts every override in effect,
+   *  saved or not. */
+  function unsavedCount() {
+    var n = 0;
+    var seen;
+
+    var wasR = saved.rows || {};
+    seen = {};
+    Object.keys(edits).concat(Object.keys(wasR)).forEach(function (row) {
+      if (seen[row]) { return; } seen[row] = true;
+      var now = edits[row] || {}, was = wasR[row] || {};
+      var fseen = {};
+      Object.keys(now).concat(Object.keys(was)).forEach(function (f) {
+        if (fseen[f]) { return; } fseen[f] = true;
+        if (String(now[f]) !== String(was[f])) { n++; }
+      });
+    });
+
+    var wasP = saved.points || {};
+    seen = {};
+    Object.keys(pointEdits).concat(Object.keys(wasP)).forEach(function (cc) {
+      if (seen[cc]) { return; } seen[cc] = true;
+      if (String(pointEdits[cc]) !== String(wasP[cc])) { n++; }
+    });
+
+    seen = {};
+    Object.keys(annualEdits).concat(Object.keys(savedAnnual)).forEach(function (cc) {
+      if (seen[cc]) { return; } seen[cc] = true;
+      if (JSON.stringify(annualEdits[cc] || {}) !== JSON.stringify(savedAnnual[cc] || {})) { n++; }
+    });
+
+    seen = {};
+    Object.keys(countryOverrides).concat(Object.keys(savedCountries)).forEach(function (cc) {
+      if (seen[cc]) { return; } seen[cc] = true;
+      var now = countryOverrides[cc] || {}, was = savedCountries[cc] || {};
+      if ((now.checked || '') !== (was.checked || '')) { n++; }
+      if ((now.source || '') !== (was.source || '')) { n++; }
+    });
+
+    if (historyChanged()) { n++; }
+    if (newEntryArmed && (imprintValue() || '').trim()) { n++; }
+
+    return n;
+  }
 
   // ---- change history ----------------------------------------------------
   // overrideCount() answers "does an overlay exist at all", which is true from
@@ -760,9 +818,13 @@
     if (window.VCLCALC && typeof window.VCLCALC.applyOverrides === 'function') {
       window.VCLCALC.applyOverrides();
     }
-    root.classList.toggle('is-dirty', overrideCount() > 0);
+    // The badge and the "dirty" chrome reflect UNSAVED changes, so the number
+    // clears after a save (the total of overrides in effect lives in the hint
+    // box above the form, which is server-rendered).
+    var unsaved = unsavedCount();
+    root.classList.toggle('is-dirty', unsaved > 0);
     var badge = document.getElementById('vclfe-editcount');
-    if (badge) badge.textContent = overrideCount() ? overrideCount() + ' geändert' : '';
+    if (badge) badge.textContent = unsaved ? unsaved + (unsaved === 1 ? ' Änderung offen' : ' Änderungen offen') : '';
     renderSaveBar();
   }
 
@@ -930,7 +992,7 @@
     // The authority's fee page, straight from the HA sheet, so the amounts can
     // be checked against the source without leaving this screen.
     appendBit(meta, authorityBit(ha));
-    if (countryEdited(activeCc)) metaBit(meta, 'ungespeicherte Änderungen');
+    if (countryUnsaved(activeCc)) metaBit(meta, 'ungespeicherte Änderungen');
 
     if (mode === 'pt') main.appendChild(pointPanel(activeCc));
 
@@ -2233,7 +2295,7 @@
   });
 
   document.getElementById('vclfe-reset').addEventListener('click', function () {
-    if (!overrideCount() && !historyChanged() && !newEntryArmed) return;
+    if (!unsavedCount()) return;
     if (!window.confirm('Alle ungespeicherten Änderungen verwerfen?')) return;
     edits = deepCopy(saved.rows || {});
     pointEdits = deepCopy(saved.points || {});
