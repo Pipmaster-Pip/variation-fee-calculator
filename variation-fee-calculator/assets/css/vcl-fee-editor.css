@@ -79,6 +79,13 @@
 #vclfe-root .vclfe-history__date:hover,
 #vclfe-root .vclfe-history__topic:hover{border-color:var(--accent)}
 .vclfe-history__del{flex:0 0 auto; padding:7px 12px}
+.vclfe-history__new{margin:2px 0 14px}
+.vclfe-history__newrow{align-items:flex-end}
+.vclfe-history__new .vclfe-f{display:flex; flex-direction:column; gap:5px; font-size:12.5px}
+.vclfe-history__new .vclfe-f--grow{flex:1 1 380px}
+.vclfe-history__new .vclfe-f > span{color:var(--accent-deep); font-weight:600}
+#vclfe-root .vclfe-history__new input.vclfe-history__topic{width:100%; font-weight:600; color:var(--accent-deep)}
+.vclfe-history__new .vclfe-history__note{margin:6px 0 0}
 .vclfe-actions{display:flex; gap:8px; align-items:center}
 
 .vclfe-btn{

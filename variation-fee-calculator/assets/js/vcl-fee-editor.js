@@ -125,11 +125,14 @@
   // the reference historyChanged() compares against.
   var baselineImprint = effectiveImprint();
   var imprintEntries = deepCopy(baselineImprint);
-  // What the user typed into the bar this session. `null` means "not touched
-  // yet, keep following the suggestion"; a string -- including an empty one --
-  // means the user has taken over, and an empty one means "no entry, thanks".
+  // What the user typed for a new history entry. `null` means "not typed yet,
+  // follow the suggestion"; a string -- including an empty one -- means the user
+  // has taken over. Only saved when newEntryArmed is true, so an ordinary save
+  // (e.g. amounts of one country) never adds a history line on its own: the user
+  // arms a new entry explicitly via the "Neuer Eintrag" button.
   var imprintText = null;
   var imprintDate = new Date().toISOString().slice(0, 10);
+  var newEntryArmed = false;
   var activeCc = null;
   var openRow = null;
   var example = { strengths: 1, IA: 0, IB: 0, II: 1 };
@@ -510,67 +513,13 @@
     return imprintText === null ? imprintSuggestion() : imprintText;
   }
 
+  // The old savebar auto-offered a history entry on every save, which was one
+  // prompt too many when amounts are saved country by country. A new entry is
+  // now added only on request, through the "Neuer Eintrag" button in the history
+  // section, so this just keeps the (unused) container empty.
   function renderSaveBar() {
     var host = document.getElementById('vclfe-savebar');
-    if (!host) { return; }
-    var ch = changedSinceLoad();
-    var active = ch.amounts.length > 0 || ch.prov.length > 0;
-    // Nothing changed in this session: no bar, and nothing carried into the
-    // payload beyond the entries that were already saved.
-    if (!active) { host.textContent = ''; return; }
-
-    // Rebuilding the bar under the cursor would eat every second keystroke, so
-    // it is built once and only its value follows the suggestion afterwards.
-    var input = document.getElementById('vclfe-imprint');
-    if (input) {
-      if (imprintText === null) { input.value = imprintSuggestion(); }
-      var why = document.getElementById('vclfe-imprint-why');
-      if (why) { why.textContent = suggestionReason(ch); }
-      return;
-    }
-
-    host.textContent = '';
-    var bar = document.createElement('div');
-    bar.className = 'vclfe-savebar';
-
-    var lab = document.createElement('label');
-    lab.className = 'vclfe-f vclfe-f--grow';
-    var lspan = document.createElement('span');
-    lspan.textContent = 'Eintrag für die Änderungshistorie';
-    var text = document.createElement('input');
-    text.type = 'text';
-    text.id = 'vclfe-imprint';
-    text.className = 'vclfe-imprint';
-    text.value = imprintSuggestion();
-    text.addEventListener('input', function () { imprintText = text.value; });
-    lab.appendChild(lspan);
-    lab.appendChild(text);
-    bar.appendChild(lab);
-
-    var dlab = document.createElement('label');
-    dlab.className = 'vclfe-f';
-    var dspan = document.createElement('span');
-    dspan.textContent = 'Datum';
-    var date = document.createElement('input');
-    date.type = 'date';
-    date.value = imprintDate;
-    date.addEventListener('input', function () { imprintDate = date.value; });
-    dlab.appendChild(dspan);
-    dlab.appendChild(date);
-    bar.appendChild(dlab);
-
-    var why = document.createElement('p');
-    why.className = 'vclfe-savebar__why';
-    var tag = document.createElement('b');
-    tag.textContent = 'Vorschlag';
-    var whyText = document.createElement('span');
-    whyText.id = 'vclfe-imprint-why';
-    whyText.textContent = suggestionReason(ch);
-    why.appendChild(tag);
-    why.appendChild(whyText);
-    bar.appendChild(why);
-
-    host.appendChild(bar);
+    if (host) { host.textContent = ''; }
   }
 
   /** True when the working copy of the history differs from the effective
@@ -579,18 +528,90 @@
     return JSON.stringify(imprintEntries) !== JSON.stringify(baselineImprint);
   }
 
+  // The "Neuer Eintrag" control at the top of the history: a button until armed,
+  // then a date + text form prefilled with the suggestion drawn from what this
+  // session changed. The armed entry is saved on the next Speichern and nowhere
+  // else, so saving amounts country by country adds nothing to the history
+  // unless the user deliberately arms one.
+  function newEntryControl() {
+    var box = document.createElement('div');
+    box.className = 'vclfe-history__new';
+
+    if (!newEntryArmed) {
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'vclfe-btn';
+      add.textContent = '+ Neuer Eintrag';
+      add.addEventListener('click', function () {
+        newEntryArmed = true;
+        imprintText = null;
+        imprintDate = new Date().toISOString().slice(0, 10);
+        renderHistory(true);
+      });
+      box.appendChild(add);
+      return box;
+    }
+
+    var dlab = document.createElement('label');
+    dlab.className = 'vclfe-f';
+    var dspan = document.createElement('span');
+    dspan.textContent = 'Datum';
+    var date = document.createElement('input');
+    date.type = 'date';
+    date.className = 'vclfe-history__date';
+    date.value = imprintDate;
+    date.addEventListener('input', function () { imprintDate = date.value; });
+    dlab.appendChild(dspan);
+    dlab.appendChild(date);
+
+    var tlab = document.createElement('label');
+    tlab.className = 'vclfe-f vclfe-f--grow';
+    var tspan = document.createElement('span');
+    tspan.textContent = 'Neuer Eintrag';
+    var topic = document.createElement('input');
+    topic.type = 'text';
+    topic.className = 'vclfe-history__topic';
+    topic.value = imprintValue();
+    topic.placeholder = 'z. B. to update AT fees';
+    topic.addEventListener('input', function () { imprintText = topic.value; });
+    tlab.appendChild(tspan);
+    tlab.appendChild(topic);
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'vclfe-btn vclfe-history__del';
+    del.textContent = 'Verwerfen';
+    del.addEventListener('click', function () {
+      newEntryArmed = false;
+      imprintText = null;
+      renderHistory(true);
+    });
+
+    var row = document.createElement('div');
+    row.className = 'vclfe-history__row vclfe-history__newrow';
+    row.appendChild(dlab);
+    row.appendChild(tlab);
+    row.appendChild(del);
+    box.appendChild(row);
+
+    var hint = document.createElement('p');
+    hint.className = 'vclfe-history__note';
+    hint.textContent = 'Wird beim Speichern als neuer Eintrag hinzugefügt.';
+    box.appendChild(hint);
+    return box;
+  }
+
   // The change-history editor: every saved entry with its date and text, each
-  // correctable in place or removable. Edits mutate imprintEntries and take
-  // effect with the next Speichern -- the payload is built from this list, so a
-  // corrected or deleted line is persisted like any other change. Adding a NEW
-  // entry still happens through the suggestion bar above, which is tied to the
-  // amounts that changed this session.
+  // correctable in place or removable, plus a "Neuer Eintrag" button to add one
+  // by hand. Edits and additions take effect with the next Speichern -- the
+  // payload is built from this list and the armed new entry -- so a plain
+  // amount save no longer prompts for a history line on its own.
   function renderHistory(force) {
     var host = document.getElementById('vclfe-history');
     if (!host) { return; }
     // Rebuild only when the number of rows changed (a delete) or when forced
-    // (reset). Editing a date or text field mutates imprintEntries in place and
-    // never rebuilds, so typing is never interrupted.
+    // (reset, arming/disarming the new entry). Editing a date or text field
+    // mutates state in place and never rebuilds, so typing is never interrupted.
     if (!force && host.dataset.count === String(imprintEntries.length) && host.childNodes.length) {
       return;
     }
@@ -602,7 +623,7 @@
     var h = document.createElement('h3');
     h.textContent = 'Änderungshistorie';
     head.appendChild(h);
-    if (historyChanged()) {
+    if (historyChanged() || newEntryArmed) {
       var tag = document.createElement('span');
       tag.className = 'vclfe-dirty';
       tag.textContent = 'geändert — mit Speichern übernehmen';
@@ -610,11 +631,13 @@
     }
     host.appendChild(head);
 
+    host.appendChild(newEntryControl());
+
     var note = document.createElement('p');
     note.className = 'vclfe-history__note';
     note.textContent = 'Datum und Text bestehender Einträge lassen sich hier korrigieren oder '
-      + 'löschen; die Änderung greift beim Speichern. Ein neuer Eintrag entsteht über die Zeile '
-      + 'oben, sobald Beträge geändert werden.';
+      + 'löschen; die Änderung greift beim Speichern. Ein neuer Eintrag wird nur über „Neuer '
+      + 'Eintrag" hinzugefügt — das Speichern von Beträgen allein legt keinen an.';
     host.appendChild(note);
 
     if (!imprintEntries.length) {
@@ -681,17 +704,6 @@
     } else if (!historyChanged() && tag) {
       tag.remove();
     }
-  }
-
-  function suggestionReason(ch) {
-    var names = (ch.amounts.length ? ch.amounts : ch.prov)
-      .map(function (cc) { return COUNTRY_NAMES[cc] || cc; });
-    var listed = names.length > 2
-      ? names.slice(0, -1).join(', ') + ' und ' + names[names.length - 1]
-      : names.join(' und ');
-    var what = ch.amounts.length ? 'geänderten Beträgen' : 'geänderten Angaben zur Quelle';
-    return ' aus den ' + what + ' in ' + listed
-      + '. Überschreib ihn mit allem, was besser passt. Leer lassen heißt: kein Eintrag.';
   }
 
   function setEdit(row, col, mode, value) {
@@ -2141,9 +2153,10 @@
   // Save / reset
   // ========================================================================
   document.getElementById('vclfe-payload').form.addEventListener('submit', function () {
-    // At most one new entry from the suggestion bar. An empty box is a decision,
-    // not an omission: this save then adds nothing.
-    var newTopic = (imprintValue() || '').trim();
+    // A new history entry is added only when the user armed one via "Neuer
+    // Eintrag". An armed-but-empty topic adds nothing; an ordinary amount save
+    // (newEntryArmed false) never touches the history.
+    var newTopic = newEntryArmed ? (imprintValue() || '').trim() : '';
     var newEntry = (newTopic && imprintDate) ? { date: imprintDate, topic: newTopic } : null;
     // Switch to the full-history representation once the editor has touched the
     // history (or once a previous save already did). Until then a plain add stays
@@ -2220,7 +2233,7 @@
   });
 
   document.getElementById('vclfe-reset').addEventListener('click', function () {
-    if (!overrideCount() && !historyChanged()) return;
+    if (!overrideCount() && !historyChanged() && !newEntryArmed) return;
     if (!window.confirm('Alle ungespeicherten Änderungen verwerfen?')) return;
     edits = deepCopy(saved.rows || {});
     pointEdits = deepCopy(saved.points || {});
@@ -2232,6 +2245,7 @@
     countryOverrides = deepCopy(savedCountries);
     imprintEntries = deepCopy(baselineImprint);
     imprintText = null;
+    newEntryArmed = false;
     applyToEngine();
     render();
     renderHistory(true);
