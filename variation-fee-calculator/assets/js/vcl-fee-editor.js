@@ -863,8 +863,8 @@
   }
 
   // Provenance for the active country: the date the user checked the amounts
-  // against the authority's schedule, and the reference they checked against.
-  // Both feed the public fee page's header.
+  // against the authority's schedule. The comment/source itself is edited under
+  // the country name (renderCountry), where it is prominent during maintenance.
   function renderProvenance(host) {
     var meta = document.createElement('div');
     meta.className = 'vclfe-prov';
@@ -892,8 +892,6 @@
     }
 
     field('checked', 'Zuletzt gegen die Gebührenordnung geprüft', 'date', '');
-    field('source', 'Quelle (Fundstelle der Gebührenordnung)', 'text',
-          'z. B. Elenco Tariffe aggiornato ad Luglio 2025');
 
     var note = document.createElement('p');
     note.className = 'vclfe-prov__note';
@@ -961,6 +959,41 @@
   }
 
 
+  // The editable comment line under the country name -- the HA sheet's "Comments"
+  // column from the workbook (e.g. "Fees valid after 01.01.2026"), which tells
+  // the maintainer at a glance from when the current fees are. Stored as the
+  // `source` override (the public page shows it as the fee page's "Source"), with
+  // the Excel comment prefilled so it is visible and editable at once. Editing to
+  // something other than the Excel text stores an override; clearing it or
+  // returning it to the Excel text drops the override and follows the workbook.
+  function renderComment(ha) {
+    var host = document.getElementById('vclfe-comment');
+    if (!host) { return; }
+    host.textContent = '';
+    var base = (ha && ha.comments) || '';
+    var ov = (countryOverrides[activeCc] || {}).source;
+
+    var wrap = document.createElement('label');
+    wrap.className = 'vclfe-comment__f';
+    var span = document.createElement('span');
+    span.textContent = 'Kommentar / Stand der Gebührenordnung (aus „HA fee websites")';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'vclfe-comment__input';
+    input.value = (ov !== undefined && ov !== null) ? ov : base;
+    input.placeholder = base || 'z. B. Fees valid after 01.01.2026';
+    input.addEventListener('input', function () {
+      if (!countryOverrides[activeCc]) { countryOverrides[activeCc] = {}; }
+      var v = input.value;
+      if (v.trim() === '' || v === base) { delete countryOverrides[activeCc].source; }
+      else { countryOverrides[activeCc].source = v; }
+      applyToEngine();
+    });
+    wrap.appendChild(span);
+    wrap.appendChild(input);
+    host.appendChild(wrap);
+  }
+
   function renderCountry() {
     var main = document.getElementById('vclfe-main');
     main.textContent = '';
@@ -993,6 +1026,8 @@
     // be checked against the source without leaving this screen.
     appendBit(meta, authorityBit(ha));
     if (countryUnsaved(activeCc)) metaBit(meta, 'ungespeicherte Änderungen');
+
+    renderComment(ha);
 
     if (mode === 'pt') main.appendChild(pointPanel(activeCc));
 

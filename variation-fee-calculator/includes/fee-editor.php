@@ -695,6 +695,8 @@ function vcl_render_fees_tab() {
 					<div>
 						<h2 id="vclfe-title">—</h2>
 						<p class="vclfe-meta" id="vclfe-meta"></p>
+						<!-- Editable HA-sheet "Comments" line, filled by vcl-fee-editor.js. -->
+						<div class="vclfe-comment" id="vclfe-comment"></div>
 					</div>
 					<div class="vclfe-actions">
 						<span class="vclfe-dirty" id="vclfe-editcount"></span>
