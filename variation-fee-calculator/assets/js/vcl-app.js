@@ -107,11 +107,12 @@
     qaQuery: "", // the Q&A view's own filter box -- separate from the global `query`, which drives Classification
     qaShowDeleted: false, // the source keeps withdrawn questions in place; hidden unless asked for
     pamOpenChapter: null, // chapter key of the EMA PAM tree view -- one-at-a-time accordion
-    pamOpen: {}, // set of expanded PAM node ids (sub-sections + questions); nesting needs several at once
+    pamOpen: {}, // expanded PAM node ids: one branch at a time -- a question plus its ancestor sub-sections
     pamQuery: "", // the PAM view's own filter box (separate from the global `query`)
     pamRecentOnly: false, // show only nodes revised in the last 12 months (flat mode)
     pamNewOnly: false, // show only NEW nodes (flat mode)
-    pamRevAll: false, // revision-history box: reveal all months beyond the newest 24
+    pamRevAll: false, // revision-history box: reveal all months beyond the newest 12
+    pamRevOpen: null, // revision box: the one expanded month key (accordion); null -> default (latest open)
     art5OpenGroup: null, // section key of the Art. 5 archive whose recommendations are expanded
     art5Query: "", // the Art. 5 view's own filter box
     ttType: "ia", // "ia" | "ib" | "ii" -- active tab in the Timetables view
@@ -1266,19 +1267,18 @@
     const chapterTitle = {};
     PAM_DATA.chapters.forEach((c) => (chapterTitle[c.key] = c.title));
 
-    // Toggle chips, not checkboxes -- the Toolbox never uses tick-boxes; this is the same pill
-    // pattern as the PI-filter chip and the summary pill, re-tinted to the Guidance ("--group")
-    // blue when active.
-    const chip = (key, on, label) =>
-      '<button type="button" class="pam-chip' + (on ? " pam-chip--on" : "") + '" data-pam-filter="' +
-      key + '" aria-pressed="' + (on ? "true" : "false") + '">' + label + "</button>";
+    // Tick-boxes, matching the CMDh Q&A's "Show deleted questions" toggle, so the two Guidance
+    // views read the same way.
+    const check = (key, on, label) =>
+      '<label class="qa-deleted-toggle"><input type="checkbox" data-pam-filter="' + key + '"' +
+      (on ? " checked" : "") + " /> " + label + "</label>";
     const controls =
       '<div class="qa-controls pam-controls">' +
       '<input type="text" id="vcl-pamSearch" class="qa-search" placeholder="Filter questions and answers…" autocomplete="off" value="' +
       escapePreciseScopeText(state.pamQuery) + '" />' +
-      '<div class="pam-chips">' +
-      chip("recent", state.pamRecentOnly, "Revised in the last 12 months") +
-      chip("new", state.pamNewOnly, "New questions only") +
+      '<div class="pam-checks">' +
+      check("recent", state.pamRecentOnly, "Revised in the last 12 months") +
+      check("new", state.pamNewOnly, "New questions only") +
       "</div></div>";
 
     const head =
@@ -1299,7 +1299,10 @@
     // expanded leaf shows its answer. depth drives the indentation class.
     const nodeRow = (n, depth, inTree) => {
       const isOpen = !!state.pamOpen[n.id];
-      const hasKids = inTree && n.children && n.children.length;
+      // A sub-section group renders its children both in the tree and in the flat hit list: a
+      // group's own answer is often empty (it is only an intro to its questions), so without this
+      // an expanded group in flat mode would show a blank body (e.g. "7.2 Quality changes").
+      const hasKids = n.children && n.children.length;
       let body = "";
       if (isOpen) {
         body = '<div class="qa-a pam-a">' + pamAnswerHtml(n) + "</div>";
@@ -1330,13 +1333,18 @@
         (!state.pamNewOnly || (n.rev && n.rev.type === "new" && pamRevMonths(n.rev) >= cutoff)) &&
         (!state.pamRecentOnly || (n.rev && pamRevMonths(n.rev) >= cutoff))
       );
+      // Drop a hit whose parent sub-section is also a hit: a group row already renders its
+      // children when expanded, so the child would otherwise appear twice (standalone + nested).
+      const hitIds = new Set(hits.map((n) => n.id));
+      const parentId = (id) => { const p = id.split("."); return p.length > 2 ? p.slice(0, -1).join(".") : null; };
+      const topHits = hits.filter((n) => { const pid = parentId(n.id); return !(pid && hitIds.has(pid)); });
       listHtml =
-        '<p class="results-meta results-meta--detail">' + hits.length +
-        (hits.length === 1 ? " question matches" : " questions match") + "</p>" +
-        (hits.length === 0
+        '<p class="results-meta results-meta--detail">' + topHits.length +
+        (topHits.length === 1 ? " question matches" : " questions match") + "</p>" +
+        (topHits.length === 0
           ? '<p class="classification-empty-hint">No matching question. Try a different keyword or filter.</p>'
           : '<div class="qa-list pam-flat">' +
-            hits.map((n) => '<div class="pam-hit-ch">' + escapePreciseScopeText(chapterTitle[n.ch] || "") + "</div>" + nodeRow(n, 0, false)).join("") +
+            topHits.map((n) => '<div class="pam-hit-ch">' + escapePreciseScopeText(chapterTitle[n.ch] || "") + "</div>" + nodeRow(n, 0, false)).join("") +
             "</div>");
     } else {
       // Nested chapter accordion. One chapter open at a time.
@@ -1366,8 +1374,15 @@
     el.pamCol.querySelectorAll("[data-pam-chapter]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = btn.dataset.pamChapter;
-        state.pamOpenChapter = state.pamOpenChapter === key ? null : key;
+        const opening = state.pamOpenChapter !== key;
+        state.pamOpenChapter = opening ? key : null;
         renderPAM();
+        // Centre the chapter just opened: closing the previously open chapter above it shifts the
+        // list up, so without this the opened chapter can land off-screen ("jumps down").
+        if (opening) {
+          const again = el.pamCol.querySelector('[data-pam-chapter="' + key + '"]');
+          if (again) again.scrollIntoView({ block: "center" });
+        }
       });
     });
     el.pamCol.querySelectorAll("[data-pam-jump]").forEach((btn) => {
@@ -1375,14 +1390,34 @@
     });
     const revMore = el.pamCol.querySelector("#vcl-pamRevMore");
     if (revMore) revMore.addEventListener("click", () => { state.pamRevAll = !state.pamRevAll; renderPAM(); });
+    el.pamCol.querySelectorAll("[data-pam-month]").forEach((row) => {
+      row.addEventListener("click", () => {
+        const key = row.dataset.pamMonth;
+        // One month open at a time: opening a month closes the previous one.
+        state.pamRevOpen = (state.pamRevOpen && state.pamRevOpen[key]) ? {} : { [key]: true };
+        renderPAM();
+      });
+    });
     el.pamCol.querySelectorAll("[data-pam-toggle]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.pamToggle;
-        if (state.pamOpen[id]) delete state.pamOpen[id];
-        else state.pamOpen[id] = true;
+        if (state.pamOpen[id]) {
+          // Closing: drop the node and any of its descendants.
+          Object.keys(state.pamOpen).forEach((k) => {
+            if (k === id || k.indexOf(id + ".") === 0) delete state.pamOpen[k];
+          });
+        } else {
+          // Opening: one branch open at a time -- keep only this node and its ancestor
+          // sub-sections, closing every other open question/section.
+          const segs = id.split(".");
+          const keep = {};
+          for (let i = 2; i < segs.length; i++) keep[segs.slice(0, i).join(".")] = true;
+          keep[id] = true;
+          state.pamOpen = keep;
+        }
         renderPAM();
         const again = el.pamCol.querySelector('[data-pam-toggle="' + id + '"]');
-        if (again && state.pamOpen[id]) again.scrollIntoView({ block: "nearest" });
+        if (again && state.pamOpen[id]) again.scrollIntoView({ block: "center" });
       });
     });
 
@@ -1399,10 +1434,9 @@
       });
     }
     const chipKey = { recent: "pamRecentOnly", new: "pamNewOnly" };
-    el.pamCol.querySelectorAll("[data-pam-filter]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const key = chipKey[btn.dataset.pamFilter];
-        state[key] = !state[key];
+    el.pamCol.querySelectorAll("[data-pam-filter]").forEach((box) => {
+      box.addEventListener("change", () => {
+        state[chipKey[box.dataset.pamFilter]] = box.checked;
         renderPAM();
       });
     });
@@ -1431,21 +1465,42 @@
     const shown = state.pamRevAll ? months : months.filter((k) => monthIndex(k) >= cutoff);
     const hidden = months.length - shown.length;
 
-    const idChip = (n) =>
-      '<button type="button" class="pam-rev-id pam-rev-id--' + (n.rev.type === "new" ? "new" : "rev") +
-      '" data-pam-jump="' + n.id + '" title="Go to question ' + n.id + '">' + n.id + "</button>";
-    const row = (key, i) => {
+    // Default state: only the latest shown month is expanded, the rest collapsed -- otherwise the
+    // full titled list is far too long. null means "not yet initialised".
+    if (state.pamRevOpen === null) state.pamRevOpen = shown.length ? { [shown[0]]: true } : {};
+
+    // Each changed question is a titled link that jumps to it (readers don't know what "7.2"
+    // means); a short REV/NEW tag -- not a colour alone -- marks which kind of change it was.
+    const qRow = (n) => {
+      const isNew = n.rev.type === "new";
+      return (
+        '<div class="pam-rev-q">' +
+        '<span class="pam-rev-qid">' + n.id + "</span>" +
+        '<span class="pam-rev-tag pam-rev-tag--' + (isNew ? "new" : "rev") + '">' + (isNew ? "NEW" : "REV") + "</span>" +
+        '<button type="button" class="pam-rev-link" data-pam-jump="' + n.id + '">' + pamText(n.title) + "</button>" +
+        "</div>"
+      );
+    };
+    // One collapsible row per month: the header row (change count + date) toggles its detail row.
+    const monthRow = (key, i) => {
       const g = byMonth[key];
       // Natural question order within a month (1.2 before 1.10, 7.3 before 7.3.1).
       const items = g.items.slice().sort((a, b) =>
         a.id.localeCompare(b.id, undefined, { numeric: true }));
+      const open = !!state.pamRevOpen[key];
+      const isLatest = i === 0;
       return (
-        '<tr' + (i === 0 ? ' class="is-latest"' : "") + '>' +
+        '<tr class="pam-rev-mrow' + (isLatest ? " is-latest" : "") + (open ? " is-open" : "") +
+        '" data-pam-month="' + key + '" aria-expanded="' + (open ? "true" : "false") + '">' +
         '<th scope="row"><span class="qa-rev-no">' + items.length +
         (items.length === 1 ? " change" : " changes") + "</span>" +
-        (i === 0 ? ' <span class="qa-rev-latest">Latest</span>' : "") + "</th>" +
-        '<td><div class="pam-rev-ids">' + items.map(idChip).join("") + "</div></td>" +
-        '<td class="qa-rev-date">' + g.date + "</td></tr>"
+        (isLatest ? ' <span class="qa-rev-latest">Latest</span>' : "") + "</th>" +
+        '<td class="pam-rev-mdate">' + g.date + "</td>" +
+        '<td class="pam-rev-chev" aria-hidden="true">' + (open ? "&#9662;" : "&#9656;") + "</td></tr>" +
+        (open
+          ? '<tr class="pam-rev-detail"><td colspan="3"><div class="pam-rev-list">' +
+            items.map(qRow).join("") + "</div></td></tr>"
+          : "")
       );
     };
     const more = hidden > 0 || state.pamRevAll
@@ -1458,10 +1513,10 @@
     return (
       '<div class="qa-revisions pam-revisions"><h4>Revision history of the source document</h4>' +
       '<p class="pam-rev-ref">Current revision: ' + revNo + " (" + PAM_DATA.meta.docDate + ")</p>" +
-      '<div class="qa-revisions__wrap"><table>' +
-      '<thead><tr><th scope="col">Changes</th><th scope="col">Which questions changed?</th>' +
-      '<th scope="col" class="qa-rev-date">Date</th></tr></thead><tbody>' +
-      shown.map(row).join("") +
+      '<div class="qa-revisions__wrap"><table class="pam-rev-table">' +
+      '<thead><tr><th scope="col">Changes</th><th scope="col">Month</th>' +
+      '<th scope="col" class="pam-rev-chev" aria-label="Expand"></th></tr></thead><tbody>' +
+      shown.map(monthRow).join("") +
       "</tbody></table></div>" + more + "</div>"
     );
   }

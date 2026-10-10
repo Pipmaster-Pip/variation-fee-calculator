@@ -107,6 +107,9 @@ VCL_STYLES.forEach(function (f) {
 	       visibility rule) -- only its inner qa-* markup is its own. -->
 	  <div class="grouping-col hidden" id="vcl-qaCol"></div>
 
+	  <!-- EMA Post-Authorisation Procedural Advice: same shared grid cell, own pam-* markup. -->
+	  <div class="grouping-col hidden" id="vcl-pamCol"></div>
+
 	  <!-- Art. 5 recommendations: the fifth Classification chapter, same shared grid cell. -->
 	  <div class="grouping-col hidden" id="vcl-art5Col"></div>
 
@@ -165,7 +168,7 @@ VCL_STYLES.forEach(function (f) {
 	</div>
 
 <script>
-var VCL_SCRIPTS = ["vcl-usage.js", "vcl-data.js", "vcl-art5-data.js", "vcl-qa-data.js", "vcl-workload-data.js", "vcl-workload-hours-data.js", "vcl-workload-hours.js", "vcl-calc-data.js", "vcl-sg-logic.js", "vcl-timeline.js", "vcl-submission.js", "vcl-app.js", "vcl-workflow.js", "vcl-guide.js", "vcl-calc-app.js", "vcl-annual-data.js", "vcl-budget-engine.js", "vcl-budget.js"];
+var VCL_SCRIPTS = ["vcl-usage.js", "vcl-data.js", "vcl-art5-data.js", "vcl-qa-data.js", "vcl-pam-data.js", "vcl-workload-data.js", "vcl-workload-hours-data.js", "vcl-workload-hours.js", "vcl-calc-data.js", "vcl-sg-logic.js", "vcl-timeline.js", "vcl-submission.js", "vcl-app.js", "vcl-workflow.js", "vcl-guide.js", "vcl-calc-app.js", "vcl-annual-data.js", "vcl-budget-engine.js", "vcl-budget.js"];
 VCL_SCRIPTS.forEach(function (f) {
   document.write('<scr' + 'ipt src="../../variation-fee-calculator/assets/js/' + f + '?v=' + VCL_BUST + '"></scr' + 'ipt>');
 });

@@ -1954,49 +1954,70 @@
 .vcl-app .pam-badge--rev { background: #e6f1fb; color: #0c447c; }
 .vcl-app .pam-badge--new { background: #eaf3de; color: #3b6d11; }
 
-/* Filter chips -- the Toolbox never uses tick-boxes; same pill pattern as the PI-filter chip and
-   the summary pill, re-tinted to the Guidance ("--group") blue when active. */
-.vcl-app .pam-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.vcl-app .pam-chip {
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--ink-soft);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 5px 13px;
-  cursor: pointer;
-  transition: border-color .12s ease, background .12s ease, color .12s ease;
-}
-.vcl-app .pam-chip:hover { border-color: var(--group); color: var(--group); }
-.vcl-app .pam-chip--on {
-  background: var(--group-bg);
-  border-color: var(--group);
-  color: var(--group);
-  font-weight: 600;
-}
+/* Filter tick-boxes -- same control as the CMDh Q&A's "Show deleted questions" toggle, so the
+   two Guidance views read the same way. */
+.vcl-app .pam-checks { display: flex; flex-wrap: wrap; gap: 14px; }
 
-/* Revision-history box: reuses the .qa-revisions card/table chrome; only the changed-question
-   chips and the "more months" control are its own. */
+/* Revision-history box: EMA-style, in the CMDh Q&A box's table chrome. Each row is a collapsible
+   change month; expanding it reveals that month's questions as titled links (readers don't know
+   what a bare "7.2" means), each tagged REV/NEW -- a text tag, not a colour alone. */
 .vcl-app .pam-rev-ref {
-  margin: -4px 0 10px;
+  margin: -4px 0 12px;
   font-size: 12px;
   color: var(--ink-soft);
 }
-.vcl-app .pam-rev-ids { display: flex; flex-wrap: wrap; gap: 5px; }
-.vcl-app .pam-rev-id {
+.vcl-app .pam-rev-mrow { cursor: pointer; }
+.vcl-app .pam-rev-mrow:hover th,
+.vcl-app .pam-rev-mrow:hover td { background: var(--hover-bg, rgba(0,0,0,.025)); }
+.vcl-app .pam-rev-mdate {
   font-family: var(--figure); font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--ink);
+}
+.vcl-app .qa-revisions th.pam-rev-chev,
+.vcl-app .qa-revisions td.pam-rev-chev { width: 40px; text-align: right; color: var(--muted); padding-left: 4px; padding-right: 14px; }
+.vcl-app .pam-rev-detail > td { padding: 2px 16px 12px; border-top: 0; }
+.vcl-app .pam-rev-list { list-style: none; margin: 0; padding: 0; }
+.vcl-app .pam-rev-q {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 2px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vcl-app .pam-rev-q + .pam-rev-q { border-top: 1px solid var(--border-soft); }
+.vcl-app .pam-rev-qid {
+  flex: none;
+  min-width: 36px;
+  font-family: var(--figure); font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+}
+.vcl-app .pam-rev-tag {
+  flex: none;
+  align-self: center;
+  font-family: var(--figure);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.vcl-app .pam-rev-tag--rev { background: #e6f1fb; color: #0c447c; }
+.vcl-app .pam-rev-tag--new { background: #eaf3de; color: #2c5a0e; }
+.vcl-app .pam-rev-link {
+  text-align: left;
+  background: none;
   border: 0;
-  border-radius: 5px;
-  padding: 2px 7px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--group);
   cursor: pointer;
 }
-.vcl-app .pam-rev-id--rev { background: var(--group-bg); color: var(--group); }
-.vcl-app .pam-rev-id--new { background: #eaf3de; color: #3b6d11; }
-.vcl-app .pam-rev-id:hover { outline: 1.5px solid var(--group); }
-.vcl-app .pam-rev-more { margin-top: 10px; }
+.vcl-app .pam-rev-link:hover { text-decoration: underline; }
+.vcl-app .pam-rev-more { margin-top: 14px; }
 .vcl-app .pam-rev-more button {
   font-family: inherit;
   font-size: 12px;
