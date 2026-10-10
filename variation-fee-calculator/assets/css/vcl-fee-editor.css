@@ -48,6 +48,17 @@
 .vclfe-dot{color:var(--line-strong)}
 .vclfe-code{font-family:var(--figure); font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
 #vclfe-root td.vclfe-code{white-space:normal; max-width:112px; line-height:1.35}
+/* Read-only provenance stamps in the country masthead: when the amounts were
+   last changed in the toolbox, and last checked against the authority. */
+.vclfe-prov-upd,.vclfe-prov-chk{
+  padding:2px 9px; border-radius:var(--radius); font-size:12px; white-space:nowrap;
+}
+.vclfe-prov-upd{background:var(--accent-soft); color:var(--accent-deep)}
+.vclfe-prov-chk{background:var(--ok-soft); color:var(--ok)}
+.vclfe-prov-upd b,.vclfe-prov-chk b{font-family:var(--figure); font-weight:600}
+.vclfe-prov-ha{font-size:12px; color:var(--ink-soft)}
+.vclfe-prov-ha a{color:var(--accent-deep); font-weight:600; text-decoration:none; border-bottom:1px solid var(--line-strong)}
+.vclfe-prov-ha a:hover{border-bottom-color:var(--accent)}
 .vclfe-actions{display:flex; gap:8px; align-items:center}
 
 .vclfe-btn{

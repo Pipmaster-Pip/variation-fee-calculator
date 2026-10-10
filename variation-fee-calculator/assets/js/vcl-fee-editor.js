@@ -28,6 +28,25 @@
   var CC_TO_CURRENCY = DATA.CC_TO_CURRENCY || {};
   var POINT_VALUES = DATA.POINT_VALUES || {};
 
+  // The HA sheet's shipped provenance dates, keyed by country code. These are
+  // what the public fee page falls back to when no override is saved
+  // (updated_calc -> "last edited", checked_ha -> "checked"), so the masthead
+  // here can show the same effective dates. The fee table carries "DE - BfArM"
+  // while the HA sheet lists "DE"; baseCc strips the " - ..." tail to match,
+  // mirroring vcl-feedata.js countryMeta().
+  var HA_BY_CC = {};
+  (DATA.HA_WEBSITES || []).forEach(function (e) {
+    if (e && e.cc) { HA_BY_CC[e.cc] = e; }
+  });
+  function baseCc(cc) {
+    var s = String(cc || '');
+    var i = s.indexOf(' - ');
+    return i > -1 ? s.slice(0, i) : s;
+  }
+  function haEntry(cc) {
+    return HA_BY_CC[cc] || HA_BY_CC[baseCc(cc)] || null;
+  }
+
   // The nine amount columns of the fee table, in the order they are shown.
   // F..K come from the workbook; T/U/V were lifted out of the formulas so the
   // caps and the fixed surcharge became plain numbers like the rest.
@@ -741,6 +760,20 @@
       ? 'Punktesystem · ' + fmt(pointValueFor(activeCc)) + ' EUR je Punkt'
       : 'Beträge in ' + unit);
     metaBit(meta, rows.length + ' Gebührenzeilen');
+    // Provenance at a glance: when the amounts were last changed in the toolbox
+    // (the stamped 'updated') and last checked against the authority's schedule
+    // (the typed 'checked'). Both are shown read-only here and on the public fee
+    // page; the 'checked' date is edited in the provenance box further down.
+    // Override first, then the HA sheet's shipped date -- exactly the fallback
+    // the public fee page uses -- so these two bits never sit empty for a
+    // country the workbook already dates.
+    var prov = countryOverrides[activeCc] || {};
+    var ha = haEntry(activeCc) || {};
+    appendBit(meta, provBit('In Toolbox geändert', prov.updated || ha.updated_calc, 'vclfe-prov-upd'));
+    appendBit(meta, provBit('Geprüft', prov.checked || ha.checked_ha, 'vclfe-prov-chk'));
+    // The authority's fee page, straight from the HA sheet, so the amounts can
+    // be checked against the source without leaving this screen.
+    appendBit(meta, authorityBit(ha));
     if (countryEdited(activeCc)) metaBit(meta, 'ungespeicherte Änderungen');
 
     if (mode === 'pt') main.appendChild(pointPanel(activeCc));
@@ -914,8 +947,62 @@
     }
     var s = document.createElement('span');
     if (cls === 'code') s.className = 'vclfe-code';
+    else if (cls) s.className = cls;
     s.textContent = text;
     parent.appendChild(s);
+  }
+
+  // A date stamp as "<label> <d. Mon yyyy>", the date in bold, mirroring the
+  // public fee page's masthead. Returns the span (label + bold date) so the
+  // caller can style the whole bit; null for a missing/unparseable date.
+  // Append a prebuilt bit node to the meta line, with the same leading dot
+  // separator metaBit draws. A null node (no date) adds nothing.
+  function appendBit(parent, node) {
+    if (!node) { return; }
+    if (parent.childNodes.length) {
+      var d = document.createElement('span');
+      d.className = 'vclfe-dot';
+      d.textContent = '·';
+      parent.appendChild(d);
+    }
+    parent.appendChild(node);
+  }
+
+  // The authority link bit: "Behörde <AGES>" with the name linking to the HA
+  // fee page in a new tab. Null when the HA sheet has no link for this country.
+  function authorityBit(ha) {
+    if (!ha || !ha.link_text) { return null; }
+    var s = document.createElement('span');
+    s.className = 'vclfe-prov-ha';
+    s.appendChild(document.createTextNode('Behörde '));
+    if (ha.link_url) {
+      var a = document.createElement('a');
+      a.href = ha.link_url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = ha.link_text;
+      s.appendChild(a);
+    } else {
+      var b = document.createElement('b');
+      b.textContent = ha.link_text;
+      s.appendChild(b);
+    }
+    return s;
+  }
+
+  function provBit(label, iso, cls) {
+    if (!iso) { return null; }
+    var d = new Date(iso + 'T00:00:00');
+    var shown = isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' });
+    var s = document.createElement('span');
+    if (cls) { s.className = cls; }
+    s.appendChild(document.createTextNode(label + ' '));
+    var b = document.createElement('b');
+    b.textContent = shown;
+    s.appendChild(b);
+    return s;
   }
 
   function pointPanel(cc) {
@@ -1925,19 +2012,37 @@
         countries: (function () {
           var out = {};
           var today = new Date().toISOString().slice(0, 10);
-          Object.keys(countryOverrides).forEach(function (cc) {
-            var e = countryOverrides[cc];
-            if (!e || (!e.checked && !e.source)) { return; }
-            // Only a country actually touched in this session gets a new "last
-            // edited" date. The others were merely loaded from the saved overlay
-            // and keep the date they were saved with -- otherwise maintaining
-            // Denmark in November would date every other country to November.
+          // Countries whose *amounts* changed this session. Changing the fees of
+          // a country is itself an edit to the toolbox, so its "In Toolbox
+          // geändert" date must move to today even when no checked date or
+          // source was touched -- otherwise the stamp would only ever follow the
+          // provenance box, never the numbers it is meant to date.
+          var amountTouched = {};
+          changedSinceLoad().amounts.forEach(function (cc) { amountTouched[cc] = true; });
+
+          var seen = {};
+          Object.keys(countryOverrides).concat(Object.keys(savedCountries),
+              Object.keys(amountTouched)).forEach(function (cc) {
+            if (seen[cc]) { return; }
+            seen[cc] = true;
+            var e = countryOverrides[cc] || {};
             var was = savedCountries[cc] || {};
-            var touched = (e.checked || '') !== (was.checked || '')
-                       || (e.source || '') !== (was.source || '');
+            var checked = e.checked || '';
+            var source = e.source || '';
+            // Nothing to persist: no provenance now, none carried over, and no
+            // amount change this session.
+            if (!checked && !source && !was.updated && !amountTouched[cc]) { return; }
+            // Only a country actually touched this session gets a new "last
+            // edited" date -- via its provenance (checked/source) or its amounts.
+            // The others merely rode along from the saved overlay and keep the
+            // date they were saved with, so maintaining Denmark does not date
+            // every other country to today.
+            var touched = checked !== (was.checked || '')
+                       || source !== (was.source || '')
+                       || amountTouched[cc];
             out[cc] = {
-              checked: e.checked || '',
-              source: e.source || '',
+              checked: checked,
+              source: source,
               updated: touched ? today : (was.updated || today)
             };
           });
