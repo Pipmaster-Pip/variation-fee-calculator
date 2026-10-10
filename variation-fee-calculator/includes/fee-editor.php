@@ -137,6 +137,10 @@ function vcl_get_fee_overrides() {
 		'points'    => array(),
 		'countries' => array(),
 		'imprint'   => array(),
+		// true means the stored 'imprint' is the complete history (the editor took
+		// a full copy so a shipped line could be corrected or deleted), so the
+		// front end does not merge the plugin's shipped history underneath it.
+		'imprintFull' => false,
 		'annual'    => array(),
 		'updated'   => '',
 		'by'        => '',
@@ -287,6 +291,12 @@ function vcl_sanitize_fee_overrides( $payload ) {
 		usort( $clean['imprint'], function ( $a, $b ) {
 			return strcmp( $b['date'], $a['date'] );
 		} );
+	}
+
+	// Whether the imprint above is the complete history or only the entries laid
+	// in front of the shipped list. A plain boolean; anything else is false.
+	if ( ! empty( $payload['imprintFull'] ) ) {
+		$clean['imprintFull'] = true;
 	}
 
 	// Annual maintenance fees. Only amounts are editable, and only for tariffs the
@@ -606,6 +616,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
 			'imprint'   => array_values( $overrides['imprint'] ),
+			'imprintFull' => ! empty( $overrides['imprintFull'] ),
 			'annual'    => (object) $overrides['annual'],
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
@@ -614,6 +625,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'points'    => (object) $overrides['points'],
 			'countries' => (object) $overrides['countries'],
 			'imprint'   => array_values( $overrides['imprint'] ),
+			'imprintFull' => ! empty( $overrides['imprintFull'] ),
 			'annual'    => (object) $overrides['annual'],
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
@@ -698,6 +710,10 @@ function vcl_render_fees_tab() {
 				<div class="vclfe-layout">
 					<main id="vclfe-main"></main>
 				</div>
+
+				<!-- Edit/delete existing change-history entries. Filled by
+				     vcl-fee-editor.js; changes are written by the main Speichern. -->
+				<section id="vclfe-history" class="vclfe-history"></section>
 			</form>
 
 			<section class="vclfe-maintain">
@@ -817,6 +833,7 @@ function vcl_handle_save_fee_overrides() {
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
+		'imprintFull' => ! empty( $clean['imprintFull'] ),
 		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $stored_annual ) ? $stored_annual : array() ),
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
@@ -853,6 +870,7 @@ function vcl_handle_export_fee_overrides() {
 		'points'    => (object) $overrides['points'],
 		'countries' => (object) $overrides['countries'],
 		'imprint'   => array_values( $overrides['imprint'] ),
+		'imprintFull' => ! empty( $overrides['imprintFull'] ),
 		'annual'    => (object) $overrides['annual'],
 	);
 
@@ -934,6 +952,7 @@ function vcl_handle_import_fee_overrides() {
 		'points'    => $clean['points'],
 		'countries' => $clean['countries'],
 		'imprint'   => $clean['imprint'],
+		'imprintFull' => ! empty( $clean['imprintFull'] ),
 		'annual'    => $annual,
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',

@@ -387,6 +387,7 @@ function vcl_register_assets() {
 				'points'    => (object) $vcl_fee_overrides['points'],
 				'countries' => (object) $vcl_fee_overrides['countries'],
 				'imprint'   => array_values( $vcl_fee_overrides['imprint'] ),
+				'imprintFull' => ! empty( $vcl_fee_overrides['imprintFull'] ),
 				'annual'    => (object) $vcl_fee_overrides['annual'],
 			) ) . ';',
 			'after'

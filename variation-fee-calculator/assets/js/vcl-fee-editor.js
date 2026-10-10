@@ -95,10 +95,36 @@
   );
   var countryOverrides = deepCopy(savedCountries);
 
-  // Change-history entries already saved in the overlay. The bar below adds at
-  // most one more per save; these ride along unchanged so a save never drops
-  // what an earlier one wrote.
+  // Change-history entries already saved in the overlay. savedImprint is the
+  // pristine baseline "Verwerfen" restores; imprintEntries is the working copy
+  // the history editor below edits (correct a date or topic, delete a line).
+  // The bar further down may prepend one new entry per save; everything else
+  // rides along from imprintEntries, so a save keeps -- or fixes -- what an
+  // earlier one wrote.
   var savedImprint = Array.isArray(saved.imprint) ? deepCopy(saved.imprint) : [];
+  // Whether the stored imprint is already the complete history (a previous full
+  // save) or only the entries laid in front of the plugin's shipped history.
+  var imprintIsFull = !!saved.imprintFull;
+
+  // The effective history the editor shows and edits: the full list, exactly as
+  // the public page renders it. When the stored imprint is already full, that
+  // list; otherwise the added entries merged in front of the plugin's shipped
+  // history (newest first, stable, so the three lines sharing 2021-10-17 keep
+  // their order). shippedImprint() hands back the pristine shipped list, which
+  // the live IMPRINT global cannot -- applyOverrides() rewrites it in place.
+  function effectiveImprint() {
+    if (imprintIsFull) { return deepCopy(savedImprint); }
+    var shipped = (window.VCLCALC && typeof window.VCLCALC.shippedImprint === 'function')
+      ? window.VCLCALC.shippedImprint() : [];
+    return savedImprint.concat(shipped)
+      .map(function (e, i) { return { e: e, i: i }; })
+      .sort(function (a, b) { return a.e.date < b.e.date ? 1 : a.e.date > b.e.date ? -1 : a.i - b.i; })
+      .map(function (x) { return x.e; });
+  }
+  // The baseline the history editor starts from and "Verwerfen" restores to, and
+  // the reference historyChanged() compares against.
+  var baselineImprint = effectiveImprint();
+  var imprintEntries = deepCopy(baselineImprint);
   // What the user typed into the bar this session. `null` means "not touched
   // yet, keep following the suggestion"; a string -- including an empty one --
   // means the user has taken over, and an empty one means "no entry, thanks".
@@ -109,6 +135,13 @@
   var example = { strengths: 1, IA: 0, IB: 0, II: 1 };
 
   function deepCopy(o) {
+    // Arrays must stay arrays -- the change-history is a list, and copying it to
+    // a plain object would break every .concat/.sort/.forEach the editor runs on
+    // it. The amount overlays (rows/points/countries/annual) are maps, so they
+    // keep taking the object branch below.
+    if (Array.isArray(o)) {
+      return o.map(function (v) { return (v && typeof v === 'object') ? deepCopy(v) : v; });
+    }
     var out = {};
     Object.keys(o || {}).forEach(function (k) {
       out[k] = (o[k] && typeof o[k] === 'object') ? deepCopy(o[k]) : o[k];
@@ -540,6 +573,116 @@
     host.appendChild(bar);
   }
 
+  /** True when the working copy of the history differs from the effective
+   *  baseline it was loaded from. */
+  function historyChanged() {
+    return JSON.stringify(imprintEntries) !== JSON.stringify(baselineImprint);
+  }
+
+  // The change-history editor: every saved entry with its date and text, each
+  // correctable in place or removable. Edits mutate imprintEntries and take
+  // effect with the next Speichern -- the payload is built from this list, so a
+  // corrected or deleted line is persisted like any other change. Adding a NEW
+  // entry still happens through the suggestion bar above, which is tied to the
+  // amounts that changed this session.
+  function renderHistory(force) {
+    var host = document.getElementById('vclfe-history');
+    if (!host) { return; }
+    // Rebuild only when the number of rows changed (a delete) or when forced
+    // (reset). Editing a date or text field mutates imprintEntries in place and
+    // never rebuilds, so typing is never interrupted.
+    if (!force && host.dataset.count === String(imprintEntries.length) && host.childNodes.length) {
+      return;
+    }
+    host.dataset.count = String(imprintEntries.length);
+    host.textContent = '';
+
+    var head = document.createElement('div');
+    head.className = 'vclfe-history__head';
+    var h = document.createElement('h3');
+    h.textContent = 'Änderungshistorie';
+    head.appendChild(h);
+    if (historyChanged()) {
+      var tag = document.createElement('span');
+      tag.className = 'vclfe-dirty';
+      tag.textContent = 'geändert — mit Speichern übernehmen';
+      head.appendChild(tag);
+    }
+    host.appendChild(head);
+
+    var note = document.createElement('p');
+    note.className = 'vclfe-history__note';
+    note.textContent = 'Datum und Text bestehender Einträge lassen sich hier korrigieren oder '
+      + 'löschen; die Änderung greift beim Speichern. Ein neuer Eintrag entsteht über die Zeile '
+      + 'oben, sobald Beträge geändert werden.';
+    host.appendChild(note);
+
+    if (!imprintEntries.length) {
+      var empty = document.createElement('p');
+      empty.className = 'vclfe-history__empty';
+      empty.textContent = 'Noch keine Einträge.';
+      host.appendChild(empty);
+      return;
+    }
+
+    var list = document.createElement('div');
+    list.className = 'vclfe-history__list';
+    imprintEntries.forEach(function (entry, i) {
+      var rowEl = document.createElement('div');
+      rowEl.className = 'vclfe-history__row';
+
+      var date = document.createElement('input');
+      date.type = 'date';
+      date.className = 'vclfe-history__date';
+      date.value = entry.date || '';
+      date.addEventListener('input', function () {
+        imprintEntries[i].date = date.value;
+        markHistoryDirty();
+      });
+
+      var topic = document.createElement('input');
+      topic.type = 'text';
+      topic.className = 'vclfe-history__topic';
+      topic.value = entry.topic || '';
+      topic.addEventListener('input', function () {
+        imprintEntries[i].topic = topic.value;
+        markHistoryDirty();
+      });
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'vclfe-btn vclfe-history__del';
+      del.textContent = 'Löschen';
+      del.addEventListener('click', function () {
+        imprintEntries.splice(i, 1);
+        renderHistory(true);
+      });
+
+      rowEl.appendChild(date);
+      rowEl.appendChild(topic);
+      rowEl.appendChild(del);
+      list.appendChild(rowEl);
+    });
+    host.appendChild(list);
+  }
+
+  // A date or text edit does not change the row count, so the list is not
+  // rebuilt; this keeps the "geändert" tag in the header in step without
+  // stealing focus from the field being typed.
+  function markHistoryDirty() {
+    var head = document.querySelector('#vclfe-history .vclfe-history__head');
+    if (!head) { return; }
+    var tag = head.querySelector('.vclfe-dirty');
+    if (historyChanged() && !tag) {
+      tag = document.createElement('span');
+      tag.className = 'vclfe-dirty';
+      tag.textContent = 'geändert — mit Speichern übernehmen';
+      head.appendChild(tag);
+    } else if (!historyChanged() && tag) {
+      tag.remove();
+    }
+  }
+
   function suggestionReason(ch) {
     var names = (ch.amounts.length ? ch.amounts : ch.prov)
       .map(function (cc) { return COUNTRY_NAMES[cc] || cc; });
@@ -617,6 +760,7 @@
   function render() {
     renderPicker();
     renderCountry();
+    renderHistory();
   }
 
   // ---- country picker ----------------------------------------------------
@@ -1997,54 +2141,78 @@
   // Save / reset
   // ========================================================================
   document.getElementById('vclfe-payload').form.addEventListener('submit', function () {
+    // At most one new entry from the suggestion bar. An empty box is a decision,
+    // not an omission: this save then adds nothing.
+    var newTopic = (imprintValue() || '').trim();
+    var newEntry = (newTopic && imprintDate) ? { date: imprintDate, topic: newTopic } : null;
+    // Switch to the full-history representation once the editor has touched the
+    // history (or once a previous save already did). Until then a plain add stays
+    // lightweight -- entries in front of the shipped list -- so a fresh install
+    // keeps seeing the plugin's shipped history and any later additions to it.
+    var goFull = imprintIsFull || historyChanged();
+    var imprintPayload = goFull
+      ? (newEntry ? [newEntry].concat(imprintEntries) : imprintEntries.slice())
+      : (newEntry ? [newEntry].concat(savedImprint) : savedImprint.slice());
+
     document.getElementById('vclfe-payload').value =
       JSON.stringify({
         rows: edits,
         points: pointEdits,
         annual: annualEdits,
-        // One new line at most, in front of what was saved before. An empty box
-        // is a decision, not an omission: this save then adds nothing.
-        imprint: (function () {
-          var topic = (imprintValue() || '').trim();
-          if (!topic || !imprintDate) { return savedImprint; }
-          return [{ date: imprintDate, topic: topic }].concat(savedImprint);
-        }()),
+        // The history list, plus the flag telling the front end whether it is the
+        // complete history or only the entries laid in front of the shipped one.
+        // PHP sorts by date and caps the list, so order and length are handled
+        // there.
+        imprint: imprintPayload,
+        imprintFull: goFull,
         countries: (function () {
           var out = {};
           var today = new Date().toISOString().slice(0, 10);
-          // Countries whose *amounts* changed this session. Changing the fees of
-          // a country is itself an edit to the toolbox, so its "In Toolbox
-          // geändert" date must move to today even when no checked date or
-          // source was touched -- otherwise the stamp would only ever follow the
-          // provenance box, never the numbers it is meant to date.
+
+          // "In Toolbox geändert" dates the AMOUNTS, nothing else. It moves to
+          // today only when a country's fees actually changed this session --
+          // never when only its checked date or source was edited, which is
+          // maintenance of the provenance, not of the numbers.
           var amountTouched = {};
           changedSinceLoad().amounts.forEach(function (cc) { amountTouched[cc] = true; });
 
+          // Countries that carry an amount override at all (this session or from
+          // an earlier save). Only these may keep a stored 'updated' stamp; a
+          // country whose amounts match the shipped table has its "In Toolbox
+          // geändert" come from the HA sheet's updated_calc, so we store no
+          // override date for it -- which also lets a wrongly stamped date heal
+          // itself on the next save.
+          var amountCountry = {};
+          Object.keys(edits).forEach(function (row) {
+            if (!edits[row] || !Object.keys(edits[row]).length) { return; }
+            var r = FEE_ROWS.filter(function (x) { return String(x.row) === String(row); })[0];
+            if (r) { amountCountry[r.cc] = true; }
+          });
+          Object.keys(pointEdits).forEach(function (cc) {
+            if (pointEdits[cc] !== undefined && pointEdits[cc] !== null) { amountCountry[cc] = true; }
+          });
+          Object.keys(annualEdits).forEach(function (cc) {
+            if (annualEdits[cc] && Object.keys(annualEdits[cc]).length) { amountCountry[cc] = true; }
+          });
+
           var seen = {};
           Object.keys(countryOverrides).concat(Object.keys(savedCountries),
-              Object.keys(amountTouched)).forEach(function (cc) {
+              Object.keys(amountTouched), Object.keys(amountCountry)).forEach(function (cc) {
             if (seen[cc]) { return; }
             seen[cc] = true;
             var e = countryOverrides[cc] || {};
             var was = savedCountries[cc] || {};
             var checked = e.checked || '';
             var source = e.source || '';
-            // Nothing to persist: no provenance now, none carried over, and no
-            // amount change this session.
-            if (!checked && !source && !was.updated && !amountTouched[cc]) { return; }
-            // Only a country actually touched this session gets a new "last
-            // edited" date -- via its provenance (checked/source) or its amounts.
-            // The others merely rode along from the saved overlay and keep the
-            // date they were saved with, so maintaining Denmark does not date
-            // every other country to today.
-            var touched = checked !== (was.checked || '')
-                       || source !== (was.source || '')
-                       || amountTouched[cc];
-            out[cc] = {
-              checked: checked,
-              source: source,
-              updated: touched ? today : (was.updated || today)
-            };
+            // Amounts changed now -> today. Otherwise keep the date an earlier
+            // amount edit stamped, but only for a country that still has an
+            // amount override; for everyone else leave it empty so the masthead
+            // falls back to the HA sheet's date.
+            var updated = amountTouched[cc] ? today
+                        : (amountCountry[cc] ? (was.updated || '') : '');
+            // Drop a country that carries nothing worth storing.
+            if (!checked && !source && !updated) { return; }
+            out[cc] = { checked: checked, source: source, updated: updated };
           });
           return out;
         }())
@@ -2052,18 +2220,21 @@
   });
 
   document.getElementById('vclfe-reset').addEventListener('click', function () {
-    if (!overrideCount()) return;
+    if (!overrideCount() && !historyChanged()) return;
     if (!window.confirm('Alle ungespeicherten Änderungen verwerfen?')) return;
     edits = deepCopy(saved.rows || {});
     pointEdits = deepCopy(saved.points || {});
     annualEdits = deepCopy(savedAnnual);
     // Provenance is part of what this page maintains, so it is part of what
     // "Verwerfen" throws away -- otherwise the next save would write the very
-    // dates and sources the user just discarded.
+    // dates and sources the user just discarded. The history editor's working
+    // copy is reset the same way.
     countryOverrides = deepCopy(savedCountries);
+    imprintEntries = deepCopy(baselineImprint);
     imprintText = null;
     applyToEngine();
     render();
+    renderHistory(true);
   });
 
   // ---- go --------------------------------------------------------------

@@ -197,13 +197,18 @@ function applyOverrides() {
   let touched = false;
 
   if (SHIPPED_IMPRINT) {
-    const added = (ov && Array.isArray(ov.imprint)) ? ov.imprint.filter(
+    const valid = (ov && Array.isArray(ov.imprint)) ? ov.imprint.filter(
       e => e && typeof e.date === 'string' && typeof e.topic === 'string' && e.topic !== ''
     ) : [];
+    // Two shapes of override: the default lays added entries IN FRONT of the
+    // shipped history; imprintFull means the override IS the whole history (the
+    // history editor took a full copy so a shipped line could be corrected or
+    // deleted), so the shipped list is not merged in underneath.
+    const base = (ov && ov.imprintFull) ? valid : valid.concat(SHIPPED_IMPRINT);
     // Newest first, the order the history is rendered and read in. A stable sort
     // keeps two entries that share a date in the order they were written -- the
     // workbook has three lines dated 2021-10-17, so this is not hypothetical.
-    const merged = added.concat(SHIPPED_IMPRINT)
+    const merged = base
       .map((e, i) => ({ e: e, i: i }))
       .sort((a, b) => (a.e.date < b.e.date ? 1 : a.e.date > b.e.date ? -1 : a.i - b.i))
       .map(x => x.e);
@@ -742,6 +747,14 @@ window.VCLCALC = {
     const rows = {};
     FEE_ROWS.forEach((r, i) => { rows[r.row] = Object.assign({}, SHIPPED_AMOUNTS[i]); });
     return { rows, points: Object.assign({}, SHIPPED_POINT_VALUES) };
+  },
+  // The change history as this plugin build ships it, before any override, newest
+  // first. The editor needs the pristine list to show and let the user correct or
+  // delete entries: the live IMPRINT global is rewritten in place by
+  // applyOverrides(), so it cannot be read back as the baseline. Shape:
+  // [{ date: 'Y-m-d', topic: string }].
+  shippedImprint() {
+    return (SHIPPED_IMPRINT || []).map((e) => ({ date: e.date, topic: e.topic }));
   },
   // The captions as shipped -- fee code and variant label, before any override.
   // The editor needs them for the same reason it needs shippedFees(): to tell an
