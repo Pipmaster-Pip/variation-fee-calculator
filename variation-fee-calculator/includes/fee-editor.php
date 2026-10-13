@@ -146,6 +146,10 @@ function vcl_get_fee_overrides() {
 		// array( '<CC>' => array( 'amountLocal' => float, 'currency' => string|null,
 		//                         'amountEur' => float ) ). Overlays ADMIN_FEES in the data file.
 		'admin'     => array(),
+		// IT worksharing/super-grouping per-product amounts, a sparse overlay over the
+		// shipped IT_WS_FEES: array( 'perProduct' => array( '<RMS|CMS>' => array( '<II|IB>' => float ) ),
+		//                           'reducedTypeII' => array( '<RMS|CMS>' => float ) ).
+		'itWsFees'  => array(),
 		'updated'   => '',
 		'by'        => '',
 	) );
@@ -163,7 +167,7 @@ function vcl_get_fee_overrides() {
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
 	$text    = array_flip( vcl_fee_text_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array(), 'admin' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array(), 'admin' => array(), 'itWsFees' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -419,6 +423,68 @@ function vcl_sanitize_fee_overrides( $payload ) {
 		}
 	}
 
+	// IT worksharing/super-grouping per-product amounts. A sparse overlay over the shipped
+	// IT_WS_FEES with a fixed shape: perProduct.{RMS,CMS}.{II,IB} and reducedTypeII.{RMS,CMS},
+	// each a finite non-negative number. Anything outside that shape is dropped, like elsewhere.
+	if ( isset( $payload['itWsFees'] ) && is_array( $payload['itWsFees'] ) ) {
+		$it  = array();
+		$src = $payload['itWsFees'];
+		if ( isset( $src['perProduct'] ) && is_array( $src['perProduct'] ) ) {
+			$pp = array();
+			foreach ( array( 'RMS', 'CMS' ) as $role ) {
+				if ( ! isset( $src['perProduct'][ $role ] ) || ! is_array( $src['perProduct'][ $role ] ) ) {
+					continue;
+				}
+				$role_clean = array();
+				foreach ( array( 'II', 'IB' ) as $t ) {
+					if ( ! isset( $src['perProduct'][ $role ][ $t ] ) ) {
+						continue;
+					}
+					if ( ! is_numeric( $src['perProduct'][ $role ][ $t ] ) ) {
+						$dropped++;
+						continue;
+					}
+					$num = (float) $src['perProduct'][ $role ][ $t ];
+					if ( ! is_finite( $num ) || $num < 0 ) {
+						$dropped++;
+						continue;
+					}
+					$role_clean[ $t ] = $num;
+				}
+				if ( $role_clean ) {
+					$pp[ $role ] = $role_clean;
+				}
+			}
+			if ( $pp ) {
+				$it['perProduct'] = $pp;
+			}
+		}
+		if ( isset( $src['reducedTypeII'] ) && is_array( $src['reducedTypeII'] ) ) {
+			$rt = array();
+			foreach ( array( 'RMS', 'CMS' ) as $role ) {
+				if ( ! isset( $src['reducedTypeII'][ $role ] ) ) {
+					continue;
+				}
+				if ( ! is_numeric( $src['reducedTypeII'][ $role ] ) ) {
+					$dropped++;
+					continue;
+				}
+				$num = (float) $src['reducedTypeII'][ $role ];
+				if ( ! is_finite( $num ) || $num < 0 ) {
+					$dropped++;
+					continue;
+				}
+				$rt[ $role ] = $num;
+			}
+			if ( $rt ) {
+				$it['reducedTypeII'] = $rt;
+			}
+		}
+		if ( $it ) {
+			$clean['itWsFees'] = $it;
+		}
+	}
+
 	return array( $clean, $dropped );
 }
 
@@ -453,6 +519,17 @@ function vcl_count_fee_overrides( $overrides ) {
 	// Each overridden per-application admin fee is one maintained value.
 	if ( ! empty( $overrides['admin'] ) && is_array( $overrides['admin'] ) ) {
 		$n += count( $overrides['admin'] );
+	}
+	// Each overridden IT worksharing per-product amount counts as one maintained value.
+	if ( ! empty( $overrides['itWsFees'] ) && is_array( $overrides['itWsFees'] ) ) {
+		if ( ! empty( $overrides['itWsFees']['perProduct'] ) && is_array( $overrides['itWsFees']['perProduct'] ) ) {
+			foreach ( $overrides['itWsFees']['perProduct'] as $role_vals ) {
+				$n += is_array( $role_vals ) ? count( $role_vals ) : 0;
+			}
+		}
+		if ( ! empty( $overrides['itWsFees']['reducedTypeII'] ) && is_array( $overrides['itWsFees']['reducedTypeII'] ) ) {
+			$n += count( $overrides['itWsFees']['reducedTypeII'] );
+		}
 	}
 	return $n;
 }
@@ -661,6 +738,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'imprintFull' => ! empty( $overrides['imprintFull'] ),
 			'annual'    => (object) $overrides['annual'],
 			'admin'     => (object) $overrides['admin'],
+			'itWsFees'  => (object) $overrides['itWsFees'],
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
@@ -671,6 +749,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'imprintFull' => ! empty( $overrides['imprintFull'] ),
 			'annual'    => (object) $overrides['annual'],
 			'admin'     => (object) $overrides['admin'],
+			'itWsFees'  => (object) $overrides['itWsFees'],
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
@@ -746,6 +825,8 @@ function vcl_render_fees_tab() {
 						<div class="vclfe-comment" id="vclfe-comment"></div>
 						<!-- Editable per-application admin fee, filled by vcl-fee-editor.js. -->
 						<div class="vclfe-comment" id="vclfe-adminfee"></div>
+						<!-- IT-only worksharing/super-grouping per-product amounts, filled by vcl-fee-editor.js. -->
+						<div class="vclfe-comment" id="vclfe-itwsfees"></div>
 					</div>
 					<div class="vclfe-actions">
 						<span class="vclfe-dirty" id="vclfe-editcount"></span>
@@ -887,6 +968,7 @@ function vcl_handle_save_fee_overrides() {
 		'imprintFull' => ! empty( $clean['imprintFull'] ),
 		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $stored_annual ) ? $stored_annual : array() ),
 		'admin'     => $clean['admin'],
+		'itWsFees'  => $clean['itWsFees'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
@@ -931,6 +1013,7 @@ function vcl_handle_export_fee_overrides() {
 		'imprintFull' => ! empty( $overrides['imprintFull'] ),
 		'annual'    => (object) $overrides['annual'],
 		'admin'     => (object) $overrides['admin'],
+		'itWsFees'  => (object) $overrides['itWsFees'],
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -1014,6 +1097,7 @@ function vcl_handle_import_fee_overrides() {
 		'imprintFull' => ! empty( $clean['imprintFull'] ),
 		'annual'    => $annual,
 		'admin'     => $clean['admin'],
+		'itWsFees'  => $clean['itWsFees'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );

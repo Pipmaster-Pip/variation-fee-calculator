@@ -88,6 +88,11 @@
   // shipped DATA.ADMIN_FEES; an entry exists only where the value differs.
   var adminEdits = deepCopy(saved.admin || {});
   var savedAdmin = deepCopy(saved.admin || {});
+  // IT worksharing/super-grouping per-product amounts: a sparse overlay over the shipped
+  // DATA.IT_WS_FEES, shown only while Italy is the active country. Shape mirrors the data:
+  // { perProduct: { RMS|CMS: { II|IB: num } }, reducedTypeII: { RMS|CMS: num } }.
+  var itWsEdits = deepCopy(saved.itWsFees || {});
+  var savedItWs = deepCopy(saved.itWsFees || {});
   // Per-country provenance (checked date + source): keyed by country code,
   // independent of the amount edits above so a country switch shows the
   // right values without touching edits/pointEdits.
@@ -521,6 +526,18 @@
       if (JSON.stringify(adminEdits[cc] || null) !== JSON.stringify(savedAdmin[cc] || null)) { n++; }
     });
 
+    // IT worksharing per-product amounts: count each changed leaf (perProduct role/type, reducedTypeII role).
+    ['RMS', 'CMS'].forEach(function (role) {
+      ['II', 'IB'].forEach(function (t) {
+        var now = ((itWsEdits.perProduct || {})[role] || {})[t];
+        var was = ((savedItWs.perProduct || {})[role] || {})[t];
+        if ((now === undefined ? null : now) !== (was === undefined ? null : was)) { n++; }
+      });
+      var nowR = (itWsEdits.reducedTypeII || {})[role];
+      var wasR = (savedItWs.reducedTypeII || {})[role];
+      if ((nowR === undefined ? null : nowR) !== (wasR === undefined ? null : wasR)) { n++; }
+    });
+
     if (historyChanged()) { n++; }
     if (newEntryArmed && (imprintValue() || '').trim()) { n++; }
 
@@ -827,7 +844,7 @@
   // the row objects it reads. Same shape the front end receives from PHP.
   function applyToEngine() {
     window.VCLCALC_OVERRIDES = {
-      rows: edits, points: pointEdits, countries: countryOverrides, annual: annualEdits, admin: adminEdits
+      rows: edits, points: pointEdits, countries: countryOverrides, annual: annualEdits, admin: adminEdits, itWsFees: itWsEdits
     };
     if (window.VCL_ANNUAL_OVERRIDES) window.VCL_ANNUAL_OVERRIDES.apply();
     if (window.VCLCALC && typeof window.VCLCALC.applyOverrides === 'function') {
@@ -1067,6 +1084,88 @@
     host.appendChild(wrap);
   }
 
+  // IT-only: the worksharing/super-grouping per-product amounts (DATA.IT_WS_FEES). Shown
+  // under the admin fee while Italy is active. Each field overlays one shipped value; an
+  // empty field or the shipped value itself drops the override (follows the data file).
+  function renderItWsFees() {
+    var host = document.getElementById('vclfe-itwsfees');
+    if (!host) { return; }
+    host.textContent = '';
+    if (normalizeCc(activeCc) !== 'IT') { return; }
+    var B = (window.VCLCALC_DATA && window.VCLCALC_DATA.IT_WS_FEES) || null;
+    if (!B) { return; }
+
+    var hd = document.createElement('div');
+    hd.className = 'vclfe-comment__f';
+    var hdSpan = document.createElement('span');
+    hdSpan.style.fontWeight = '600';
+    hdSpan.textContent = 'Worksharing / Super-Grouping je weiterem Arzneimittel (EUR)';
+    hd.appendChild(hdSpan);
+    host.appendChild(hd);
+
+    function pruneEmpty(obj, key) {
+      if (obj[key] && !Object.keys(obj[key]).length) { delete obj[key]; }
+    }
+    function setPerProduct(role, t, amt, baseVal) {
+      if (amt == null || amt === baseVal) {
+        if (itWsEdits.perProduct && itWsEdits.perProduct[role]) {
+          delete itWsEdits.perProduct[role][t];
+          pruneEmpty(itWsEdits.perProduct, role);
+          pruneEmpty(itWsEdits, 'perProduct');
+        }
+        return;
+      }
+      if (!itWsEdits.perProduct) { itWsEdits.perProduct = {}; }
+      if (!itWsEdits.perProduct[role]) { itWsEdits.perProduct[role] = {}; }
+      itWsEdits.perProduct[role][t] = amt;
+    }
+    function setReduced(role, amt, baseVal) {
+      if (amt == null || amt === baseVal) {
+        if (itWsEdits.reducedTypeII) {
+          delete itWsEdits.reducedTypeII[role];
+          pruneEmpty(itWsEdits, 'reducedTypeII');
+        }
+        return;
+      }
+      if (!itWsEdits.reducedTypeII) { itWsEdits.reducedTypeII = {}; }
+      itWsEdits.reducedTypeII[role] = amt;
+    }
+    function mkField(label, baseVal, ovVal, onSet) {
+      var wrap = document.createElement('label');
+      wrap.className = 'vclfe-comment__f';
+      var span = document.createElement('span');
+      span.textContent = label;
+      var input = document.createElement('input');
+      input.type = 'number'; input.min = '0'; input.step = '1';
+      input.className = 'vclfe-comment__input';
+      input.value = (ovVal === undefined || ovVal === null) ? '' : ovVal;
+      input.placeholder = (baseVal == null) ? '' : String(baseVal);
+      input.addEventListener('input', function () {
+        var v = input.value.trim();
+        var amt = v === '' ? null : parseFloat(v);
+        onSet((amt != null && isFinite(amt) && amt >= 0) ? amt : null, baseVal);
+        applyToEngine();
+      });
+      wrap.appendChild(span); wrap.appendChild(input);
+      host.appendChild(wrap);
+    }
+    function ppField(role, t, label) {
+      mkField(label, ((B.perProduct || {})[role] || {})[t], ((itWsEdits.perProduct || {})[role] || {})[t],
+        function (amt, baseVal) { setPerProduct(role, t, amt, baseVal); });
+    }
+    function rtField(role, label) {
+      mkField(label, (B.reducedTypeII || {})[role], (itWsEdits.reducedTypeII || {})[role],
+        function (amt, baseVal) { setReduced(role, amt, baseVal); });
+    }
+
+    ppField('RMS', 'II', 'Verwaltungsgebühr — IT als RMS, höchster Typ II');
+    ppField('RMS', 'IB', 'Verwaltungsgebühr — IT als RMS, höchster Typ IB');
+    ppField('CMS', 'II', 'Verwaltungsgebühr — IT als CMS, höchster Typ II');
+    ppField('CMS', 'IB', 'Verwaltungsgebühr — IT als CMS, höchster Typ IB');
+    rtField('RMS', '3.+ Typ-II-Satz (Worksharing) — IT als RMS');
+    rtField('CMS', '3.+ Typ-II-Satz (Worksharing) — IT als CMS');
+  }
+
   function renderCountry() {
     var main = document.getElementById('vclfe-main');
     main.textContent = '';
@@ -1102,6 +1201,7 @@
 
     renderComment(ha);
     renderAdminFee();
+    renderItWsFees();
 
     if (mode === 'pt') main.appendChild(pointPanel(activeCc));
 
@@ -2348,6 +2448,7 @@
         points: pointEdits,
         annual: annualEdits,
         admin: adminEdits,
+        itWsFees: itWsEdits,
         // The history list, plus the flag telling the front end whether it is the
         // complete history or only the entries laid in front of the shipped one.
         // PHP sorts by date and caps the list, so order and length are handled

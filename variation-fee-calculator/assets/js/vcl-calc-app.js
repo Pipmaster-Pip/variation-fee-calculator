@@ -68,6 +68,26 @@ function adminFeeFor(cc) {
   return { cc: base, eur: eur, amountLocal: af.amountLocal, currency: af.currency || null };
 }
 
+// IT's worksharing/super-grouping per-product amounts, with any fee-editor overrides
+// (window.VCLCALC_OVERRIDES.itWsFees) laid sparsely over the shipped IT_WS_FEES -- the
+// same overlay idea as the admin fee above, read at point of use. The submission layer
+// consumes this via engines.itWsFees (set in vcl-workflow.js / vcl-budget.js).
+function effectiveItWsFees() {
+  const base = (typeof window.VCLCALC_DATA !== 'undefined' && window.VCLCALC_DATA) ? window.VCLCALC_DATA.IT_WS_FEES : null;
+  if (!base) return null;
+  const ov = window.VCLCALC_OVERRIDES && window.VCLCALC_OVERRIDES.itWsFees;
+  if (!ov) return base;
+  const bp = base.perProduct || {}, op = ov.perProduct || {};
+  const out = {
+    perProduct: {
+      RMS: Object.assign({}, bp.RMS, op.RMS),
+      CMS: Object.assign({}, bp.CMS, op.CMS),
+    },
+    reducedTypeII: Object.assign({}, base.reducedTypeII, ov.reducedTypeII),
+  };
+  return out;
+}
+
 // Attach the per-application admin fee to each country result -- once per involved
 // country (counts > 0 and the row priced), 0 otherwise -- and return the EUR total
 // to fold into the grand total. Keeps the per-variation math in computeCountryResult
@@ -937,6 +957,9 @@ window.VCLCALC = {
   // involved country after pricing each procedure with adminFees:false.
   // Shape: { cc, eur, amountLocal, currency }.
   adminFeeFor(cc) { return adminFeeFor(cc); },
+  // IT worksharing/super-grouping per-product amounts with fee-editor overrides applied.
+  // Consumed by the submission layer via engines.itWsFees. See effectiveItWsFees().
+  effectiveItWsFees() { return effectiveItWsFees(); },
   // Open the public fee-data page. Moved here from the old "Fee data by country" box at the
   // foot of every step: the entry point now lives in the calculator's view heading, which is
   // rendered by the host guide (vcl-app.js, a different IIFE) and therefore needs a public door
