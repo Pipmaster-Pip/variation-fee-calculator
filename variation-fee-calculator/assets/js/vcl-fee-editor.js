@@ -1158,12 +1158,12 @@
         function (amt, baseVal) { setReduced(role, amt, baseVal); });
     }
 
-    ppField('RMS', 'II', 'Verwaltungsgebühr — IT als RMS, höchster Typ II');
-    ppField('RMS', 'IB', 'Verwaltungsgebühr — IT als RMS, höchster Typ IB');
-    ppField('CMS', 'II', 'Verwaltungsgebühr — IT als CMS, höchster Typ II');
-    ppField('CMS', 'IB', 'Verwaltungsgebühr — IT als CMS, höchster Typ IB');
-    rtField('RMS', '3.+ Typ-II-Satz (Worksharing) — IT als RMS');
-    rtField('CMS', '3.+ Typ-II-Satz (Worksharing) — IT als CMS');
+    ppField('RMS', 'II', 'Verwaltungsgebühr — IT als RMS, höchster Typ II (B.2.2.26)');
+    ppField('RMS', 'IB', 'Verwaltungsgebühr — IT als RMS, höchster Typ IB (B.2.2.30)');
+    ppField('CMS', 'II', 'Verwaltungsgebühr — IT als CMS, höchster Typ II (B.2.2.25)');
+    ppField('CMS', 'IB', 'Verwaltungsgebühr — IT als CMS, höchster Typ IB (B.2.2.29)');
+    rtField('RMS', '3.+ Typ-II-Satz (Worksharing) — IT als RMS (B.2.2.22)');
+    rtField('CMS', '3.+ Typ-II-Satz (Worksharing) — IT als CMS (B.2.2.21)');
   }
 
   function renderCountry() {
