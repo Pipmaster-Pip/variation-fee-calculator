@@ -10,7 +10,7 @@
 // ============================================================================
 (function(){
 
-const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES, POINT_VALUES } = window.VCLCALC_DATA;
+const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES, POINT_VALUES, ADMIN_FEES, PROCESS_FEES } = window.VCLCALC_DATA;
 
 const ROWS_BY_ROW = {};
 FEE_ROWS.forEach(r => { ROWS_BY_ROW[r.row] = r; });
@@ -44,6 +44,100 @@ function getEffectiveRate(cc) {
   if (liveRates[currency]) return liveRates[currency];
   if (typeof STATIC_FX_RATES !== 'undefined' && STATIC_FX_RATES[cc]) return STATIC_FX_RATES[cc];
   return null;
+}
+
+// The one-off per-application admin fee for a country (CZ 2000 CZK, EE 16 EUR, ...),
+// in EUR. It is charged once per application for every involved country, not per
+// variation -- distinct from the per-row V surcharge (which IE still uses). A
+// local-currency fee is converted with the live rate where available and falls back
+// to the exported snapshot otherwise, mirroring how a fee row carries F/F_lc. An
+// override typed in the fee editor wins over the shipped value. Null when none.
+function adminFeeFor(cc) {
+  const base = (typeof cc === 'string' && cc.indexOf(' - ') > -1) ? cc.slice(0, cc.indexOf(' - ')) : cc;
+  const ov = window.VCLCALC_OVERRIDES && window.VCLCALC_OVERRIDES.admin;
+  const af = (ov && ov[base]) || (typeof ADMIN_FEES !== 'undefined' && ADMIN_FEES ? ADMIN_FEES[base] : null);
+  if (!af) return null;
+  let eur;
+  if (af.currency) {
+    const rate = getEffectiveRate(base);
+    eur = rate ? (af.amountLocal / rate) : (af.amountEur || 0);
+  } else {
+    eur = af.amountLocal;
+  }
+  return { cc: base, eur: eur, amountLocal: af.amountLocal, currency: af.currency || null };
+}
+
+// Attach the per-application admin fee to each country result -- once per involved
+// country (counts > 0 and the row priced), 0 otherwise -- and return the EUR total
+// to fold into the grand total. Keeps the per-variation math in computeCountryResult
+// untouched, so the admin fee is a clearly separable line.
+function attachAdminFees(countryResults, countsSum) {
+  let total = 0;
+  countryResults.forEach(function (cr) {
+    cr.adminFee = 0;
+    cr.adminFeeLocal = null;
+    cr.adminFeeCurrency = null;
+    if (countsSum > 0 && cr.hasData) {
+      const af = adminFeeFor(cr.cc);
+      if (af && af.eur) {
+        cr.adminFee = af.eur;
+        cr.adminFeeLocal = af.amountLocal;
+        cr.adminFeeCurrency = af.currency;
+        total += af.eur;
+      }
+    }
+  });
+  return total;
+}
+
+// The highest variation type present in a count set (II > IB > IA), or null.
+function highestType(counts) {
+  if ((counts.II || 0) > 0) return 'II';
+  if ((counts.IB || 0) > 0) return 'IB';
+  if ((counts.IA || 0) > 0) return 'IA';
+  return null;
+}
+
+// A country's once-per-application "process fee" for a role, by the submission's
+// highest variation type (Finland as RMS: IA 640 / IB 1010 / II 2250 EUR). Charged on
+// top of the per-variation processing fees, exactly once per application -- not per
+// variation -- so a grouping is not over-charged. EUR amounts (the only publisher so
+// far is euro-based). 0 where the country/role has none. The worksharing and
+// super-grouping process fees are priced through lead special rows instead.
+function processFeeFor(cc, role, counts) {
+  const base = (typeof cc === 'string' && cc.indexOf(' - ') > -1) ? cc.slice(0, cc.indexOf(' - ')) : cc;
+  const pf = (typeof PROCESS_FEES !== 'undefined' && PROCESS_FEES) ? PROCESS_FEES[base] : null;
+  if (!pf || pf.role !== role) return 0;
+  const t = highestType(counts);
+  const amt = t && pf.byType ? pf.byType[t] : 0;
+  return (typeof amt === 'number') ? amt : 0;
+}
+
+// A country's flat worksharing/super-grouping lead process fee for a role, EUR. Unlike the
+// per-type process fee above, this is a single flat amount charged once when the country is the
+// worksharing/super-grouping lead (Finland: WS 4500 / SG 1120), on top of its per-variation fees.
+// mode: 'ws' | 'sg'. 0 where the country/role has none.
+function processFeeFlatFor(cc, role, mode) {
+  const base = (typeof cc === 'string' && cc.indexOf(' - ') > -1) ? cc.slice(0, cc.indexOf(' - ')) : cc;
+  const pf = (typeof PROCESS_FEES !== 'undefined' && PROCESS_FEES) ? PROCESS_FEES[base] : null;
+  if (!pf || pf.role !== role) return 0;
+  const amt = (mode === 'sg') ? pf.sg : pf.ws;
+  return (typeof amt === 'number') ? amt : 0;
+}
+
+// Attach the process fee to each country result (once, by highest type, for the
+// matching role) and return the EUR total to fold into the grand total.
+function attachProcessFees(countryResults, counts) {
+  let total = 0;
+  const countsSum = (counts.IA || 0) + (counts.IB || 0) + (counts.II || 0);
+  countryResults.forEach(function (cr) {
+    cr.processFee = 0;
+    if (countsSum > 0 && cr.hasData) {
+      const pf = processFeeFor(cr.cc, cr.role, counts);
+      if (pf) { cr.processFee = pf; total += pf; }
+    }
+  });
+  return total;
 }
 
 async function loadLiveRates() {
@@ -779,9 +873,39 @@ window.VCLCALC = {
       { role: c.role, strengths: Math.max(1, parseInt(c.strengths, 10) || 1), specialByType: c.special || { IA: null, IB: null, II: null } },
       counts
     ));
-    const grandTotal = results.reduce((acc, cr) => acc + (cr.total || 0), 0);
-    return { countries: results, grandTotal };
+    // The per-application admin fee is folded in once per involved country, unless
+    // the caller opts out (input.adminFees === false). vcl-submission does opt out
+    // on its per-procedure/lead calls and adds the admin fee once at the submission
+    // level, so a worksharing with several procedures never charges it twice.
+    const countsSum = counts.IA + counts.IB + counts.II;
+    let adminFeesTotal = 0;
+    if (input && input.adminFees === false) {
+      results.forEach((cr) => { cr.adminFee = 0; });
+    } else {
+      adminFeesTotal = attachAdminFees(results, countsSum);
+    }
+    // Process fee (Finland as RMS): once per application, by highest type. Same
+    // opt-out pattern as the admin fee -- vcl-submission adds it once at the
+    // submission level for a plain single/grouping, and prices the worksharing /
+    // super-grouping process fees through lead special rows.
+    let processFeesTotal = 0;
+    if (input && input.processFees === false) {
+      results.forEach((cr) => { cr.processFee = 0; });
+    } else {
+      processFeesTotal = attachProcessFees(results, counts);
+    }
+    const grandTotal = results.reduce((acc, cr) => acc + (cr.total || 0), 0) + adminFeesTotal + processFeesTotal;
+    return { countries: results, grandTotal, adminFeesTotal, processFeesTotal };
   },
+  processFeeFor(cc, role, counts) { return processFeeFor(cc, role, counts); },
+  // Flat worksharing/super-grouping lead process fee (EUR) for a country/role, by mode
+  // ('ws'|'sg'). Exposed so the submission layer can add it to the lead's one-off fee.
+  processFeeFlatFor(cc, role, mode) { return processFeeFlatFor(cc, role, mode); },
+  // The one-off per-application admin fee for a country, in EUR, or null. Exposed so
+  // the submission layer (worksharing/super-grouping/budget) can charge it once per
+  // involved country after pricing each procedure with adminFees:false.
+  // Shape: { cc, eur, amountLocal, currency }.
+  adminFeeFor(cc) { return adminFeeFor(cc); },
   // Open the public fee-data page. Moved here from the old "Fee data by country" box at the
   // foot of every step: the entry point now lives in the calculator's view heading, which is
   // rendered by the host guide (vcl-app.js, a different IIFE) and therefore needs a public door
@@ -1214,9 +1338,10 @@ function specialChoicesForType(type) {
     const cfg = ensureCountryConfig(cc);
     const candidates = rowsFor(cc, cfg.role, type);
     if (candidates.length <= 1) return;
-    // Worksharing variants stay out of the classic calculator's special-case picker --
-    // they belong to the Guided Workflow's worksharing path (user decision 2026-07-22).
-    const labels = candidates.map(r => r.special).filter(Boolean).filter(l => !/worksharing/i.test(l));
+    // Worksharing and super-grouping variants stay out of the classic calculator's
+    // special-case picker -- they belong to the Guided Workflow's lead-fee paths
+    // (worksharing user decision 2026-07-22; super-grouping 2026-10-12).
+    const labels = candidates.map(r => r.special).filter(Boolean).filter(l => !/worksharing/i.test(l) && !/supergrouping/i.test(l));
     if (labels.length === 0) return; // only one unlabelled row, nothing to choose
     result.push({ cc, role: cfg.role, options: labels, hasStandard: candidates.some(r => !r.special) });
   });
@@ -1330,7 +1455,18 @@ function specialHintHTML(cc, type, label) {
       <span class="exm-toggle__car">${open ? '&#9660;' : '&#9654;'}</span> ${escapeHtml(hint.buttonLabel || label)} &mdash; which codes qualify?
     </button>`;
   if (!open) return toggle;
+  return toggle + specialHintListHTML(cc, type, label);
+}
 
+// The bare "which codes qualify?" list for a special-case fee -- the code/description
+// rows, head and source, without the toggle button. specialHintHTML() uses it when its
+// own toggle is open; the fee-data page's exemptions callout embeds it directly, since a
+// native <details> already provides the expand/collapse there. Returns '' where no hint
+// list is registered.
+function specialHintListHTML(cc, type, label) {
+  const hint = SPECIAL_CODE_HINTS[cc + '|' + type + '|' + label];
+  if (!hint) return '';
+  const codes = hint.codes;
   // Fee amount straight from the special row itself, so the head stays true to the data.
   const cfg = ensureCountryConfig(cc);
   const row = rowsFor(cc, cfg.role, type).find(r => r.special === label);
@@ -1353,7 +1489,7 @@ function specialHintHTML(cc, type, label) {
   const source = src
     ? `Source: ${src.url ? `<a href="${escapeHtml(src.url)}" target="_blank" rel="noopener">${escapeHtml(src.text)}</a>` : escapeHtml(src.text)} &middot; descriptions from the Classification of Variations (this Toolbox).`
     : 'Descriptions from the Classification of Variations (this Toolbox).';
-  return `${toggle}
+  return `
     <div class="exm-list">
       <div class="exm-list__head">These classification codes qualify for the ${escapeHtml(COUNTRY_NAMES[cc] || cc)} &quot;${escapeHtml(label)}&quot; fee${feeBit}:</div>
       ${items}
@@ -1645,9 +1781,13 @@ function computeResult() {
     return COUNTRY_NAMES[a.cc].localeCompare(COUNTRY_NAMES[b.cc], 'en');
   });
 
-  const grandTotal = countryResults.reduce((acc, cr) => acc + cr.total, 0);
+  const gc = appState.globalCounts || {};
+  const countsSum = (gc.IA || 0) + (gc.IB || 0) + (gc.II || 0);
+  const adminFeesTotal = attachAdminFees(countryResults, countsSum);
+  const processFeesTotal = attachProcessFees(countryResults, gc);
+  const grandTotal = countryResults.reduce((acc, cr) => acc + cr.total, 0) + adminFeesTotal + processFeesTotal;
 
-  appState.results = { countries: countryResults, grandTotal };
+  appState.results = { countries: countryResults, grandTotal, adminFeesTotal, processFeesTotal };
 }
 
 // Per-country breakdown for the result table. Produces one entry per variation TYPE
@@ -1674,7 +1814,7 @@ function computeCountryBreakdown(cc, full) {
   // and a plain dash in the result's Special case column.
   const hasVariants = t => {
     const candidates = rowsFor(cc, cfg.role, t);
-    return candidates.length > 1 && candidates.some(r => r.special && !/worksharing/i.test(r.special));
+    return candidates.length > 1 && candidates.some(r => r.special && !/worksharing/i.test(r.special) && !/supergrouping/i.test(r.special));
   };
   const clamp0 = x => (x < 0 ? 0 : x);
   const mkVar = (base, line) => ({ base, perAdd: (s > 1 && line > 0.005) ? clamp0((line - base) / (s - 1)) : null, line });
@@ -1826,14 +1966,33 @@ function renderStepResult() {
       return main + subs;
     }).join('');
 
+    // The "once per application" fees (admin fee CZ/EE, process fee FI) sit as the last rows of
+    // this card -- not as separate lines in the overview -- and fold into the country subtotal, so
+    // the overview's per-country total and this subtotal agree. The amount follows the currency
+    // toggle: the admin fee uses its own canonical local amount in local view (e.g. CZK 2000,00).
+    const feeRowsHtml =
+      (cr.adminFee > 0.005 ? `
+        <tr class="vres-feerow">
+          <td colspan="4">Administrative fee (once per application)</td>
+          <td class="vres-num">${(mode === 'local' && cr.adminFeeCurrency) ? fmtLocalCurrency(cr.adminFeeLocal, cr.adminFeeCurrency) : fmtEUR(cr.adminFee)}</td>
+        </tr>` : '') +
+      (cr.processFee > 0.005 ? `
+        <tr class="vres-feerow">
+          <td colspan="4">Process fee (once per application)</td>
+          <td class="vres-num">${m(cr.processFee)}</td>
+        </tr>` : '');
+
+    // All-in country total: per-variation subtotal plus its once-per-application fees.
+    const allIn = (cr.total || 0) + (cr.adminFee || 0) + (cr.processFee || 0);
+
     // Footer: always "Country subtotal"; a subtle mechanic note beside it, and for a
     // cap the raw (uncapped) sum struck through before the capped subtotal.
     let note = '';
     if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; all variations covered by one grouping fee</span>`;
     else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">&middot; Cap fee applies</span>`;
     const amtCell = bd.mechanic === 'cap'
-      ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(cr.total)}</span>`
-      : `<span class="vres-num">${m(cr.total)}</span>`;
+      ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(allIn)}</span>`
+      : `<span class="vres-num">${m(allIn)}</span>`;
 
     return `
       <div class="vres-cty" data-ctycard="${cr.cc}">
@@ -1842,11 +2001,11 @@ function renderStepResult() {
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
             <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b> &middot; <button type="button" class="vres-fdlink" data-fdjump="${escapeAttr(cr.cc)}">Fee data for ${escapeHtml(COUNTRY_NAMES[cr.cc] || cr.cc)} &#8599;</button></div>
           </div>
-          <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(cr.total)}</span></div>
+          <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(allIn)}</span></div>
         </div>
         <table class="vres-tbl${bd.mechanic !== 'none' ? ' vres-tbl--indicative' : ''}">
           <thead><tr><th>Variation</th><th>Special case</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
+          <tbody>${rowsHtml}${feeRowsHtml}</tbody>
           <tfoot><tr><td colspan="4">Country subtotal${note}</td><td>${amtCell}</td></tr></tfoot>
         </table>
       </div>`;
@@ -1860,7 +2019,11 @@ function renderStepResult() {
       let r;
       if (sort.key === 'name') r = COUNTRY_NAMES[a.cr.cc].localeCompare(COUNTRY_NAMES[b.cr.cc], 'en');
       else if (sort.key === 'strengths') r = (a.cr.strengths || 0) - (b.cr.strengths || 0);
-      else r = (a.cr.total || 0) - (b.cr.total || 0);
+      else {
+        const aIn = (a.cr.total || 0) + (a.cr.adminFee || 0) + (a.cr.processFee || 0);
+        const bIn = (b.cr.total || 0) + (b.cr.adminFee || 0) + (b.cr.processFee || 0);
+        r = aIn - bIn;
+      }
       return r * sort.dir;
     });
   }
@@ -1883,8 +2046,11 @@ function renderStepResult() {
         <tbody>
           ${ordered.map(({ cr, bd }) => {
             const m = money(cr);
-            const amount = cr.hasData ? m(cr.total) : '&ndash;';
-            const zero = cr.hasData && cr.total < 0.005;
+            // All-in per country: the once-per-application fees (admin/process) are folded into the
+            // total here instead of shown as separate rows -- they appear itemised in the details card.
+            const allIn = (cr.total || 0) + (cr.adminFee || 0) + (cr.processFee || 0);
+            const amount = cr.hasData ? m(allIn) : '&ndash;';
+            const zero = cr.hasData && allIn < 0.005;
             return `
             <tr data-ovrow="${cr.cc}" tabindex="0">
               <td><span class="vres-ovname"><span class="badge vres-ovcode">${ccShort(cr.cc)}</span>${COUNTRY_NAMES[cr.cc]}</span></td>
@@ -2062,6 +2228,10 @@ function exportNotesFor(cr) {
       : '';
     notes.push(`Grouping fee applied${suffix}: ${fmtEUR(topGrouping.total)}`);
   }
+  // Once-per-application fees are folded into the country Total column; note them so the
+  // reader sees the Total is more than the per-type amounts.
+  if (cr.adminFee > 0.005) notes.push(`Incl. administrative fee (once per application): ${cr.adminFeeCurrency ? fmtLocalCurrency(cr.adminFeeLocal, cr.adminFeeCurrency) : fmtEUR(cr.adminFee)}`);
+  if (cr.processFee > 0.005) notes.push(`Incl. process fee (once per application): ${fmtEUR(cr.processFee)}`);
   return notes.join(' | ');
 }
 
@@ -2176,7 +2346,7 @@ function exportExcel(res) {
     const r = pushRow([
       COUNTRY_NAMES[cr.cc], cr.cc, EXCEL_ROLE_LABELS[cr.role] || cr.role, cr.strengths,
       ...typeAmounts,
-      cr.hasData ? cr.total : '',
+      cr.hasData ? (cr.total + (cr.adminFee || 0) + (cr.processFee || 0)) : '',
       '',
       exportNotesFor(cr)
     ]);
@@ -2217,7 +2387,7 @@ function exportExcel(res) {
       const r = pushRow([
         COUNTRY_NAMES[cr.cc], cr.cc, EXCEL_ROLE_LABELS[cr.role] || cr.role, cr.strengths,
         ...typeAmountsLocal,
-        cr.totalLocal,
+        cr.totalLocal + (cr.adminFeeLocal || 0) + ((cr.processFee || 0) * cr.fxRate),
         cr.fxRate,
         exportNotesFor(cr)
       ]);
@@ -2610,6 +2780,31 @@ function renderStepFeeData() {
         }).join('')}
         <span class="fd-fnote">Marked lines are charged by a rule that arrives at a different amount than their &ldquo;1st variation&rdquo; column. The quick calculation above and the Fee Calculator apply that rule, not the column.</span>
       </p>` : '';
+    // Type-IA exemptions: in France most Type IA variations are free, but a set of
+    // named changes carry a fee. They already sit in the table as their own rows;
+    // this folds them into a collapsible callout at the foot of the National section
+    // (one place, not per role -- the exempt changes are the same whoever files them)
+    // and, where a classification-code hint is registered, lists the actual qualifying
+    // changes with their descriptions -- the same list the calculator's special-cases
+    // panel shows. A native <details> is the expand toggle, so the inner hint renders
+    // without its own button. Generic: appears wherever an authority publishes
+    // "… exemptions" rows plus a code hint.
+    const exemptRows = (g.role === 'national') ? g.rows.filter(r => /exemption/i.test(r.special || '')) : [];
+    const exemptAmount = (r) => {
+      const v = (meta.currency && local) ? (r.F_lc !== null && r.F_lc !== undefined ? r.F_lc : r.F) : r.F;
+      return `${fmtAmount(v)} ${escapeHtml(unitTxt)}`;
+    };
+    const exemptPanel = exemptRows.length ? `
+      <details class="fd-exempt">
+        <summary><span class="fd-exempt__ttl">Type IA exemptions</span><span class="fd-exempt__n">${exemptRows.length}</span></summary>
+        <div class="fd-exempt__body">
+          <p class="fd-hint">Most Type IA variations are free in ${escapeHtml(COUNTRY_NAMES[cc] || cc)}. The changes below are the exceptions &mdash; they carry a fee.</p>
+          ${exemptRows.map(r => {
+            const list = specialHintListHTML(cc, r.type, r.special);
+            return list || `<p class="fd-hint"><b>${escapeHtml(variantLabel(r))}</b>${r.fee_code ? ` ${escapeHtml(String(r.fee_code))}` : ''} &mdash; <b>${exemptAmount(r)}</b></p>`;
+          }).join('')}
+        </div>
+      </details>` : '';
     return `
     <div class="fd-group">
       <div class="fd-grouphead">
@@ -2641,6 +2836,7 @@ function renderStepFeeData() {
         </table>
       </div></div>
       ${notes}
+      ${exemptPanel}
     </div>`;
   }).join('');
 

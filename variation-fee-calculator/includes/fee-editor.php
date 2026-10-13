@@ -142,6 +142,10 @@ function vcl_get_fee_overrides() {
 		// front end does not merge the plugin's shipped history underneath it.
 		'imprintFull' => false,
 		'annual'    => array(),
+		// Per-application admin fee overrides, keyed by base country code:
+		// array( '<CC>' => array( 'amountLocal' => float, 'currency' => string|null,
+		//                         'amountEur' => float ) ). Overlays ADMIN_FEES in the data file.
+		'admin'     => array(),
 		'updated'   => '',
 		'by'        => '',
 	) );
@@ -159,7 +163,7 @@ function vcl_get_fee_overrides() {
 function vcl_sanitize_fee_overrides( $payload ) {
 	$allowed = array_flip( vcl_fee_editable_fields() );
 	$text    = array_flip( vcl_fee_text_fields() );
-	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array() );
+	$clean   = array( 'rows' => array(), 'points' => array(), 'countries' => array(), 'imprint' => array(), 'admin' => array() );
 	$dropped = 0;
 
 	if ( isset( $payload['rows'] ) && is_array( $payload['rows'] ) ) {
@@ -381,6 +385,40 @@ function vcl_sanitize_fee_overrides( $payload ) {
 		}
 	}
 
+	// Per-application admin fee overrides. The editor sends the amount in the
+	// country's own currency plus the euro snapshot it computed from that country's
+	// FX factor, so the front end can price it even when live rates are unavailable
+	// (the same reason fee rows carry both F and F_lc). An EUR country sends currency
+	// null and amountLocal == amountEur.
+	if ( isset( $payload['admin'] ) && is_array( $payload['admin'] ) ) {
+		foreach ( $payload['admin'] as $cc => $fields ) {
+			if ( ! is_array( $fields ) ) {
+				$dropped++;
+				continue;
+			}
+			$code = sanitize_text_field( (string) $cc );
+			if ( $code === '' || ! isset( $fields['amountLocal'] ) || ! is_numeric( $fields['amountLocal'] ) ) {
+				$dropped++;
+				continue;
+			}
+			$local = (float) $fields['amountLocal'];
+			if ( ! is_finite( $local ) || $local < 0 ) {
+				$dropped++;
+				continue;
+			}
+			$currency = ( isset( $fields['currency'] ) && is_scalar( $fields['currency'] ) && $fields['currency'] !== '' )
+				? sanitize_text_field( (string) $fields['currency'] ) : null;
+			$eur = ( isset( $fields['amountEur'] ) && is_numeric( $fields['amountEur'] ) && is_finite( (float) $fields['amountEur'] ) && (float) $fields['amountEur'] >= 0 )
+				? (float) $fields['amountEur'] : $local;
+			// An amount of 0 is "no admin fee here" -- carry no entry, so clearing the
+			// field drops the override and the row follows the shipped ADMIN_FEES again.
+			if ( $local <= 0 ) {
+				continue;
+			}
+			$clean['admin'][ $code ] = array( 'amountLocal' => $local, 'currency' => $currency, 'amountEur' => $eur );
+		}
+	}
+
 	return array( $clean, $dropped );
 }
 
@@ -411,6 +449,10 @@ function vcl_count_fee_overrides( $overrides ) {
 				$n += count( (array) $fields );
 			}
 		}
+	}
+	// Each overridden per-application admin fee is one maintained value.
+	if ( ! empty( $overrides['admin'] ) && is_array( $overrides['admin'] ) ) {
+		$n += count( $overrides['admin'] );
 	}
 	return $n;
 }
@@ -618,6 +660,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'imprint'   => array_values( $overrides['imprint'] ),
 			'imprintFull' => ! empty( $overrides['imprintFull'] ),
 			'annual'    => (object) $overrides['annual'],
+			'admin'     => (object) $overrides['admin'],
 		) ) . ';', 'after' );
 	wp_localize_script( 'vcl-fee-editor', 'VCLFE_CONFIG', array(
 		'overrides'    => array(
@@ -627,6 +670,7 @@ function vcl_fee_editor_assets( $hook ) {
 			'imprint'   => array_values( $overrides['imprint'] ),
 			'imprintFull' => ! empty( $overrides['imprintFull'] ),
 			'annual'    => (object) $overrides['annual'],
+			'admin'     => (object) $overrides['admin'],
 		),
 		'startCountry' => isset( $_GET['cc'] ) ? sanitize_text_field( wp_unslash( $_GET['cc'] ) ) : '',
 	) );
@@ -688,6 +732,9 @@ function vcl_render_fees_tab() {
 				<?php wp_nonce_field( 'vclfe_save_action', 'vclfe_save_nonce' ); ?>
 				<input type="hidden" name="action" value="vclfe_save">
 				<input type="hidden" name="vclfe_payload" id="vclfe-payload" value="">
+				<!-- The country being edited, so the post-save redirect returns to it
+				     instead of the first country alphabetically. Filled by vcl-fee-editor.js. -->
+				<input type="hidden" name="vclfe_cc" id="vclfe-cc" value="">
 
 				<nav id="vclfe-picker" class="vclfe-picker" aria-label="Land wählen"></nav>
 
@@ -697,6 +744,8 @@ function vcl_render_fees_tab() {
 						<p class="vclfe-meta" id="vclfe-meta"></p>
 						<!-- Editable HA-sheet "Comments" line, filled by vcl-fee-editor.js. -->
 						<div class="vclfe-comment" id="vclfe-comment"></div>
+						<!-- Editable per-application admin fee, filled by vcl-fee-editor.js. -->
+						<div class="vclfe-comment" id="vclfe-adminfee"></div>
 					</div>
 					<div class="vclfe-actions">
 						<span class="vclfe-dirty" id="vclfe-editcount"></span>
@@ -837,11 +886,18 @@ function vcl_handle_save_fee_overrides() {
 		'imprint'   => $clean['imprint'],
 		'imprintFull' => ! empty( $clean['imprintFull'] ),
 		'annual'    => isset( $clean['annual'] ) ? $clean['annual'] : ( is_array( $stored_annual ) ? $stored_annual : array() ),
+		'admin'     => $clean['admin'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => $user ? $user->display_name : '',
 	), false );
 
-	vcl_fee_editor_redirect( array( 'vclfe_status' => 'saved', 'vclfe_dropped' => $dropped ) );
+	// Return to the country that was being edited, not the first one alphabetically.
+	$redirect = array( 'vclfe_status' => 'saved', 'vclfe_dropped' => $dropped );
+	$cc = isset( $_POST['vclfe_cc'] ) ? sanitize_text_field( wp_unslash( $_POST['vclfe_cc'] ) ) : '';
+	if ( $cc !== '' ) {
+		$redirect['cc'] = $cc;
+	}
+	vcl_fee_editor_redirect( $redirect );
 }
 add_action( 'admin_post_vclfe_save', 'vcl_handle_save_fee_overrides' );
 
@@ -874,6 +930,7 @@ function vcl_handle_export_fee_overrides() {
 		'imprint'   => array_values( $overrides['imprint'] ),
 		'imprintFull' => ! empty( $overrides['imprintFull'] ),
 		'annual'    => (object) $overrides['annual'],
+		'admin'     => (object) $overrides['admin'],
 	);
 
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -956,6 +1013,7 @@ function vcl_handle_import_fee_overrides() {
 		'imprint'   => $clean['imprint'],
 		'imprintFull' => ! empty( $clean['imprintFull'] ),
 		'annual'    => $annual,
+		'admin'     => $clean['admin'],
 		'updated'   => current_time( 'mysql' ),
 		'by'        => ( $user ? $user->display_name : '' ) . ' (Import)',
 	), false );

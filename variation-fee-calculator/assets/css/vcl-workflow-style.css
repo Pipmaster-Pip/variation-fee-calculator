@@ -882,6 +882,11 @@
 .vcl-app .vcl-wf-ws-lead .vcl-wf-fee-line { padding: 4px 0; }
 .vcl-app .vcl-wf-ws-lead .vcl-wf-fee-line__amt { color: var(--workflow); font-weight: 600; }
 .vcl-app .vcl-wf-ws-lead .vcl-wf-hint { margin-top: 6px; }
+/* Lead-fee breakdown: splits the lead's one amount into its flat process fee and its
+   per-variation part (Finland worksharing/super-grouping). */
+.vcl-app .vcl-wf-ws-lead__bd { margin-top: 6px; padding-top: 6px; border-top: 0.5px solid var(--line, #e4e4de); }
+.vcl-app .vcl-wf-ws-lead__bdrow { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--ink-faint, #838da0); padding: 2px 0; }
+.vcl-app .vcl-wf-ws-lead__bdrow span:last-child { font-family: var(--figure); font-variant-numeric: tabular-nums; }
 .vcl-app .vcl-wf-fee-line__r {
   display: flex;
   align-items: center;

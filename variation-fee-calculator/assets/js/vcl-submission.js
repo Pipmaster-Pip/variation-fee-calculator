@@ -120,18 +120,30 @@
   function wsPricingRole(role) { return role === "RMS" ? WS_RMS_PRICES_AS : role; }
   function wsSpecialKey(cc, role) { return cc + "|" + role; }
   function isWorksharingSpecial(s) { return /worksharing/i.test(s || ""); }
+  function isSuperGroupingSpecial(s) { return /supergrouping/i.test(s || ""); }
   // Options offered in a worksharing pricing context: where an authority publishes
   // "… - worksharing" variants, ONLY those are offered; otherwise the normal special cases.
+  // Super-grouping specials are never offered here -- they belong to the SG lead path.
   function wsOptionsFor(sub, cc, role, engines) {
-    var all = specialOptionsFor(sub, cc, role, engines);
+    var all = specialOptionsFor(sub, cc, role, engines).filter(function (s) { return !isSuperGroupingSpecial(s); });
     var ws = all.filter(isWorksharingSpecial);
     return ws.length ? ws : all;
+  }
+  // Lead-fee options. In a super-grouping the "… - supergrouping" variants win where the
+  // authority publishes them (DK's 3119); otherwise it falls back to the worksharing rule.
+  // Both WS and SG price a one-off lead fee, but at different schedules.
+  function leadOptionsFor(sub, cc, role, engines) {
+    if (sgActive(sub)) {
+      var sg = specialOptionsFor(sub, cc, role, engines).filter(isSuperGroupingSpecial);
+      if (sg.length) return sg;
+    }
+    return wsOptionsFor(sub, cc, role, engines);
   }
   // The effective pick for a line: the stored choice if it is still on offer; otherwise the
   // first option wherever "no pick" is not a real alternative.
   function defaultSpecial(sub, cc, role, opts, engines) {
     if (!opts.length) return null;
-    if (isWorksharingSpecial(opts[0]) || !hasStandardRow(sub, cc, role, engines)) return opts[0];
+    if (isWorksharingSpecial(opts[0]) || isSuperGroupingSpecial(opts[0]) || !hasStandardRow(sub, cc, role, engines)) return opts[0];
     return null;
   }
   function wsSpecialFor(sub, cc, role, engines) {
@@ -140,9 +152,10 @@
     if (stored && opts.indexOf(stored) !== -1) return stored;
     return defaultSpecial(sub, cc, role, opts, engines);
   }
-  // Non-worksharing fee-category options: the published labels minus the "… - worksharing" variants.
+  // Non-worksharing fee-category options: the published labels minus the "… - worksharing"
+  // and "… - supergrouping" variants (both belong to the lead-fee paths, not a plain line).
   function nonWsOptionsFor(sub, cc, role, engines) {
-    return specialOptionsFor(sub, cc, role, engines).filter(function (s) { return !isWorksharingSpecial(s); });
+    return specialOptionsFor(sub, cc, role, engines).filter(function (s) { return !isWorksharingSpecial(s) && !isSuperGroupingSpecial(s); });
   }
   // The effective pick for a single (non-worksharing) line.
   function specialFor(sub, cc, role, engines) {
@@ -154,7 +167,7 @@
   // Same rule for the lead's own pick.
   function leadSpecial(sub, engines) {
     if (!sub.lead) return null;
-    var opts = wsOptionsFor(sub, sub.lead, leadPricingRole(sub, engines), engines);
+    var opts = leadOptionsFor(sub, sub.lead, leadPricingRole(sub, engines), engines);
     var stored = sub.specials.lead;
     if (stored && opts.indexOf(stored) !== -1) return stored;
     return defaultSpecial(sub, sub.lead, leadPricingRole(sub, engines), opts, engines);
@@ -188,26 +201,46 @@
   function procFees(sub, p, counts, engines) {
     if (!engines.computeFees) return null;
     if (!procCountries(sub, p, engines).length || feeCountsTotal(counts) === 0) return { countries: [], grandTotal: 0 };
-    return engines.computeFees({ countries: procPricedCountries(sub, p, engines), counts: counts });
+    // adminFees/processFees:false -- both once-per-application fees are charged once
+    // at the submission level (computeSubmissionFees), not per procedure.
+    return engines.computeFees({ countries: procPricedCountries(sub, p, engines), counts: counts, adminFees: false, processFees: false });
   }
   // The lead's one-off fee: a single engine country-result, or null while it can't be priced.
+  // Where the lead authority publishes a flat worksharing/super-grouping process fee (Finland:
+  // WS 4500 / SG 1120), it is added ON TOP of the lead's per-variation fees -- unlike the DK
+  // pattern, whose flat "… - worksharing" row replaces the per-variation pricing. For DK the flat
+  // amount is 0 (no ws/sg in PROCESS_FEES), so this leaves it unchanged.
   function leadFees(sub, counts, engines) {
     if (!leadPricingActive(sub) || !sub.lead || !engines.computeFees) return null;
     if (feeCountsTotal(counts) === 0) return null;
     var s = leadSpecial(sub, engines);
+    var role = leadPricingRole(sub, engines);
     var r = engines.computeFees({
-      countries: [{ cc: sub.lead, role: leadPricingRole(sub, engines), strengths: strengthsFor(sub, sub.lead), special: { IA: s, IB: s, II: s } }],
+      countries: [{ cc: sub.lead, role: role, strengths: strengthsFor(sub, sub.lead), special: { IA: s, IB: s, II: s } }],
       counts: counts,
+      adminFees: false, processFees: false,  // charged once at the submission level
     });
-    return (r.countries && r.countries[0]) || null;
+    var lf = (r.countries && r.countries[0]) || null;
+    if (lf && engines.processFeeFlatFor) {
+      var mode = sgActive(sub) ? "sg" : "ws";
+      var flat = engines.processFeeFlatFor(sub.lead, role, mode);
+      if (flat) {
+        lf.total = (lf.total || 0) + flat;
+        lf.processFeeFlat = flat;         // for the lead-box breakdown line (variant A)
+        lf.processFeeFlatMode = mode;     // 'ws' | 'sg'
+      }
+    }
+    return lf;
   }
   // Assemble per-procedure + lead pricing into one grand total (parity with vcl-workflow.js's
   // grandTotalFees) plus a NEW by-country breakdown for the Budget tool.
   function computeSubmissionFees(sub, engines) {
     var counts = feeCounts(sub);
     if (feeCountsTotal(counts) === 0) return { total: null, byCountry: [] };
-    var byCc = {}; var total = 0; var any = false;
+    var byCc = {}; var total = 0; var any = false; var roleByCc = {};
     allPricedProcedures(sub).forEach(function (p) {
+      // The role each country is priced under this procedure, for the process fee below.
+      procPricedCountries(sub, p, engines).forEach(function (x) { if (roleByCc[x.cc] === undefined) roleByCc[x.cc] = x.role; });
       var r = procFees(sub, p, counts, engines);
       if (!r) return;
       total += r.grandTotal || 0;
@@ -217,6 +250,34 @@
     if (leadPricingActive(sub)) {
       var lf = leadFees(sub, counts, engines);
       if (lf) { total += lf.total || 0; byCc[lf.cc] = (byCc[lf.cc] || 0) + (lf.total || 0); any = true; }
+    }
+    // Per-application admin fee (CZ 2000 CZK, EE 16 EUR, ...): once per distinct
+    // involved country, no matter how many procedures it took part in. The
+    // per-procedure/lead pricing above ran with adminFees:false, so this is the
+    // one place it is charged. Deduped by the admin fee's own (base) country code.
+    if (engines.adminFeeFor) {
+      var adminSeen = {};
+      Object.keys(byCc).forEach(function (cc) {
+        var af = engines.adminFeeFor(cc);
+        if (!af || !af.eur || adminSeen[af.cc]) return;
+        adminSeen[af.cc] = true;
+        total += af.eur;
+        byCc[cc] = (byCc[cc] || 0) + af.eur;
+        any = true;
+      });
+    }
+    // Process fee (Finland as RMS): once per involved country, by the submission's
+    // highest type, for a plain single/grouping only. In a worksharing/super-grouping
+    // the process fee is the lead's one-off fee, priced through its special row above,
+    // so this is skipped there to avoid charging it twice.
+    if (engines.processFeeFor && !leadPricingActive(sub)) {
+      Object.keys(roleByCc).forEach(function (cc) {
+        var pf = engines.processFeeFor(cc, roleByCc[cc], counts);
+        if (!pf) return;
+        total += pf;
+        byCc[cc] = (byCc[cc] || 0) + pf;
+        any = true;
+      });
     }
     var byCountry = Object.keys(byCc).map(function (cc) { return { cc: cc, total: byCc[cc] }; });
     return { total: any ? total : null, byCountry: byCountry };
@@ -276,6 +337,7 @@
     emaCc: emaCc, strengthsFor: strengthsFor, procCountries: procCountries,
     specialOptionsFor: specialOptionsFor, hasStandardRow: hasStandardRow,
     wsPricingRole: wsPricingRole, wsSpecialKey: wsSpecialKey, isWorksharingSpecial: isWorksharingSpecial,
+    isSuperGroupingSpecial: isSuperGroupingSpecial, leadOptionsFor: leadOptionsFor,
     wsOptionsFor: wsOptionsFor, defaultSpecial: defaultSpecial, wsSpecialFor: wsSpecialFor,
     nonWsOptionsFor: nonWsOptionsFor, specialFor: specialFor, leadSpecial: leadSpecial,
     leadPricingRole: leadPricingRole, procPricedCountries: procPricedCountries, procFees: procFees,

@@ -176,6 +176,9 @@
   function subEngines() {
     return {
       computeFees: window.VCLCALC && window.VCLCALC.computeFees,
+      adminFeeFor: window.VCLCALC && window.VCLCALC.adminFeeFor,
+      processFeeFor: window.VCLCALC && window.VCLCALC.processFeeFor,
+      processFeeFlatFor: window.VCLCALC && window.VCLCALC.processFeeFlatFor,
       countries: (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [],
       feeRows: (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || [],
       workload: window.VCL_WORKLOAD_HOURS, workloadData: window.VCL_WORKLOAD_HD, sgLogic: window.VCL_SG_LOGIC,
@@ -346,6 +349,9 @@
   function specialFor(cc, role) { return window.VCL_SUBMISSION.specialFor(submissionFromState(), cc, role, subEngines()); }
   // Same rule for the lead's own pick.
   function leadSpecial() { return window.VCL_SUBMISSION.leadSpecial(submissionFromState(), subEngines()); }
+  // Options offered for the lead's one-off fee category: super-grouping variants in SG,
+  // worksharing variants in WS, otherwise the normal cases. Delegates to vcl-submission.js.
+  function leadOptionsFor(cc, role) { return window.VCL_SUBMISSION.leadOptionsFor(submissionFromState(), cc, role, subEngines()); }
   // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
   // publishes RMS rows, falling back to national, then CMS.
   function leadPricingRole() { return window.VCL_SUBMISSION.leadPricingRole(submissionFromState(), subEngines()); }
@@ -982,6 +988,23 @@
   // The three type counters under the open search row: how many code-less variations of each
   // type are in the list. "+" appends one, "-" removes the last one added this way. The search
   // row above stays open, so several can be added without reopening it each time.
+  // Stepping a codeless-variation counter inserts (or removes) a row higher up the
+  // station, which a full rerender() reflows -- the stepper slides out from under the
+  // cursor, so a second click misses. Anchor it: remember where the clicked button sat
+  // in the viewport, rebuild, then scroll by the delta so the button stays put (and keep
+  // focus on it, so keyboard repeats work too).
+  function stepCodeless(t, add, selector) {
+    const btn = document.querySelector(selector);
+    const before = btn ? btn.getBoundingClientRect().top : null;
+    if (add) addCodeless(t); else removeCodeless(t, false);
+    rerender();
+    const nb = document.querySelector(selector);
+    if (nb && before !== null) {
+      window.scrollBy(0, nb.getBoundingClientRect().top - before);
+      try { nb.focus({ preventScroll: true }); } catch (e) { /* disabled button, e.g. minus at 0 */ }
+    }
+  }
+
   function buildTypeCounters(host) {
     const wrap = el("div", "vcl-wf-typecount");
     wrap.appendChild(el("span", "vcl-wf-hint vcl-wf-typecount__label", "or add variations without a classification code:"));
@@ -994,11 +1017,13 @@
       const minus = el("button", null, "&minus;");
       minus.type = "button"; minus.disabled = n === 0;
       minus.setAttribute("aria-label", `Remove one Type ${t} variation without a classification code`);
-      minus.addEventListener("click", () => { removeCodeless(t, false); rerender(); });
+      minus.setAttribute("data-codeless", `minus-${t}`);
+      minus.addEventListener("click", () => stepCodeless(t, false, `[data-codeless="minus-${t}"]`));
       const plus = el("button", null, "+");
       plus.type = "button";
       plus.setAttribute("aria-label", `Add one Type ${t} variation without a classification code`);
-      plus.addEventListener("click", () => { addCodeless(t); rerender(); });
+      plus.setAttribute("data-codeless", `plus-${t}`);
+      plus.addEventListener("click", () => stepCodeless(t, true, `[data-codeless="plus-${t}"]`));
       st.appendChild(minus);
       st.appendChild(el("span", "vcl-rat-stepper__val" + (n === 0 ? " is-zero" : ""), String(n)));
       st.appendChild(plus);
@@ -1574,11 +1599,22 @@
       `${escapeHtml(cd.nameOf[cc] || cc)} <span class="vcl-wf-fee-line__cc">${escapeHtml(cc)}</span>${worksharingHasCP() ? ' <span class="vcl-wf-fee-line__role">auto (CP)</span>' : ""}`));
     grid.appendChild(el("div", "vcl-wf-fee-line__role", sgActive() ? "SG Lead" : "WS Lead"));
     grid.appendChild(buildFeeCategoryCell(cc, leadPricingRole(), strengthsFor(cc), leadSpecial(),
-      (v) => { state.worksharingLeadSpecial = v; rerender(); }));
+      (v) => { state.worksharingLeadSpecial = v; rerender(); }, leadOptionsFor(cc, leadPricingRole())));
     grid.appendChild(el("div", "vcl-wf-fee-grid__str", String(strengthsFor(cc))));
     grid.appendChild(el("div", "vcl-wf-fee-line__amt is-r", (lead && lead.hasData) ? fmtEUR(lead.total) : "no fee data"));
     box.appendChild(grid);
-    box.appendChild(el("p", "vcl-wf-hint", "The lead is charged once, here — its " + modeLabel.toLowerCase() + " fee category where published, otherwise the standard one. In its own procedure below it is not charged again."));
+    // Where the lead carries a flat process fee on top of its per-variation fees (Finland: WS
+    // 4500 / SG 1120), split the one amount into its two parts so the user sees how it is built.
+    if (lead && lead.processFeeFlat > 0) {
+      const perVar = (lead.total || 0) - lead.processFeeFlat;
+      const bd = el("div", "vcl-wf-ws-lead__bd");
+      bd.appendChild(el("div", "vcl-wf-ws-lead__bdrow",
+        `<span>incl. ${modeLabel.toLowerCase()} process fee (once)</span><span>${fmtEUR(lead.processFeeFlat)}</span>`));
+      bd.appendChild(el("div", "vcl-wf-ws-lead__bdrow",
+        `<span>+ per-variation processing fees</span><span>${fmtEUR(perVar)}</span>`));
+      box.appendChild(bd);
+    }
+    box.appendChild(el("p", "vcl-wf-hint", "The lead is charged once, here — its " + modeLabel.toLowerCase() + " fee category where published, otherwise the standard one" + ((lead && lead.processFeeFlat > 0) ? ", plus its one-off " + modeLabel.toLowerCase() + " process fee" : "") + ". In its own procedure below it is not charged again."));
     host.appendChild(box);
   }
 

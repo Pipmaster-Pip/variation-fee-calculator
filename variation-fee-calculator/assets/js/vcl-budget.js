@@ -17,6 +17,9 @@
     return {
       SUB: window.VCL_SUBMISSION,
       computeFees: window.VCLCALC && window.VCLCALC.computeFees,
+      adminFeeFor: window.VCLCALC && window.VCLCALC.adminFeeFor,
+      processFeeFor: window.VCLCALC && window.VCLCALC.processFeeFor,
+      processFeeFlatFor: window.VCLCALC && window.VCLCALC.processFeeFlatFor,
       countries: (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [],
       feeRows: (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || [],
       workload: window.VCL_WORKLOAD_HOURS,

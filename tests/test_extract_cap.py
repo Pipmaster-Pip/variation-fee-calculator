@@ -46,44 +46,46 @@ def test_every_cap_is_enterable():
     assert offenders == [], f"caps not expressible as form fields: {offenders}"
 
 
-def test_ie_row_224_caps_q_only():
-    # Finding 1: IF(L=1, IF(Q>4150,4150,Q), IF(Q>6425,6425,Q)) caps Q alone --
-    # the P subtotal is zero on this row, so scope "P" would be a silent no-op.
+def test_ie_row_224_caps_the_ib_subtotal():
+    # IE 2026-10-12: a flat 4150 grouping ceiling (code 236). The scope is reported
+    # P+Q uniformly; on a CMS row the IA subtotal P is structurally zero, so P+Q is
+    # numerically the IB subtotal.
     cap = extract_cap(ROWS[224])
-    assert cap["scope"] == "Q"
+    assert cap["scope"] == "P+Q"
+    assert cap["value"] == {"const": 4150.0}
 
 
-def test_ie_row_226_caps_q_plus_r():
-    # Finding 1: IF(L=1, IF((Q+R)>4150,4150,Q+R), ...) caps Q+R, not P.
+def test_ie_row_226_caps_the_summed_subtotals():
     cap = extract_cap(ROWS[226])
-    assert cap["scope"] == "Q+R"
+    assert cap["scope"] == "P+Q+R"
+    assert cap["value"] == {"const": 4150.0}
 
 
-def test_ie_row_221_still_caps_all_three():
-    # A row that genuinely caps P+Q+R must keep reporting that scope after
-    # _cap_scope stopped substring-matching a fixed list of two combinations.
+def test_ie_row_221_caps_at_the_flat_grouping_ceiling():
+    # IE's ceiling used to be strength-dependent (4150 at 1 strength, 6425 at 2+).
+    # As of 2026-10-12 IE charges no per-strength fee and the ceiling is a flat 4150
+    # applied only when grouping.
     cap = extract_cap(ROWS[221])
     assert cap["scope"] == "P+Q+R"
-    assert cap["value"]["byStrength"] == {"1": 4150.0, "else": 6425.0}
+    assert cap["value"] == {"const": 4150.0}
 
 
-def test_a_strength_dependent_cap_keeps_both_levels():
-    hits = [r for r in load_fee_rows()
-            if r.get("Sf") and "4150" in r["Sf"] and "6425" in r["Sf"]]
-    assert hits, "no row with the 4150/6425 cap found -- data changed?"
-    cap = extract_cap(hits[0])
-    assert cap["value"]["byStrength"]["1"] == 4150.0
-    assert cap["value"]["byStrength"]["else"] == 6425.0
+def test_no_row_has_a_strength_dependent_cap_anymore():
+    # The only byStrength caps were IE's (4150/6425); both are gone after the IE
+    # rebuild. extract_cap still supports the shape for any future row.
+    assert [r["row"] for r in load_fee_rows()
+            if (extract_cap(r) or {}).get("value", {}).get("byStrength")] == []
 
 
-def test_surcharge_is_read_as_a_number():
-    hits = [r for r in load_fee_rows()
-            if r.get("Sf") and re.search(r"\+77\b", r["Sf"])]
-    assert hits, "no row with the +77 surcharge found -- data changed?"
-    assert extract_surcharge(hits[0]) == 77.0
+def test_no_row_carries_a_v_surcharge_anymore():
+    # The per-row V surcharge was retired: CZ's moved to the per-application admin
+    # fee (v1.41.0) and IE's folded into flat full RMS amounts (2026-10-12). No
+    # shipped row carries one now; extract_surcharge still reads a V column if a
+    # future row brings one back.
+    assert [r["row"] for r in load_fee_rows() if r.get("V")] == []
 
 
 def test_build_rules_covers_every_row():
     rules = build_rules()
-    assert len(rules) == 421
+    assert len(rules) == 440
     assert all("rule" in r and "amounts" in r and "select" in r for r in rules)

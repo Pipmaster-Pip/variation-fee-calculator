@@ -84,6 +84,10 @@
   // with vcl-annual-data.js; only the two amounts are editable here.
   var annualEdits = deepCopy(saved.annual || {});
   var savedAnnual = deepCopy(saved.annual || {});
+  // Per-application admin fee overrides, keyed by base country code. Overlays the
+  // shipped DATA.ADMIN_FEES; an entry exists only where the value differs.
+  var adminEdits = deepCopy(saved.admin || {});
+  var savedAdmin = deepCopy(saved.admin || {});
   // Per-country provenance (checked date + source): keyed by country code,
   // independent of the amount edits above so a country switch shows the
   // right values without touching edits/pointEdits.
@@ -511,6 +515,12 @@
       if ((now.source || '') !== (was.source || '')) { n++; }
     });
 
+    seen = {};
+    Object.keys(adminEdits).concat(Object.keys(savedAdmin)).forEach(function (cc) {
+      if (seen[cc]) { return; } seen[cc] = true;
+      if (JSON.stringify(adminEdits[cc] || null) !== JSON.stringify(savedAdmin[cc] || null)) { n++; }
+    });
+
     if (historyChanged()) { n++; }
     if (newEntryArmed && (imprintValue() || '').trim()) { n++; }
 
@@ -812,7 +822,7 @@
   // the row objects it reads. Same shape the front end receives from PHP.
   function applyToEngine() {
     window.VCLCALC_OVERRIDES = {
-      rows: edits, points: pointEdits, countries: countryOverrides, annual: annualEdits
+      rows: edits, points: pointEdits, countries: countryOverrides, annual: annualEdits, admin: adminEdits
     };
     if (window.VCL_ANNUAL_OVERRIDES) window.VCL_ANNUAL_OVERRIDES.apply();
     if (window.VCLCALC && typeof window.VCLCALC.applyOverrides === 'function') {
@@ -994,6 +1004,64 @@
     host.appendChild(wrap);
   }
 
+  // The shipped per-application admin fee for a country, or null.
+  function adminFeeBaseline(cc) {
+    var m = (DATA.ADMIN_FEES || {});
+    return m[normalizeCc(cc)] || null;
+  }
+  // EUR per one local-currency unit for a country, read off any of its own rows
+  // (F / F_lc). The same factor the shipped admin-fee snapshot was computed with,
+  // so an override converts consistently. Null for an EUR country.
+  function ccFactor(cc) {
+    var r = FEE_ROWS.filter(function (x) { return x.cc === cc && x.F && x.F_lc; })[0];
+    return r ? (r.F / r.F_lc) : null;
+  }
+
+  // Editable "admin fee charged once per application" for the active country. The
+  // amount is typed in the country's own currency; the euro snapshot is derived from
+  // ccFactor so the front end can price it offline. Clearing the field, or typing the
+  // shipped value, drops the override. Stored under the base country code, keyed the
+  // same way the engine looks it up.
+  function renderAdminFee() {
+    var host = document.getElementById('vclfe-adminfee');
+    if (!host) { return; }
+    host.textContent = '';
+    var code = normalizeCc(activeCc);
+    var cur = CC_TO_CURRENCY[activeCc] || CC_TO_CURRENCY[code] || null; // local currency, or null = EUR
+    var base = adminFeeBaseline(code);
+    var ov = adminEdits[code];
+    var shown = ov ? ov.amountLocal : (base ? base.amountLocal : '');
+
+    var wrap = document.createElement('label');
+    wrap.className = 'vclfe-comment__f';
+    var span = document.createElement('span');
+    span.textContent = 'Zuschlag pro Antrag (' + (cur || 'EUR') + ') — einmalig je Antrag, zusätzlich zu den Gebühren';
+    var input = document.createElement('input');
+    input.type = 'number'; input.min = '0'; input.step = '0.01';
+    input.className = 'vclfe-comment__input';
+    input.value = (shown === '' || shown == null) ? '' : shown;
+    input.placeholder = base ? String(base.amountLocal) : 'z. B. 2000';
+    input.addEventListener('input', function () {
+      var v = input.value.trim();
+      var amt = parseFloat(v);
+      if (v === '' || !(amt > 0)) {
+        // Empty or non-positive: no admin fee here -> drop the override (0 means none).
+        delete adminEdits[code];
+      } else if (base && amt === base.amountLocal && (cur || null) === (base.currency || null)) {
+        // Back to the shipped value -> follow the data file again.
+        delete adminEdits[code];
+      } else {
+        var factor = cur ? ccFactor(activeCc) : null;
+        var eur = cur ? (factor ? amt * factor : amt) : amt;
+        adminEdits[code] = { amountLocal: amt, currency: cur || null, amountEur: eur };
+      }
+      applyToEngine();
+    });
+    wrap.appendChild(span);
+    wrap.appendChild(input);
+    host.appendChild(wrap);
+  }
+
   function renderCountry() {
     var main = document.getElementById('vclfe-main');
     main.textContent = '';
@@ -1028,6 +1096,7 @@
     if (countryUnsaved(activeCc)) metaBit(meta, 'ungespeicherte Änderungen');
 
     renderComment(ha);
+    renderAdminFee();
 
     if (mode === 'pt') main.appendChild(pointPanel(activeCc));
 
@@ -2250,6 +2319,10 @@
   // Save / reset
   // ========================================================================
   document.getElementById('vclfe-payload').form.addEventListener('submit', function () {
+    // Carry the country being edited through the save so the post-save redirect
+    // returns to it instead of falling back to the first country alphabetically.
+    var ccField = document.getElementById('vclfe-cc');
+    if (ccField) { ccField.value = activeCc || ''; }
     // A new history entry is added only when the user armed one via "Neuer
     // Eintrag". An armed-but-empty topic adds nothing; an ordinary amount save
     // (newEntryArmed false) never touches the history.
@@ -2269,6 +2342,7 @@
         rows: edits,
         points: pointEdits,
         annual: annualEdits,
+        admin: adminEdits,
         // The history list, plus the flag telling the front end whether it is the
         // complete history or only the entries laid in front of the shipped one.
         // PHP sorts by date and caps the list, so order and length are handled
@@ -2335,6 +2409,7 @@
     edits = deepCopy(saved.rows || {});
     pointEdits = deepCopy(saved.points || {});
     annualEdits = deepCopy(savedAnnual);
+    adminEdits = deepCopy(savedAdmin);
     // Provenance is part of what this page maintains, so it is part of what
     // "Verwerfen" throws away -- otherwise the next save would write the very
     // dates and sources the user just discarded. The history editor's working

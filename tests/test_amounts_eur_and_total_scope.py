@@ -60,27 +60,26 @@ def test_slovenia_is_untouched_by_its_own_static_entry():
 
 def test_amounts_eur_present_on_every_rule():
     rules = build_rules()
-    assert len(rules) == 421
+    assert len(rules) == 440
     assert all("amounts" in r and "amountsEur" in r for r in rules)
 
 
 # --- Cause C: totalScope records which subtotals the TOTAL actually sums ---
 
 def test_total_scope_distribution_matches_the_diagnosed_counts():
-    # The brief's own tally across all 421 rows, from Sf's own-row P/Q/R
-    # references: P+Q+R 174, P 102, P+Q 97, direct 36 (of which 30 reduce to
-    # a known shape, 6 don't), Q+R 8, Q 4.
+    # Tally across all 439 rows, from Sf's own-row P/Q/R references. After the
+    # 2026-10-12 work the IE rebuild recut every IE row's S formula to the uniform
+    # P / P+Q / P+Q+R shape (CMS/national IB and II no longer report the bare Q / Q+R
+    # scopes), and added 3 IE RMS variants. Resulting tally:
     rules = build_rules()
     from collections import Counter
     cnt = Counter(r["totalScope"]["scope"] for r in rules)
-    assert cnt["P+Q+R"] == 174
-    assert cnt["P"] == 102
-    assert cnt["P+Q"] == 97
-    assert cnt["Q+R"] == 8
-    assert cnt["Q"] == 4
+    assert cnt["P+Q+R"] == 195
+    assert cnt["P"] == 105  # +1: DK super-grouping lead fee (IA, scope P)
+    assert cnt["P+Q"] == 104
     assert cnt["direct"] == 30
     assert cnt["unparsed"] == 6
-    assert sum(cnt.values()) == 421
+    assert sum(cnt.values()) == 440
 
 
 def test_belgium_row_35_is_a_direct_gated_flat_total():

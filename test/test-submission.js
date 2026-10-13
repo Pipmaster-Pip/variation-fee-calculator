@@ -88,6 +88,99 @@ eq(wsFees.byCountry, [{ cc: "FR", total: 100 }, { cc: "DE - BfArM", total: 100 }
 // incomplete (no country) prices to null
 eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: null, cms: [] }] }), feeEng).total, null, "fees: incomplete → null");
 
+// --- per-application admin fee: charged once per involved country, only where it applies ---
+var feeEngAdmin = Object.assign({}, feeEng, {
+  adminFeeFor: function (cc) { return (cc && cc.indexOf("CZ") === 0) ? { cc: "CZ", eur: 50 } : null; },
+});
+// single CZ national: base 100 + admin 50 once
+eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "CZ", cms: [] }] }), feeEngAdmin),
+  { total: 150, byCountry: [{ cc: "CZ", total: 150 }] }, "admin fee: single CZ = 100 + 50");
+// single FR national: no admin fee for FR
+eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "FR", cms: [] }] }), feeEngAdmin).total,
+  100, "admin fee: FR has none → unchanged");
+// worksharing, CZ in TWO procedures: admin charged once, not per procedure
+var sWsCz = mk({ mode: "worksharing", lead: "FR",
+  variations: [{ type: "II" }],
+  procedures: [{ kind: "national", nat: "FR", cms: [] }, { kind: "national", nat: "CZ", cms: [] }, { kind: "national", nat: "CZ", cms: [] }] });
+var wsCz = SUB.computeSubmissionFees(sWsCz, feeEngAdmin);
+eq(wsCz.total, 350, "admin fee: WS lead FR(100) + CZ x2 procedures(200) + CZ admin ONCE(50) = 350");
+eq(wsCz.byCountry.find(function (c) { return c.cc === "CZ"; }).total, 250, "admin fee: CZ byCountry = 200 + 50 once");
+
+// --- super-grouping: the lead's one-off fee uses the "… - supergrouping" special ---
+var sgRows = [
+  { cc: "DK", role: "RMS", type: "IA", special: "standard" },
+  { cc: "DK", role: "RMS", type: "IA", special: "supergrouping" },
+];
+var sgEng = { feeRows: sgRows, computeFees: stubFees, countries: [{ cc: "DK", roles: ["RMS"] }] };
+var sgSub = mk({ mode: "superGrouping", lead: "DK", variations: [{ type: "IA" }],
+  procedures: [{ kind: "mrpdcp", rms: "DK", cms: ["FR"] }] });
+eq(SUB.leadSpecial(sgSub, sgEng), "supergrouping", "SG: lead picks the supergrouping special");
+eq(SUB.nonWsOptionsFor(sgSub, "DK", "RMS", sgEng).indexOf("supergrouping"), -1,
+  "SG: supergrouping is not offered as a plain line option");
+// A worksharing over the same data does NOT reach for the supergrouping special.
+var wsSgSub = mk({ mode: "worksharing", lead: "DK", variations: [{ type: "IA" }],
+  procedures: [{ kind: "mrpdcp", rms: "DK", cms: ["FR"] }] });
+eq(SUB.leadSpecial(wsSgSub, sgEng), null, "WS: supergrouping special stays out of the worksharing lead pick");
+
+// --- process fee (FI as RMS): once per application, by highest type, not in WS/SG ---
+var procEng = Object.assign({}, feeEng, {
+  processFeeFor: function (cc, role, counts) {
+    if (cc.indexOf("FI") !== 0 || role !== "RMS") return 0;
+    return counts.II > 0 ? 2250 : counts.IB > 0 ? 1010 : counts.IA > 0 ? 640 : 0;
+  },
+});
+// FI as RMS of an MRP/DCP, plain grouping (not WS): FI priced RMS (stub 150) + DK CMS (100)
+// + process fee once (highest type IB -> 1010).
+var fiSub = mk({ variations: [{ type: "IB" }], procedures: [{ kind: "mrpdcp", rms: "FI", cms: ["DK"] }] });
+eq(SUB.computeSubmissionFees(fiSub, procEng).total, 150 + 100 + 1010, "process fee: FI RMS once, IB -> 1010");
+// Highest type II picks 2250.
+var fiII = mk({ variations: [{ type: "II" }], procedures: [{ kind: "mrpdcp", rms: "FI", cms: ["DK"] }] });
+eq(SUB.computeSubmissionFees(fiII, procEng).total, 150 + 100 + 2250, "process fee: highest type II -> 2250");
+// Worksharing: the process fee is a lead fee there, so the mechanic is skipped.
+var fiWs = mk({ mode: "worksharing", lead: "FI", variations: [{ type: "IB" }],
+  procedures: [{ kind: "mrpdcp", rms: "FI", cms: ["DK"] }, { kind: "national", nat: "SE" }] });
+eq(SUB.computeSubmissionFees(fiWs, procEng).byCountry.some(function (c) { return c.cc === "FI" && c.total > 900; }), false,
+  "process fee: not added on top in worksharing (lead-fee path owns it)");
+
+// --- FI worksharing/super-grouping LEAD process fee: flat amount ON TOP of per-variation fees ---
+// (Finland Stage C, v1.48.0). Unlike DK, whose flat "… - worksharing" row replaces per-variation
+// pricing, FI stays priced per-variation and gets a flat WS 4500 / SG 1120 added as the lead fee.
+var fiLeadRows = [
+  { cc: "FI", role: "RMS", type: "IA", special: null },
+  { cc: "FI", role: "RMS", type: "IB", special: null },
+  { cc: "FI", role: "RMS", type: "II", special: null },
+  { cc: "DK", role: "RMS", type: "IA", special: null },
+];
+var fiFlat = function (cc, role, mode) { return (cc === "FI" && role === "RMS") ? (mode === "sg" ? 1120 : 4500) : 0; };
+var fiLeadEng = { feeRows: fiLeadRows, computeFees: stubFees, countries: [{ cc: "FI", roles: ["RMS"] }, { cc: "DK", roles: ["RMS", "CMS"] }], processFeeFlatFor: fiFlat };
+
+// WS lead FI, 1×IB + 1×II: leadFees = per-variation (stub RMS 150) + flat 4500.
+var fiWsLeadSub = mk({ mode: "worksharing", lead: "FI", variations: [{ type: "IB" }, { type: "II" }],
+  procedures: [{ kind: "mrpdcp", rms: "FI", cms: ["DK"] }] });
+var fiWsCounts = SUB.feeCounts(fiWsLeadSub);
+var fiLf = SUB.leadFees(fiWsLeadSub, fiWsCounts, fiLeadEng);
+approx(fiLf.total, 150 + 4500, "FI WS lead = per-variation (stub 150) + flat 4500");
+approx(fiLf.processFeeFlat, 4500, "FI WS lead carries processFeeFlat = 4500");
+eq(fiLf.processFeeFlatMode, "ws", "FI WS lead mode = ws");
+
+// SG lead FI (all-IA): per-variation (stub 150) + flat 1120.
+var fiSgLeadSub = mk({ mode: "superGrouping", lead: "FI", variations: [{ type: "IA" }, { type: "IA" }],
+  procedures: [{ kind: "mrpdcp", rms: "FI", cms: ["DK"] }] });
+var fiSgLf = SUB.leadFees(fiSgLeadSub, SUB.feeCounts(fiSgLeadSub), fiLeadEng);
+approx(fiSgLf.total, 150 + 1120, "FI SG lead = per-variation (stub 150) + flat 1120");
+eq(fiSgLf.processFeeFlatMode, "sg", "FI SG lead mode = sg");
+
+// DK as WS lead: no flat process fee published -> unchanged (no processFeeFlat).
+var dkWsLeadSub = mk({ mode: "worksharing", lead: "DK", variations: [{ type: "IA" }],
+  procedures: [{ kind: "mrpdcp", rms: "DK", cms: ["FI"] }] });
+var dkLf = SUB.leadFees(dkWsLeadSub, SUB.feeCounts(dkWsLeadSub), fiLeadEng);
+eq(dkLf.processFeeFlat, undefined, "DK WS lead: no flat process fee added");
+
+// Integration: computeSubmissionFees folds the flat lead fee in exactly once.
+var fiWsAll = SUB.computeSubmissionFees(fiWsLeadSub, fiLeadEng);
+approx(fiWsAll.total, (150 + 4500) + 100, "FI WS total = lead (150+4500) + DK CMS procedure (100)");
+approx(fiWsAll.byCountry.find(function (c) { return c.cc === "FI"; }).total, 4650, "FI WS byCountry FI = 4650 (lead once)");
+
 console.log("\nSubmission — computeSubmissionHours (real engine)");
 var sHours = mk({ variations: [{ type: "IB" }], procedures: [{ kind: "mrpdcp", rms: "DE - BfArM", cms: ["FR", "ES"] }] });
 var h = SUB.computeSubmissionHours(sHours, engines);

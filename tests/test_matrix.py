@@ -7,13 +7,15 @@ from matrix import build_matrix
 ROWS = load_fee_rows()
 
 
-def test_the_data_file_still_holds_421_rows():
-    assert len(ROWS) == 421
+def test_the_data_file_still_holds_440_rows():
+    # 421 shipped + 15 (BG MRP/DCP, CZ "neue Studie", DK worksharing) + 3 (IE RMS
+    # reduced/complex-reduced variants) + 1 (DK super-grouping lead fee 3119),
+    # all 2026-10-12.
+    assert len(ROWS) == 440
 
 
 def test_matrix_has_the_size_the_spec_states():
-    # 482 special-case combinations x 63 count combinations x 5 strengths
-    assert len(build_matrix(ROWS)) == 151830
+    assert len(build_matrix(ROWS)) == 205695
 
 
 def test_matrix_contains_the_hand_checked_italian_case():

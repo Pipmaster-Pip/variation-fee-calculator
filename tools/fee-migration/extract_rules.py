@@ -178,6 +178,24 @@ def extract_cap(row):
     if re.search(rf"F{own}\*0\.8", body):
         return None
 
+    # Current model: the ceiling lives in the T column (and U for a strength
+    # split), with the S formula referencing T<row>/U<row> rather than a literal.
+    # The four literal branches below stay for any row still carrying an inline
+    # number.
+    T, U, T_pt = row.get("T"), row.get("U"), row.get("T_pt")
+    if re.search(rf">T{own}\b", body) and T is not None:
+        # Points x point value (Slovenia): the cap is held in points in T_pt, the
+        # euro value in T; the point value is their ratio.
+        if T_pt:
+            return {"scope": _cap_scope(sf, own),
+                    "value": {"points": float(T_pt), "pointValue": float(T) / float(T_pt)}}
+        # Strength-dependent: L=1 caps at T, otherwise at U.
+        if U is not None and re.search(rf">U{own}\b", body) and f"L{own}=1" in body:
+            return {"scope": _cap_scope(sf, own),
+                    "value": {"byStrength": {"1": float(T), "else": float(U)}}}
+        # Plain amount.
+        return {"scope": _cap_scope(sf, own), "value": {"const": float(T)}}
+
     # Points x point value: IF(P>1500*5.8, 1500*5.8, P)  -- Slovenia.
     # The 5.8 is the point value from the 'Exchange rates' sheet, resolved by
     # convert.py at export time.
@@ -219,11 +237,20 @@ def extract_cap(row):
 
 
 def extract_surcharge(row):
-    """A flat amount added on top of the sum, e.g. P+Q+77."""
+    """A flat amount added on top of the sum, e.g. P+Q+V (77 for CZ).
+
+    The surcharge lives in the V column and the S formula references V<row>; older
+    rows carried it as a literal added after a subtotal (P+Q+77), still read here
+    for backward compatibility.
+    """
     sf = row.get("Sf")
     if not sf:
         return None
-    m = re.search(r"[PQR]\d+\+(\d+(?:\.\d+)?)\)", sf.replace(" ", ""))
+    body = sf.replace(" ", "")
+    own = row["row"]
+    if re.search(rf"\+V{own}\b", body) and row.get("V") is not None:
+        return float(row["V"])
+    m = re.search(r"[PQR]\d+\+(\d+(?:\.\d+)?)\)", body)
     return float(m.group(1)) if m else None
 
 
