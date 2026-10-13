@@ -993,6 +993,9 @@
 .vclcalc-app .vres-total{ text-align:right; flex-shrink:0; }
 .vclcalc-app .vres-eq{ display:block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; color:var(--ink-faint); }
 .vclcalc-app .vres-amt{ font-family:var(--serif); font-size:18px; font-weight:600; color:var(--accent-deep); }
+/* The mechanic pill in the detail-card header sits on the amount's baseline and reads as hanging
+   low next to the larger figure; centre both to the line so the pill lines up with the amount. */
+.vclcalc-app .vres-total .vres-chip, .vclcalc-app .vres-total .vres-amt{ vertical-align:middle; }
 
 .vclcalc-app .vres-mtag{ display:inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; font-weight:600; letter-spacing:.03em; padding:2px 6px; border-radius:5px; border:1px solid; }
 .vclcalc-app .vres-mtag--grp{ background:var(--accent-soft); color:var(--accent-deep); border-color:#e7d9b6; }
@@ -1008,6 +1011,8 @@
    enough room for "Type IB … · included in grouped fee" to stay on one line. */
 .vclcalc-app .vres-tbl th:not(:first-child), .vclcalc-app .vres-tbl td:not(:first-child){ width:150px; white-space:nowrap; }
 .vclcalc-app .vres-num{ font-family:var(--figure); font-variant-numeric:tabular-nums; }
+/* "× N" multiplier after a per-additional-strength rate -- muted, so the rate stays primary. */
+.vclcalc-app .vres-mult{ color:var(--ink-faint); font-weight:400; }
 /* When a grouping or cap fee applies, the per-variation amounts are only indicative --
    the binding number is the country subtotal below -- so grey them out. */
 .vclcalc-app .vres-tbl--indicative tbody td.vres-num{ color:var(--ink-faint); }
@@ -1511,7 +1516,7 @@
    with a faint gold accent stripe so a once-per-application charge is not mistaken for a fee row. */
 .vclcalc-app .fd-adminfee{
   margin-top:24px; padding:13px 15px 14px;
-  background:var(--accent-soft); border:1px solid var(--line); border-left:3px solid var(--accent);
+  background:var(--accent-soft); border:1px solid var(--line);
   border-radius:8px;
 }
 .vclcalc-app .fd-adminfee h3{

@@ -1620,9 +1620,15 @@ function escapeAttr(s) {
 function isAllIaSupergrouping(counts) {
   return (counts.IA || 0) >= 2 && (counts.IB || 0) === 0 && (counts.II || 0) === 0;
 }
-// The country's flat super-grouping IA row (DK 3119), or null where it publishes none.
+// The country's flat all-IA grouping row, or null where it publishes none. The RMS lead pays the
+// super-grouping fee (DK 3119) where it exists; national/CMS have no super-grouping row and instead
+// use the "same D.Sp.No." grouping fee (DK CMS 3120 / national 3115) -- the one-product default,
+// since "several D.Sp.No." needs a marketing-authorisation count the classic calculator does not have.
 function supergroupingIaRow(cc, role) {
-  return rowsFor(cc, role, 'IA').find(r => /supergrouping/i.test(r.special || '')) || null;
+  const ia = rowsFor(cc, role, 'IA');
+  return ia.find(r => /supergrouping/i.test(r.special || ''))
+      || ia.find(r => (r.special || '').toLowerCase() === 'same d.sp.no.')
+      || null;
 }
 
 // `autoSg` opts the caller into treating multiple Type IA as a super-grouping (the classic
@@ -1950,8 +1956,8 @@ function renderStepResult() {
   const mechChipHTML = (bd) => {
     if (!bd || bd.mechanic === 'none') return '<span class="vres-chip vres-chip--none">&ndash;</span>';
     if (bd.mechanic === 'cap') return '<span class="vres-chip vres-chip--cap">Cap</span>';
-    if (bd.mechanic === 'supergrouping') return '<span class="vres-chip">Super-grouping</span>';
-    return '<span class="vres-chip">Grouping</span>';
+    if (bd.mechanic === 'supergrouping') return '<span class="vres-chip">Supergrouping Fee</span>';
+    return '<span class="vres-chip">Grouping Fee</span>';
   };
   // The overview's code column is a fixed 30px so the names line up; "DE - BfArM" would blow
   // that apart. Only the ISO part goes in the pill -- the authority stays in the name beside it
@@ -1985,6 +1991,14 @@ function renderStepResult() {
     if (useLocal) caption = `<span class="vres-eq">${fmtRate(cr.fxRate, cr.currency)}</span>`;
     else if (cr.currency) caption = `<span class="vres-eq">EUR equivalent</span>`;
 
+    // The "per add. strength" column shows the rate for ONE additional strength; the line total
+    // multiplies it by the number of additional strengths (strengths - 1). Spell that factor out
+    // ("€200,00 × 3") whenever there is more than one additional strength, so base + rate × N = line
+    // is legible. One additional strength adds up on its own, so no "× 1" clutter. Any country.
+    const addMult = (cr.strengths || 1) - 1;
+    const perAddCell = (v) => (v == null) ? '&ndash;'
+      : (addMult > 1 && v > 0.005) ? `${m(v)} <span class="vres-mult">&times; ${addMult}</span>` : m(v);
+
     // One row per variation type; rows with more than one variation expand to the individual ones.
     const rowsHtml = bd.types.map((ty) => {
       const key = cr.cc + '|' + ty.type;
@@ -2003,7 +2017,7 @@ function renderStepResult() {
           <td><span class="vres-var">${caret}${typePillHTML(ty.type)}<span class="vres-cnt">${ty.count}&times;</span> Type ${ty.type}${inclNote}</span></td>
           <td class="${scClass}">${scText}</td>
           <td class="vres-num">${m(ty.base)}</td>
-          <td class="vres-num">${ty.perAdd != null ? m(ty.perAdd) : '&ndash;'}</td>
+          <td class="vres-num">${perAddCell(ty.perAdd)}</td>
           <td class="vres-num">${m(ty.line)}</td>
         </tr>`;
       const subs = expandable ? ty.vars.map((v, vi) => `
@@ -2011,7 +2025,7 @@ function renderStepResult() {
           <td><span class="vres-var"><span class="vres-caret vres-caret--none"></span><span class="vres-vno">Var ${vi + 1}</span></span></td>
           <td class="vres-sc vres-sc--std"></td>
           <td class="vres-num">${m(v.base)}</td>
-          <td class="vres-num">${v.perAdd != null ? m(v.perAdd) : '&ndash;'}</td>
+          <td class="vres-num">${perAddCell(v.perAdd)}</td>
           <td class="vres-num">${m(v.line)}</td>
         </tr>`).join('') : '';
       return main + subs;
@@ -2041,7 +2055,7 @@ function renderStepResult() {
     let note = '';
     if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; all variations covered by one grouping fee</span>`;
     else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">&middot; Cap fee applies</span>`;
-    else if (bd.mechanic === 'supergrouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; flat super-grouping fee (multiple Type IA)</span>`;
+    else if (bd.mechanic === 'supergrouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; flat supergrouping fee (multiple Type IA)</span>`;
     const amtCell = bd.mechanic === 'cap'
       ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(allIn)}</span>`
       : `<span class="vres-num">${m(allIn)}</span>`;
@@ -2053,7 +2067,7 @@ function renderStepResult() {
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
             <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b> &middot; <button type="button" class="vres-fdlink" data-fdjump="${escapeAttr(cr.cc)}">Fee data for ${escapeHtml(COUNTRY_NAMES[cr.cc] || cr.cc)} &#8599;</button></div>
           </div>
-          <div class="vres-total">${caption}${(bd.mechanic === 'cap' || bd.mechanic === 'grouping') ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(allIn)}</span></div>
+          <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(allIn)}</span></div>
         </div>
         <table class="vres-tbl${(bd.mechanic === 'cap' || bd.mechanic === 'grouping') ? ' vres-tbl--indicative' : ''}">
           <thead><tr><th>Variation</th><th>Special case</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
