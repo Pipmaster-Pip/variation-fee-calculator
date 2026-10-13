@@ -143,7 +143,17 @@
   // first option wherever "no pick" is not a real alternative.
   function defaultSpecial(sub, cc, role, opts, engines) {
     if (!opts.length) return null;
-    if (isWorksharingSpecial(opts[0]) || isSuperGroupingSpecial(opts[0]) || !hasStandardRow(sub, cc, role, engines)) return opts[0];
+    var lead = isWorksharingSpecial(opts[0]) || isSuperGroupingSpecial(opts[0]);
+    if (lead || !hasStandardRow(sub, cc, role, engines)) {
+      // Honour a configured per-country default (e.g. DK -> "quality, simple (Q)") for a plain
+      // line where it is on offer; worksharing/super-grouping lead options keep their first row.
+      if (!lead) {
+        var ds = (typeof window !== "undefined" && window.VCLCALC_DATA && window.VCLCALC_DATA.DEFAULT_SPECIALS)
+          ? window.VCLCALC_DATA.DEFAULT_SPECIALS[cc] : null;
+        if (ds && opts.indexOf(ds) !== -1) return ds;
+      }
+      return opts[0];
+    }
     return null;
   }
   function wsSpecialFor(sub, cc, role, engines) {

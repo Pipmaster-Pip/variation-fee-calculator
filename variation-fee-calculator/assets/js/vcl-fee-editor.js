@@ -798,10 +798,15 @@
   }
 
   // ---- number formatting -------------------------------------------------
+  // nf keeps 4 decimals for the exchange-rate readout (7,4748 must not round to 7,47).
   var nf = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+  // Money values (fees, their currency-converted equivalents) are shown with at most 2 decimals --
+  // a converted euro amount like 82,6602037409 is display noise. Display only: the stored raw
+  // value is untouched, and editable fields hold clean local/≤2-decimal amounts anyway.
+  var nfMoney = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   var euro = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
 
-  function fmt(v) { return (v === null || v === undefined) ? '' : nf.format(v); }
+  function fmt(v) { return (v === null || v === undefined) ? '' : nfMoney.format(v); }
 
   // Accepts both German ("1.234,56") and plain ("1234.56") notation, because
   // amounts get pasted out of authority PDFs in either shape.

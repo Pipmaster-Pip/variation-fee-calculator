@@ -1316,6 +1316,20 @@
 @media (max-width: 760px) {
   .vcl-app .layout { grid-template-columns: 1fr; }
   .vcl-app .browse-col { margin-bottom: 20px; }
+  /* Masthead action buttons (Legal Toolbox / How to use / Start) are absolutely positioned
+     top-right on desktop; on a narrow screen that row overlaps the title and the buttons wrap
+     their own text to uneven heights. Let the row flow above the title and wrap as a unit, and
+     keep each button's label on one line. */
+  .vcl-app .app-header__actions {
+    position: static;
+    top: auto; right: auto;
+    margin: 0 0 16px;
+    flex-wrap: wrap;
+  }
+  .vcl-app .app-header__home,
+  .vcl-app .app-header__guide,
+  .vcl-app .app-header__lt,
+  .vcl-app .app-header__summary { white-space: nowrap; }
   /* Single column here, so the collapsed rail becomes a full-width bar above the content
      rather than a 34px stripe next to it. */
   .vcl-app .layout[data-tree="collapsed"] { grid-template-columns: 1fr; }

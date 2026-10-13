@@ -11,6 +11,7 @@
 (function(){
 
 const { FEE_ROWS, COUNTRY_NAMES, IMPRINT, HA_WEBSITES, CC_TO_CURRENCY, STATIC_FX_RATES, POINT_VALUES, ADMIN_FEES, PROCESS_FEES } = window.VCLCALC_DATA;
+const DEFAULT_SPECIALS = window.VCLCALC_DATA.DEFAULT_SPECIALS || {};
 
 const ROWS_BY_ROW = {};
 FEE_ROWS.forEach(r => { ROWS_BY_ROW[r.row] = r; });
@@ -636,7 +637,23 @@ function resolveRow(cc, role, type, preferredSpecial) {
   }
   const standard = candidates.find(r => !r.special);
   if (standard) return standard;
+  // No explicit pick and no plain standard row: honour a configured per-country default
+  // (e.g. DK -> "quality, simple (Q)") where that variant exists, else the first row.
+  const def = DEFAULT_SPECIALS[cc];
+  if (def) {
+    const defRow = candidates.find(r => r.special === def);
+    if (defRow) return defRow;
+  }
   return candidates[0];
+}
+
+// The special that is shown pre-selected for a country/role/type when the user has not picked one:
+// the configured default where it exists among the published variants, otherwise the first variant.
+function defaultSpecialFor(cc, role, type) {
+  const candidates = rowsFor(cc, role, type);
+  const def = DEFAULT_SPECIALS[cc];
+  if (def && candidates.some(r => r.special === def)) return def;
+  return (candidates[0] && candidates[0].special) || '';
 }
 
 // ============================================================================
@@ -1403,7 +1420,9 @@ function renderSpecialPanel() {
           <thead><tr><th style="width:90px;">Type</th><th>Applies to</th><th>Variant</th></tr></thead>
           <tbody>
             ${rows.map(({type, options, hasStandard}) => {
-              const current = cfg.specialByType[type] || '';
+              // When the user has not picked and there is no plain standard row, pre-select the
+              // configured default variant (e.g. DK quality-simple) rather than the first option.
+              const effective = cfg.specialByType[type] || (hasStandard ? '' : defaultSpecialFor(cc, cfg.role, type));
               const n = appState.globalCounts[type] || 0;
               return `
                 <tr>
@@ -1411,8 +1430,8 @@ function renderSpecialPanel() {
                   <td class="sp-scope">${n} variation${n === 1 ? '' : 's'}</td>
                   <td>
                     <select class="field-select" data-special-select="${cc}|${type}">
-                      ${hasStandard ? `<option value="" ${current===''?'selected':''}>Standard</option>` : ''}
-                      ${options.map(o => `<option value="${escapeAttr(o)}" ${current===o?'selected':''}>${escapeHtml(variantLabelFor(cc, cfg.role, type, o))}</option>`).join('')}
+                      ${hasStandard ? `<option value="" ${effective===''?'selected':''}>Standard</option>` : ''}
+                      ${options.map(o => `<option value="${escapeAttr(o)}" ${effective===o?'selected':''}>${escapeHtml(variantLabelFor(cc, cfg.role, type, o))}</option>`).join('')}
                     </select>
                   </td>
                 </tr>`;
@@ -1596,13 +1615,31 @@ function escapeAttr(s) {
 // the Guided Workflow to price each procedure at country level). `counts` is {IA,IB,II};
 // `cfg` is {role, strengths, specialByType}. This is the single source of truth for a country's
 // fee -- both callers go through it, so there is no second copy of the grouping/cap/FX logic.
-function computeCountryResult(cc, cfg, counts) {
+// Multiple Type IA variations (and only IA) are, by the toolbox's definition, a super-grouping.
+// The classic calculator has no procedure/MA concept, so it detects this purely from the counts.
+function isAllIaSupergrouping(counts) {
+  return (counts.IA || 0) >= 2 && (counts.IB || 0) === 0 && (counts.II || 0) === 0;
+}
+// The country's flat super-grouping IA row (DK 3119), or null where it publishes none.
+function supergroupingIaRow(cc, role) {
+  return rowsFor(cc, role, 'IA').find(r => /supergrouping/i.test(r.special || '')) || null;
+}
+
+// `autoSg` opts the caller into treating multiple Type IA as a super-grouping (the classic
+// calculator does; the Guided Workflow / submission layer handles super-grouping itself and must
+// NOT get this auto-pricing, or the flat fee would be applied twice).
+function computeCountryResult(cc, cfg, counts, autoSg) {
     const rows = rowsForCountry(cc);
 
+    // All-IA super-grouping: price IA through the flat super-grouping row where the country has one
+    // (DK 19 237 DKK / 3119) instead of the single-only standard row, which would otherwise yield 0.
+    // Countries without a super-grouping row fall through to normal per-IA pricing.
+    const sgIa = (autoSg && isAllIaSupergrouping(counts)) ? supergroupingIaRow(cc, cfg.role) : null;
     const selectedRows = [];
     ['IA','IB','II'].forEach(type => {
       if (counts[type] <= 0) return;
-      const row = resolveRow(cc, cfg.role, type, cfg.specialByType[type]);
+      const pref = (type === 'IA' && sgIa) ? sgIa.special : cfg.specialByType[type];
+      const row = resolveRow(cc, cfg.role, type, pref);
       if (row) selectedRows.push(row);
     });
 
@@ -1771,7 +1808,7 @@ function computeCountryResult(cc, cfg, counts) {
 
 // ---- Compute results across all selected countries (wizard) ----
 function computeResult() {
-  const countryResults = appState.selectedCountries.map(cc => computeCountryResult(cc, ensureCountryConfig(cc), appState.globalCounts));
+  const countryResults = appState.selectedCountries.map(cc => computeCountryResult(cc, ensureCountryConfig(cc), appState.globalCounts, true));
 
   // Sort: RMS entries first, then all others alphabetically by country name
   countryResults.sort((a, b) => {
@@ -1805,10 +1842,10 @@ function computeCountryBreakdown(cc, full) {
   const cfg = ensureCountryConfig(cc);
   const counts = appState.globalCounts;
   const s = cfg.strengths;
-  const cr = full || computeCountryResult(cc, cfg, counts);
+  const cr = full || computeCountryResult(cc, cfg, counts, true);
 
   const order = ['II', 'IB', 'IA'].filter(t => (counts[t] || 0) > 0);
-  const totalFor = (cnts, str) => (computeCountryResult(cc, Object.assign({}, cfg, { strengths: str }), cnts).total || 0);
+  const totalFor = (cnts, str) => (computeCountryResult(cc, Object.assign({}, cfg, { strengths: str }), cnts, true).total || 0);
   const labelFor = t => variantLabel(resolveRow(cc, cfg.role, t, cfg.specialByType[t]));
   // Whether this country/type offers a variant choice at all -- decides between "standard"
   // and a plain dash in the result's Special case column.
@@ -1818,6 +1855,20 @@ function computeCountryBreakdown(cc, full) {
   };
   const clamp0 = x => (x < 0 ? 0 : x);
   const mkVar = (base, line) => ({ base, perAdd: (s > 1 && line > 0.005) ? clamp0((line - base) / (s - 1)) : null, line });
+
+  // All-IA super-grouping: the flat super-grouping fee (e.g. DK 19 237 DKK) is the whole country
+  // total, carried on a single IA line labelled "supergrouping" -- not split across the variations
+  // and not an "included in grouping fee" zero. One line, the real amount, done.
+  const sgIaBd = isAllIaSupergrouping(counts) ? supergroupingIaRow(cc, cfg.role) : null;
+  if (sgIaBd) {
+    const cnt = counts.IA || 0;
+    const vars = [];
+    for (let k = 1; k <= cnt; k++) vars.push(mkVar(k === 1 ? cr.total : 0, k === 1 ? cr.total : 0));
+    return { mechanic: 'supergrouping', rawEur: cr.total, types: [
+      { type: 'IA', special: variantLabel(sgIaBd), variants: false, count: cnt,
+        base: cr.total, perAdd: null, line: cr.total, incl: false, vars }
+    ] };
+  }
 
   const capFired = cr.groupCapValue !== null || cr.items.some(it => it.capValue !== null);
   // "grouping" is a genuine grouping FEE only when the country's Excel formula actually has
@@ -1898,9 +1949,9 @@ function renderStepResult() {
 
   const mechChipHTML = (bd) => {
     if (!bd || bd.mechanic === 'none') return '<span class="vres-chip vres-chip--none">&ndash;</span>';
-    return bd.mechanic === 'cap'
-      ? '<span class="vres-chip vres-chip--cap">Cap</span>'
-      : '<span class="vres-chip">Grouping</span>';
+    if (bd.mechanic === 'cap') return '<span class="vres-chip vres-chip--cap">Cap</span>';
+    if (bd.mechanic === 'supergrouping') return '<span class="vres-chip">Super-grouping</span>';
+    return '<span class="vres-chip">Grouping</span>';
   };
   // The overview's code column is a fixed 30px so the names line up; "DE - BfArM" would blow
   // that apart. Only the ISO part goes in the pill -- the authority stays in the name beside it
@@ -1990,6 +2041,7 @@ function renderStepResult() {
     let note = '';
     if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; all variations covered by one grouping fee</span>`;
     else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">&middot; Cap fee applies</span>`;
+    else if (bd.mechanic === 'supergrouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; flat super-grouping fee (multiple Type IA)</span>`;
     const amtCell = bd.mechanic === 'cap'
       ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(allIn)}</span>`
       : `<span class="vres-num">${m(allIn)}</span>`;
@@ -2001,9 +2053,9 @@ function renderStepResult() {
             <div class="vres-name">${COUNTRY_NAMES[cr.cc]} <span class="badge">${cr.cc}</span></div>
             <div class="vres-meta"><b>${roleLabel(cr.role)}</b> &middot; <b>${cr.strengths} strength${cr.strengths===1?'':'s'}</b> &middot; <b>${varTotal} variation${varTotal===1?'':'s'}</b> &middot; <button type="button" class="vres-fdlink" data-fdjump="${escapeAttr(cr.cc)}">Fee data for ${escapeHtml(COUNTRY_NAMES[cr.cc] || cr.cc)} &#8599;</button></div>
           </div>
-          <div class="vres-total">${caption}${bd.mechanic !== 'none' ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(allIn)}</span></div>
+          <div class="vres-total">${caption}${(bd.mechanic === 'cap' || bd.mechanic === 'grouping') ? mechChipHTML(bd) : ''}<span class="vres-amt">${m(allIn)}</span></div>
         </div>
-        <table class="vres-tbl${bd.mechanic !== 'none' ? ' vres-tbl--indicative' : ''}">
+        <table class="vres-tbl${(bd.mechanic === 'cap' || bd.mechanic === 'grouping') ? ' vres-tbl--indicative' : ''}">
           <thead><tr><th>Variation</th><th>Special case</th><th>Base fee</th><th>Per add. strength</th><th>Line total</th></tr></thead>
           <tbody>${rowsHtml}${feeRowsHtml}</tbody>
           <tfoot><tr><td colspan="4">Country subtotal${note}</td><td>${amtCell}</td></tr></tfoot>
@@ -2840,6 +2892,17 @@ function renderStepFeeData() {
     </div>`;
   }).join('');
 
+  // A country's once-per-application administrative fee (CZ 2000 CZK, EE 16 EUR) is not a fee row,
+  // so it is called out here, above the plain-words section, following the page's currency toggle.
+  const adminFee = adminFeeFor(cc);
+  const adminFeeBlock = (adminFee && adminFee.eur > 0.005) ? `
+      <div class="fd-adminfee">
+        <h3>Administrative fee</h3>
+        <p>In addition to the variation fees above, an administrative fee of
+          <b>${(adminFee.currency && local) ? `${fmtAmount(adminFee.amountLocal)} ${escapeHtml(adminFee.currency)}` : `${fmtAmount(adminFee.eur)} EUR`}</b>
+          is charged <b>once per application</b>.</p>
+      </div>` : '';
+
   contentEl.innerHTML = `
     ${pickerHtml}
 
@@ -2871,7 +2934,7 @@ function renderStepFeeData() {
       </div>
     </header>
     ${quickCalc}
-    <div id="vclcalc-fdBody">${tables}${
+    <div id="vclcalc-fdBody">${tables}${adminFeeBlock}${
       roleGroups.length ? plainWords({ rows: rows }, rows.some(r => rowNote[r.row] !== undefined)) : ''
     }</div>
   `;

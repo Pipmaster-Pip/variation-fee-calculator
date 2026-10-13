@@ -1176,7 +1176,7 @@
 /* Mechanic chip in the card head, matching the overview table's column. */
 .vclcalc-app .vres-chip{
   display:inline-block; font-family:var(--figure); font-variant-numeric:tabular-nums; font-size:10px; font-weight:600;
-  padding:1px 7px; border-radius:999px; margin-right:8px;
+  padding:1px 7px; border-radius:999px; margin-right:8px; white-space:nowrap;
   background:var(--accent-soft); color:var(--accent-deep);
 }
 .vclcalc-app .vres-chip--cap{ background:var(--amber-soft); color:var(--amber); }
@@ -1198,7 +1198,7 @@
 .vclcalc-app .vres-ov th:first-child, .vclcalc-app .vres-ov td:first-child{ width:210px; }
 .vclcalc-app .vres-ov th:nth-child(2), .vclcalc-app .vres-ov td:nth-child(2){ width:150px; }
 .vclcalc-app .vres-ov th:nth-child(3), .vclcalc-app .vres-ov td:nth-child(3){ width:110px; }
-.vclcalc-app .vres-ov th:nth-child(5), .vclcalc-app .vres-ov td:nth-child(5){ width:120px; }
+.vclcalc-app .vres-ov th:nth-child(5), .vclcalc-app .vres-ov td:nth-child(5){ width:160px; }
 .vclcalc-app .vres-ov th:nth-child(6), .vclcalc-app .vres-ov td:nth-child(6){ width:190px; }
 .vclcalc-app .vres-ov td{ overflow:hidden; text-overflow:ellipsis; }
 .vclcalc-app .vres-ov thead th{
@@ -1506,6 +1506,20 @@
   margin:0; font-size:13.5px; line-height:1.65; color:var(--ink-soft);
 }
 .vclcalc-app .fd-sentence b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* Administrative fee call-out on the fee-data page (CZ/EE): same card voice as "In plain words",
+   with a faint gold accent stripe so a once-per-application charge is not mistaken for a fee row. */
+.vclcalc-app .fd-adminfee{
+  margin-top:24px; padding:13px 15px 14px;
+  background:var(--accent-soft); border:1px solid var(--line); border-left:3px solid var(--accent);
+  border-radius:8px;
+}
+.vclcalc-app .fd-adminfee h3{
+  margin:0 0 7px; font-size:10px; font-weight:600; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--accent-deep);
+}
+.vclcalc-app .fd-adminfee p{ margin:0; font-size:13.5px; line-height:1.65; color:var(--ink-soft); }
+.vclcalc-app .fd-adminfee b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
 
 /* ---- Lines priced by another rule ----------------------------------------
    A footnote marker in the "1st variation" cell plus a note under the table,
