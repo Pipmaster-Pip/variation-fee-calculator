@@ -242,6 +242,83 @@
     }
     return lf;
   }
+  // ---- IT (AIFA) per-product pricing ----
+  // IT charges variations per medicinal product in WS/SG, unlike the per-authority model of
+  // the other countries. The shared path above prices IT once (lead) and dedupes extra IT
+  // procedures by country, so the product dimension is lost. These helpers add it back for IT
+  // only, as a submission-level adjustment (like the admin/process fees below). See design
+  // 2026-10-13-it-worksharing-supergrouping-per-product. GW + Budget both flow through here.
+  var IT_CC = "IT";
+
+  // Number of procedures that involve IT, and IT's single pricing role across them.
+  function itProcedureCount(sub) {
+    var P = 0, role = null;
+    (sub.procedures || []).forEach(function (p) {
+      if (!p) return;
+      if (p.kind === "national" && p.nat === IT_CC) { P++; role = role || "national"; }
+      else if (p.kind === "mrpdcp") {
+        if (p.rms === IT_CC) { P++; role = "RMS"; }
+        else if ((p.cms || []).indexOf(IT_CC) !== -1) { P++; role = role || "CMS"; }
+      }
+    });
+    return { P: P, role: role };
+  }
+
+  // The per-Type-II rate IT actually charges for a role, as the base pricing resolves it
+  // (standard 29357/24465 or reduced 14678/12232 — reduced is IT's default). Derived from the
+  // engine with the SAME special the base used, so the 3rd+ II discount is sized against the
+  // real base rate rather than a hard-coded assumption. Marginal = fee(II=2) - fee(II=1).
+  function itMarginalTypeIIRate(sub, role, engines) {
+    if (!engines.computeFees) return null;
+    var special = (sub.lead === IT_CC) ? leadSpecial(sub, engines) : wsSpecialFor(sub, IT_CC, role, engines);
+    var sp = { IA: null, IB: null, II: special };
+    function fee(n) {
+      var r = engines.computeFees({ countries: [{ cc: IT_CC, role: role, strengths: 1, special: sp }],
+        counts: { IA: 0, IB: 0, II: n }, adminFees: false, processFees: false });
+      return (r.countries && r.countries[0] && r.countries[0].total) || 0;
+    }
+    return fee(2) - fee(1);
+  }
+
+  // The amount to ADD to IT's share (and the grand total) so IT is priced per product.
+  // Worksharing:   (P-1) * perProductAdminFee(highestType, role)   minus the 3rd+ II discount.
+  // Super-grouping:(P-1) * base(1 product)                         => base * P.
+  // Returns 0 for every non-IT / non-WS-SG case, so other countries are bitwise unchanged.
+  function itPerProductAdjustment(sub, counts, engines) {
+    if (!leadPricingActive(sub) || !engines || !engines.itWsFees) return 0;
+    var pc = itProcedureCount(sub);
+    if (pc.P < 1) return 0;
+    var role = (sub.lead === IT_CC) ? leadPricingRole(sub, engines) : wsPricingRole(pc.role || "CMS");
+    if (role !== "RMS" && role !== "CMS") return 0; // national out of scope (spec §7)
+    var data = engines.itWsFees;
+    var extra = pc.P - 1;
+
+    if (sgActive(sub)) {
+      if (extra <= 0 || !engines.computeFees) return 0;
+      var rb = engines.computeFees({ countries: [{ cc: IT_CC, role: role, strengths: 1, special: { IA: null, IB: null, II: null } }],
+        counts: counts, adminFees: false, processFees: false });
+      var base = (rb.countries && rb.countries[0] && rb.countries[0].total) || 0;
+      return extra * base;
+    }
+
+    // worksharing
+    var adj = 0;
+    if (extra > 0 && data.perProduct && data.perProduct[role]) {
+      var ht = highestType(sub);
+      var rate = ht === "II" ? data.perProduct[role].II : (ht === "IB" ? data.perProduct[role].IB : 0);
+      adj += extra * (rate || 0);
+    }
+    var O = counts.II || 0;
+    if (O >= 3 && data.reducedTypeII && data.reducedTypeII[role] != null) {
+      var marginal = itMarginalTypeIIRate(sub, role, engines);
+      // Only discount when the 3rd+ rate is actually lower than the base rate.
+      if (marginal != null && marginal > data.reducedTypeII[role]) {
+        adj -= (marginal - data.reducedTypeII[role]) * (O - 2);
+      }
+    }
+    return adj;
+  }
+
   // Assemble per-procedure + lead pricing into one grand total (parity with vcl-workflow.js's
   // grandTotalFees) plus a NEW by-country breakdown for the Budget tool.
   function computeSubmissionFees(sub, engines) {
@@ -288,6 +365,14 @@
         byCc[cc] = (byCc[cc] || 0) + pf;
         any = true;
       });
+    }
+    // IT (AIFA) per-product scaling in worksharing/super-grouping. Zero for every other
+    // country and for mode === null, so nothing else changes. See itPerProductAdjustment.
+    var itAdj = itPerProductAdjustment(sub, counts, engines);
+    if (itAdj) {
+      total += itAdj;
+      byCc[IT_CC] = (byCc[IT_CC] || 0) + itAdj;
+      any = true;
     }
     var byCountry = Object.keys(byCc).map(function (cc) { return { cc: cc, total: byCc[cc] }; });
     return { total: any ? total : null, byCountry: byCountry };
@@ -352,6 +437,7 @@
     nonWsOptionsFor: nonWsOptionsFor, specialFor: specialFor, leadSpecial: leadSpecial,
     leadPricingRole: leadPricingRole, procPricedCountries: procPricedCountries, procFees: procFees,
     leadFees: leadFees, computeSubmissionFees: computeSubmissionFees,
+    itProcedureCount: itProcedureCount, itPerProductAdjustment: itPerProductAdjustment,
     computeSubmissionHours: computeSubmissionHours,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

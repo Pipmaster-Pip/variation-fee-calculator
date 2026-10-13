@@ -762,7 +762,21 @@ const IE_COMPLEX_HINT = {
     url: 'https://assets.hpra.ie/data/docs/default-source/external-guidance-document/fin-g0002-guide-to-fees-for-human-products-v37.pdf?sfvrsn=dd51febb_51',
   },
 };
+// IT's reduced Type II rate is the usual case (quality variations almost always come
+// without new clinical data, and texts are rarely supplemented with clinical studies),
+// so it is the default pick; the standard rate applies only when new clinical data are
+// submitted. This is a criteria-based hint (no fixed code list) -- transcribed from the
+// workbook's "IT – fee reductions" sheet / AIFA Decree of 6 December 2016, Attachment 2.
+const IT_REDUCED_HINT = {
+  buttonLabel: 'Reduced rate',
+  note: 'The reduced Type II rate applies to correlated or consequential variations that imply no further assessment by the Authority (one fee at the highest category). In particular: quality variations (chemical, pharmaceutical, biological documentation) for which no new clinical data are submitted; Module 1 variations that do not require updates to other modules (changes to the SmPC/PIL are excluded); and SmPC, labelling or package-leaflet variations for which no new clinical data are submitted. Bioequivalence, bibliographic, pre-clinical and pharmacovigilance data count as clinical data. When new clinical data are submitted, the standard Type II rate applies.',
+  source: {
+    text: 'AIFA Decree of 6 December 2016, Attachment 2 — fee reductions for correlated variations',
+    url: null,
+  },
+};
 const SPECIAL_CODE_HINTS = {
+  'IT|II|reduced': IT_REDUCED_HINT,
   'FR|IA|Type IA exemptions': {
     codes: [
       'C.3.a', 'Q.I.a.3.a', 'Q.I.b.1.c', 'Q.I.b.2.h', 'Q.I.d.1.a.5', 'Q.I.d.1.b.1',
@@ -1469,9 +1483,12 @@ function specialHintHTML(cc, type, label) {
   const codes = hint.codes;
   const key = cc + '|' + type + '|' + label;
   const open = !!appState.specialHintOpen[key];
+  // A hint may be a code list ("which codes qualify?") or criteria-only ("when does
+  // this apply?", e.g. IT's reduced Type II rate, which is defined by criteria, not codes).
+  const prompt = (codes && codes.length) ? 'which codes qualify?' : 'when does this apply?';
   const toggle = `
     <button type="button" class="exm-toggle" data-exm-toggle="${escapeHtml(key)}">
-      <span class="exm-toggle__car">${open ? '&#9660;' : '&#9654;'}</span> ${escapeHtml(hint.buttonLabel || label)} &mdash; which codes qualify?
+      <span class="exm-toggle__car">${open ? '&#9660;' : '&#9654;'}</span> ${escapeHtml(hint.buttonLabel || label)} &mdash; ${prompt}
     </button>`;
   if (!open) return toggle;
   return toggle + specialHintListHTML(cc, type, label);
@@ -1485,7 +1502,7 @@ function specialHintHTML(cc, type, label) {
 function specialHintListHTML(cc, type, label) {
   const hint = SPECIAL_CODE_HINTS[cc + '|' + type + '|' + label];
   if (!hint) return '';
-  const codes = hint.codes;
+  const codes = hint.codes || [];
   // Fee amount straight from the special row itself, so the head stays true to the data.
   const cfg = ensureCountryConfig(cc);
   const row = rowsFor(cc, cfg.role, type).find(r => r.special === label);
@@ -1502,15 +1519,21 @@ function specialHintListHTML(cc, type, label) {
     if (res && extra) desc += ` <span class="exm-var">&mdash; ${escapeHtml(extra)}</span>`;
     return `<div class="exm-row"><span class="exm-code">${escapeHtml(code)}</span><span class="exm-desc">${desc}</span></div>`;
   }).join('');
-  // Source line: the hint list's own legal source (decree etc.), plus where the
-  // descriptions come from.
+  // Source line: the hint list's own legal source (decree etc.). Code-list hints also
+  // name where the descriptions come from; a criteria-only hint (no codes) does not.
   const src = hint.source;
+  const descTail = codes.length ? ' &middot; descriptions from the Classification of Variations (this Toolbox).' : '';
   const source = src
-    ? `Source: ${src.url ? `<a href="${escapeHtml(src.url)}" target="_blank" rel="noopener">${escapeHtml(src.text)}</a>` : escapeHtml(src.text)} &middot; descriptions from the Classification of Variations (this Toolbox).`
-    : 'Descriptions from the Classification of Variations (this Toolbox).';
+    ? `Source: ${src.url ? `<a href="${escapeHtml(src.url)}" target="_blank" rel="noopener">${escapeHtml(src.text)}</a>` : escapeHtml(src.text)}${descTail}`
+    : (codes.length ? 'Descriptions from the Classification of Variations (this Toolbox).' : '');
+  // Code-list hints head their rows with "these codes qualify"; a criteria-only hint
+  // (no codes, e.g. IT reduced Type II) heads the note with "when this fee applies".
+  const head = codes.length
+    ? `These classification codes qualify for the ${escapeHtml(COUNTRY_NAMES[cc] || cc)} &quot;${escapeHtml(label)}&quot; fee${feeBit}:`
+    : `When the ${escapeHtml(COUNTRY_NAMES[cc] || cc)} &quot;${escapeHtml(label)}&quot; fee${feeBit} applies:`;
   return `
     <div class="exm-list">
-      <div class="exm-list__head">These classification codes qualify for the ${escapeHtml(COUNTRY_NAMES[cc] || cc)} &quot;${escapeHtml(label)}&quot; fee${feeBit}:</div>
+      <div class="exm-list__head">${head}</div>
       ${items}
       ${hint.note ? `<div class="exm-note">${escapeHtml(hint.note)}</div>` : ''}
       <div class="exm-foot">${source}</div>

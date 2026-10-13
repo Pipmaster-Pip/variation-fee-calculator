@@ -49,11 +49,13 @@ Vereinheitlicht, mit P = Zahl der IT-Verfahren im Vorgang:
 | WS, 1× Typ IB, 2 Produkte | 2.446 + 1×391 | 2.837 € |
 | SG, 1× Typ IA, 3 Produkte | 1.055 × 3 | 3.165 € |
 
+> **Default-Hinweis (Umsetzung):** Für IT Typ II ist der **reduzierte** Satz der Normalfall (Q-Variations kommen fast immer ohne neue klinische Daten; Texte werden selten mit klinischen Studien ergänzt) — er ist daher die Vorauswahl. Die obigen Beispiele mit 29.357 € illustrieren den **Standard**-Fall; realistisch rechnet der Default mit 14.678 € (RMS). Der 3.+-II-Rabatt (8.478) wird gegen die *tatsächlich* genutzte Basis-Rate (reduziert oder standard) gebildet. Erläuterung zu den Reduktionskriterien: AIFA-Dekret 06.12.2016, Anlage 2 — als Note-only-Hint unter der „reduced"-Auswahl im Rechner hinterlegt.
+
 ## 3. Architektur
 
 **Einziger Hook:** `computeSubmissionFees` in `vcl-submission.js`. Es ist die alleinige Fee-Quelle für Guided Workflow (`vcl-workflow.js:377 grandTotalFees`) **und** Budget-Tool (`vcl-budget-engine.js:59`). Ein Hook dort deckt beide ab.
 
-**Neue, nicht-exportierte Hilfsfunktion** `itLeadPricingAdjustment(sub, counts, engines)`:
+**Umgesetzt als** `itPerProductAdjustment(sub, counts, engines)` (+ Helfer `itProcedureCount`, `itMarginalTypeIIRate`; für Tests exportiert). Ablauf:
 1. Greift nur, wenn `leadPricingActive(sub)` (worksharing **oder** superGrouping) **und** IT im Vorgang beteiligt ist.
 2. Ermittelt `P_IT` = Zahl der Verfahren, in denen IT vorkommt (als `rms`, `cms` oder `nat`) — siehe §4.
 3. Ermittelt IT-Rolle & höchsten Typ; schlägt Verwaltungssatz bzw. Basisgebühr nach. IT-Rolle = `leadPricingRole` wenn IT der Lead/Referenz ist (→ RMS-Sätze), sonst die über `wsPricingRole` ermittelte Member-Rolle (→ CMS-Sätze). Basis und Verwaltungssatz nutzen dieselbe Rolle.

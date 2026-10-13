@@ -22,6 +22,7 @@
       processFeeFlatFor: window.VCLCALC && window.VCLCALC.processFeeFlatFor,
       countries: (window.VCLCALC && window.VCLCALC.countries) ? window.VCLCALC.countries() : [],
       feeRows: (window.VCLCALC_DATA && window.VCLCALC_DATA.FEE_ROWS) || [],
+      itWsFees: (window.VCLCALC_DATA && window.VCLCALC_DATA.IT_WS_FEES) || null,
       workload: window.VCL_WORKLOAD_HOURS,
       workloadData: window.VCL_WORKLOAD_HD,
       sgLogic: window.VCL_SG_LOGIC,
