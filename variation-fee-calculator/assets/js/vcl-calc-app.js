@@ -88,6 +88,55 @@ function effectiveItWsFees() {
   return out;
 }
 
+// The read-only "Worksharing / Super-grouping" block on Italy's public fee page. IT is the only
+// country that prices a worksharing/super-grouping per medicinal product (AIFA codes B.2.2.21-30),
+// and those amounts are otherwise visible only inside the Guided Workflow / Budget tools. Returns ''
+// for every other country, and when the data (or any fee-editor override of it) is unavailable.
+// `fmtAmount` is the fee page's own euro formatter, passed in so the numbers match the tables above.
+function itWsFeesBlock(cc, fmtAmount) {
+  const base = (typeof cc === 'string' && cc.indexOf(' - ') > -1) ? cc.slice(0, cc.indexOf(' - ')) : cc;
+  if (base !== 'IT') return '';
+  const F = effectiveItWsFees();
+  if (!F) return '';
+  const pp = F.perProduct || {}, rt = F.reducedTypeII || {};
+  // role, scope description, AIFA code, amount
+  const rows = [
+    ['RMS', 'Per further medicinal product &mdash; highest change Type II', 'B.2.2.26', (pp.RMS || {}).II],
+    ['RMS', 'Per further medicinal product &mdash; highest change Type IB', 'B.2.2.30', (pp.RMS || {}).IB],
+    ['CMS', 'Per further medicinal product &mdash; highest change Type II', 'B.2.2.25', (pp.CMS || {}).II],
+    ['CMS', 'Per further medicinal product &mdash; highest change Type IB', 'B.2.2.29', (pp.CMS || {}).IB],
+    ['RMS', '3rd and further Type II change (worksharing rate)', 'B.2.2.22', rt.RMS],
+    ['CMS', '3rd and further Type II change (worksharing rate)', 'B.2.2.21', rt.CMS],
+  ].filter(r => typeof r[3] === 'number' && r[3] > 0.005);
+  if (!rows.length) return '';
+  const fmt = (typeof fmtAmount === 'function') ? fmtAmount : (v => String(v));
+  return `
+      <div class="fd-group fd-itws">
+        <div class="fd-grouphead">
+          <h2>Worksharing / Super-grouping</h2>
+          <p>Charged per <b>additional</b> medicinal product on top of the per-variation fees above,
+             once per procedure &mdash; applied by the Guided Workflow and Budget tools.</p>
+        </div>
+        <div class="fd-card"><div class="fd-scroll">
+          <table class="fd-tbl">
+            <thead><tr>
+              <th>Role</th><th>Scope</th><th>Fee code</th>
+              <th class="fd-num">Amount<span class="fd-cur">EUR</span></th>
+            </tr></thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td>${escapeHtml(r[0])}</td>
+                  <td class="fd-sc">${r[1]}</td>
+                  <td class="fd-code">${escapeHtml(r[2])}</td>
+                  <td class="fd-num">${fmt(r[3])}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div></div>
+      </div>`;
+}
+
 // Attach the per-application admin fee to each country result -- once per involved
 // country (counts > 0 and the row priced), 0 otherwise -- and return the EUR total
 // to fold into the grand total. Keeps the per-variation math in computeCountryResult
@@ -1661,32 +1710,33 @@ function escapeAttr(s) {
 // the Guided Workflow to price each procedure at country level). `counts` is {IA,IB,II};
 // `cfg` is {role, strengths, specialByType}. This is the single source of truth for a country's
 // fee -- both callers go through it, so there is no second copy of the grouping/cap/FX logic.
-// Multiple Type IA variations (and only IA) are, by the toolbox's definition, a super-grouping.
-// The classic calculator has no procedure/MA concept, so it detects this purely from the counts.
-function isAllIaSupergrouping(counts) {
+// Several Type IA variations (and only IA) filed together on ONE product form a grouping. The
+// classic calculator has no procedure/MA concept -- it always prices a single product -- so a
+// grouping is the only multi-variation case it can see; a super-grouping (the same change across
+// several products) belongs to the Guided Workflow / Budget tools, never here.
+function isAllIaGrouping(counts) {
   return (counts.IA || 0) >= 2 && (counts.IB || 0) === 0 && (counts.II || 0) === 0;
 }
-// The country's flat all-IA grouping row, or null where it publishes none. The RMS lead pays the
-// super-grouping fee (DK 3119) where it exists; national/CMS have no super-grouping row and instead
-// use the "same D.Sp.No." grouping fee (DK CMS 3120 / national 3115) -- the one-product default,
-// since "several D.Sp.No." needs a marketing-authorisation count the classic calculator does not have.
-function supergroupingIaRow(cc, role) {
+// The country's flat all-IA "same D.Sp.No." grouping row (one product, several variations), or null
+// where it publishes none (DK CMS 3120 / RMS 3117 / national 3115). The super-grouping row (DK RMS
+// 3119) is deliberately NOT used here: that is a several-products fee and the classic calculator only
+// ever prices one product. "Several D.Sp.No." also stays out -- it needs an MA count this tool lacks.
+function groupingIaRow(cc, role) {
   const ia = rowsFor(cc, role, 'IA');
-  return ia.find(r => /supergrouping/i.test(r.special || ''))
-      || ia.find(r => (r.special || '').toLowerCase() === 'same d.sp.no.')
+  return ia.find(r => (r.special || '').toLowerCase() === 'same d.sp.no.')
       || null;
 }
 
-// `autoSg` opts the caller into treating multiple Type IA as a super-grouping (the classic
-// calculator does; the Guided Workflow / submission layer handles super-grouping itself and must
-// NOT get this auto-pricing, or the flat fee would be applied twice).
+// `autoSg` opts the caller into treating multiple Type IA as a flat grouping (the classic calculator
+// does; the Guided Workflow / submission layer handles grouping/super-grouping itself and must NOT
+// get this auto-pricing, or the flat fee would be applied twice).
 function computeCountryResult(cc, cfg, counts, autoSg) {
     const rows = rowsForCountry(cc);
 
-    // All-IA super-grouping: price IA through the flat super-grouping row where the country has one
-    // (DK 19 237 DKK / 3119) instead of the single-only standard row, which would otherwise yield 0.
-    // Countries without a super-grouping row fall through to normal per-IA pricing.
-    const sgIa = (autoSg && isAllIaSupergrouping(counts)) ? supergroupingIaRow(cc, cfg.role) : null;
+    // All-IA grouping: price IA through the flat "same D.Sp.No." grouping row where the country has
+    // one (DK CMS 3120 / RMS 3117 / national 3115) instead of the single-only standard row, which
+    // would otherwise yield 0. Countries without such a row fall through to normal per-IA pricing.
+    const sgIa = (autoSg && isAllIaGrouping(counts)) ? groupingIaRow(cc, cfg.role) : null;
     const selectedRows = [];
     ['IA','IB','II'].forEach(type => {
       if (counts[type] <= 0) return;
@@ -1908,15 +1958,16 @@ function computeCountryBreakdown(cc, full) {
   const clamp0 = x => (x < 0 ? 0 : x);
   const mkVar = (base, line) => ({ base, perAdd: (s > 1 && line > 0.005) ? clamp0((line - base) / (s - 1)) : null, line });
 
-  // All-IA super-grouping: the flat super-grouping fee (e.g. DK 19 237 DKK) is the whole country
-  // total, carried on a single IA line labelled "supergrouping" -- not split across the variations
-  // and not an "included in grouping fee" zero. One line, the real amount, done.
-  const sgIaBd = isAllIaSupergrouping(counts) ? supergroupingIaRow(cc, cfg.role) : null;
+  // All-IA grouping: the flat grouping fee (e.g. DK CMS 3120) is the whole country total, carried on
+  // a single IA line labelled with the "same D.Sp.No." row -- not split across the variations and not
+  // an "included in grouping fee" zero. One line, the real amount, done. This is a grouping (one
+  // product, several IA), never a super-grouping -- see groupingIaRow.
+  const sgIaBd = isAllIaGrouping(counts) ? groupingIaRow(cc, cfg.role) : null;
   if (sgIaBd) {
     const cnt = counts.IA || 0;
     const vars = [];
     for (let k = 1; k <= cnt; k++) vars.push(mkVar(k === 1 ? cr.total : 0, k === 1 ? cr.total : 0));
-    return { mechanic: 'supergrouping', rawEur: cr.total, types: [
+    return { mechanic: 'grouping', rawEur: cr.total, types: [
       { type: 'IA', special: variantLabel(sgIaBd), variants: false, count: cnt,
         base: cr.total, perAdd: null, line: cr.total, incl: false, vars }
     ] };
@@ -2002,7 +2053,6 @@ function renderStepResult() {
   const mechChipHTML = (bd) => {
     if (!bd || bd.mechanic === 'none') return '<span class="vres-chip vres-chip--none">&ndash;</span>';
     if (bd.mechanic === 'cap') return '<span class="vres-chip vres-chip--cap">Cap</span>';
-    if (bd.mechanic === 'supergrouping') return '<span class="vres-chip">Supergrouping Fee</span>';
     return '<span class="vres-chip">Grouping Fee</span>';
   };
   // The overview's code column is a fixed 30px so the names line up; "DE - BfArM" would blow
@@ -2101,7 +2151,6 @@ function renderStepResult() {
     let note = '';
     if (bd.mechanic === 'grouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; all variations covered by one grouping fee</span>`;
     else if (bd.mechanic === 'cap') note = ` <span class="vres-fnote vres-fnote--cap">&middot; Cap fee applies</span>`;
-    else if (bd.mechanic === 'supergrouping') note = ` <span class="vres-fnote vres-fnote--grp">&middot; flat supergrouping fee (multiple Type IA)</span>`;
     const amtCell = bd.mechanic === 'cap'
       ? `<span class="vres-capraw">${m(bd.rawEur)}</span><span class="vres-num">${m(allIn)}</span>`
       : `<span class="vres-num">${m(allIn)}</span>`;
@@ -2963,6 +3012,12 @@ function renderStepFeeData() {
           is charged <b>once per application</b>.</p>
       </div>` : '';
 
+  // Italy prices a worksharing / super-grouping per medicinal product on top of the
+  // per-variation fees in the tables above (AIFA codes B.2.2.21-30). These amounts are
+  // only applied by the Guided Workflow and Budget tools, so the national fee page is
+  // the one place a reader can look them up. IT bills in euro, so no currency toggle.
+  const itWsBlock = itWsFeesBlock(cc, fmtAmount);
+
   contentEl.innerHTML = `
     ${pickerHtml}
 
@@ -2994,7 +3049,7 @@ function renderStepFeeData() {
       </div>
     </header>
     ${quickCalc}
-    <div id="vclcalc-fdBody">${tables}${adminFeeBlock}${
+    <div id="vclcalc-fdBody">${tables}${itWsBlock}${adminFeeBlock}${
       roleGroups.length ? plainWords({ rows: rows }, rows.some(r => rowNote[r.row] !== undefined)) : ''
     }</div>
   `;

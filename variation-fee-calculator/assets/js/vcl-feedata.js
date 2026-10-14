@@ -28,7 +28,8 @@
 
   /** The metadata strip above a country's tables: dates, source, authority,
    *  payment method. Overrides win over the shipped HA_WEBSITES entry, but only
-   *  for the two fields the editor actually maintains. */
+   *  for the fields the editor actually maintains (checked date, source, and the
+   *  authority link URL). */
   function countryMeta(cc, haEntries, ccToCurrency, overrides) {
     // The fee table carries one composite code, "DE - BfArM", while the HA
     // sheet lists Germany plainly as "DE"; every other country matches exactly.
@@ -47,7 +48,7 @@
       edited: ov.updated || (entry && entry.updated_calc) || '',
       source: ov.source || (entry && entry.comments) || '',
       linkText: (entry && entry.link_text) || '',
-      linkUrl: (entry && entry.link_url) || '',
+      linkUrl: ov.linkUrl || (entry && entry.link_url) || '',
       payment: (entry && entry.payment) || ''
     };
   }

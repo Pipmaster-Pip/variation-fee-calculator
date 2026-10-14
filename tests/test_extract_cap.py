@@ -87,5 +87,5 @@ def test_no_row_carries_a_v_surcharge_anymore():
 
 def test_build_rules_covers_every_row():
     rules = build_rules()
-    assert len(rules) == 444
+    assert len(rules) == 456
     assert all("rule" in r and "amounts" in r and "select" in r for r in rules)

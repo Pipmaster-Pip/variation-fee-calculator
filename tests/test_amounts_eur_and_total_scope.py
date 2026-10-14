@@ -60,7 +60,7 @@ def test_slovenia_is_untouched_by_its_own_static_entry():
 
 def test_amounts_eur_present_on_every_rule():
     rules = build_rules()
-    assert len(rules) == 444
+    assert len(rules) == 456
     assert all("amounts" in r and "amountsEur" in r for r in rules)
 
 
@@ -71,16 +71,20 @@ def test_total_scope_distribution_matches_the_diagnosed_counts():
     # 2026-10-12 work the IE rebuild recut every IE row's S formula to the uniform
     # P / P+Q / P+Q+R shape (CMS/national IB and II no longer report the bare Q / Q+R
     # scopes), and added 3 IE RMS variants. The 2026-10-13 LT worksharing rows add
-    # 4 more P+Q+R rows (IB/II for RMS/CMS). Resulting tally:
+    # 4 more P+Q+R rows (IB/II for RMS/CMS). The 2026-10-14 NO worksharing rows add
+    # 8 more P+Q+R rows (IB + 3xII for RMS/CMS). The 2026-10-14 PL worksharing rows add
+    # 2 P+Q+R rows (II for RMS/CMS) and 2 P+Q rows (IB for RMS/CMS) -- PL worksharing
+    # mirrors the per-variation PL standard rows (so §8.1 grouping applies), not a flat
+    # fee, hence the IB rows report P+Q like the PL standard IB rows. Resulting tally:
     rules = build_rules()
     from collections import Counter
     cnt = Counter(r["totalScope"]["scope"] for r in rules)
-    assert cnt["P+Q+R"] == 199  # +4: LT worksharing IB/II (RMS/CMS)
+    assert cnt["P+Q+R"] == 209  # +2: PL worksharing II (RMS/CMS)
     assert cnt["P"] == 105  # +1: DK super-grouping lead fee (IA, scope P)
-    assert cnt["P+Q"] == 104
+    assert cnt["P+Q"] == 106  # +2: PL worksharing IB (RMS/CMS)
     assert cnt["direct"] == 30
     assert cnt["unparsed"] == 6
-    assert sum(cnt.values()) == 444
+    assert sum(cnt.values()) == 456
 
 
 def test_belgium_row_35_is_a_direct_gated_flat_total():

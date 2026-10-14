@@ -353,9 +353,14 @@
     if (field === 'label') return baseText(row, 'label') || String(row.special || '');
     return baseText(row, field);
   }
+  // Highlighted only when the stored caption still differs from the shipped one.
+  // A caption override that the workbook has since caught up with is no longer a
+  // change, so it stops being marked -- same rule as the amount cells and the
+  // picker pill (see fieldDeviates / countryEdited).
   function textEdited(row, field) {
     var e = edits[row.row];
-    return !!(e && Object.prototype.hasOwnProperty.call(e, field));
+    if (!e || !Object.prototype.hasOwnProperty.call(e, field)) return false;
+    return fieldDeviates(row, field, e[field]);
   }
   function setText(row, field, raw) {
     var value = String(raw === null || raw === undefined ? '' : raw).trim();
@@ -436,16 +441,44 @@
     }
     return baseValue(row, col, mode);
   }
+  // Highlighted only when the stored amount still deviates from the shipped (or,
+  // for a coupled cell, the derived) value. An override the shipped table has
+  // since caught up with reads as unchanged, so the cell -- and with it the
+  // picker pill -- stops being marked. See fieldDeviates / countryEdited.
   function isEdited(row, col, mode) {
     var e = edits[row.row];
-    return !!(e && Object.prototype.hasOwnProperty.call(e, fieldName(col, mode)));
+    var f = fieldName(col, mode);
+    if (!e || !Object.prototype.hasOwnProperty.call(e, f)) return false;
+    return fieldDeviates(row, f, e[f]);
   }
-  // True when the country carries any amount override, saved or not -- a lasting
-  // "this country deviates from the shipped table" mark for the picker pills.
+  // True when a single stored row-edit field still deviates from what the plugin
+  // ships. A saved override whose value has since caught up with the shipped table
+  // (the authority's amount changed to match, or it predates the no-op pruning in
+  // setEdit/setText) is NOT a deviation -- counting it is what kept a country lit
+  // "edited" in the picker with nothing actually changed.
+  function fieldDeviates(row, f, val) {
+    if (f === 'fee_code' || f === 'label') {
+      var shipped = (f === 'label') ? (baseText(row, 'label') || String(row.special || ''))
+                                    : baseText(row, f);
+      return String(val) !== shipped;
+    }
+    var mode = /_lc$/.test(f) ? 'lc' : 'eur';
+    var col = (mode === 'lc') ? f.slice(0, -3) : f;
+    var base = linkFor(row, col) ? derivedValue(row, col, mode) : baseValue(row, col, mode);
+    return !nearlyEqual(typeof val === 'number' ? val : parseFloat(val), base);
+  }
+  function rowDeviates(row) {
+    var e = edits[row.row];
+    return !!e && Object.keys(e).some(function (f) { return fieldDeviates(row, f, e[f]); });
+  }
+  // True when the country carries any amount override that still deviates from the
+  // shipped table, saved or not -- a lasting "this country differs" mark for the
+  // picker pills. Point and annual edits are already pruned to real deviations on
+  // save, so they can be counted by mere presence; row edits are checked by value.
   function countryEdited(cc) {
     if (pointEdits[cc] !== undefined) return true;
     if (annualEditCount(cc) > 0) return true;
-    return rowsFor(cc).some(function (r) { return edits[r.row] && Object.keys(edits[r.row]).length; });
+    return rowsFor(cc).some(rowDeviates);
   }
   // True when this country changed in THIS session and is not yet saved -- what
   // the masthead's "ungespeicherte Änderungen" bit reflects, so it clears after
@@ -462,14 +495,15 @@
   }
 
   /** Maintained provenance fields, counted the same way vcl_count_fee_overrides()
-   *  counts them in PHP: the typed checked date and source, never the stamped
-   *  'updated'. */
+   *  counts them in PHP: the typed checked date, the source and the authority link,
+   *  never the stamped 'updated'. */
   function provCount() {
     var n = 0;
     Object.keys(countryOverrides).forEach(function (cc) {
       var e = countryOverrides[cc] || {};
       if (e.checked) { n++; }
       if (e.source) { n++; }
+      if (e.linkUrl) { n++; }
     });
     return n;
   }
@@ -518,6 +552,7 @@
       var now = countryOverrides[cc] || {}, was = savedCountries[cc] || {};
       if ((now.checked || '') !== (was.checked || '')) { n++; }
       if ((now.source || '') !== (was.source || '')) { n++; }
+      if ((now.linkUrl || '') !== (was.linkUrl || '')) { n++; }
     });
 
     seen = {};
@@ -573,7 +608,9 @@
     Object.keys(countryOverrides).concat(Object.keys(savedCountries)).forEach(function (cc) {
       var now = countryOverrides[cc] || {};
       var old = savedCountries[cc] || {};
-      if ((now.checked || '') !== (old.checked || '') || (now.source || '') !== (old.source || '')) {
+      if ((now.checked || '') !== (old.checked || '')
+          || (now.source || '') !== (old.source || '')
+          || (now.linkUrl || '') !== (old.linkUrl || '')) {
         prov[cc] = true;
       }
     });
@@ -928,7 +965,7 @@
     var note = document.createElement('p');
     note.className = 'vclfe-prov__note';
     note.textContent = 'Das Änderungsdatum wird beim Speichern automatisch gesetzt. '
-      + 'Behördenlink und Zahlungsweise stammen aus der Excel und sind hier nicht änderbar.';
+      + 'Der Behördenlink lässt sich oben unter dem Kommentar bearbeiten; die Zahlungsweise stammt aus der Excel.';
     meta.appendChild(note);
 
     host.appendChild(meta);
@@ -1019,6 +1056,41 @@
       var v = input.value;
       if (v.trim() === '' || v === base) { delete countryOverrides[activeCc].source; }
       else { countryOverrides[activeCc].source = v; }
+      applyToEngine();
+    });
+    wrap.appendChild(span);
+    wrap.appendChild(input);
+    host.appendChild(wrap);
+  }
+
+  // The editable authority fee-page link, under the comment line. The Excel ships a
+  // link_url per country, but authorities move these pages often, so the maintainer
+  // can type a new one here without waiting for a workbook rebuild. Stored as the
+  // `linkUrl` override; clearing it (or typing the Excel URL back) drops the override
+  // and follows the workbook again. The public fee page and the masthead above both
+  // prefer this override over the shipped link.
+  function renderHaLink(ha) {
+    var host = document.getElementById('vclfe-halink');
+    if (!host) { return; }
+    host.textContent = '';
+    var base = (ha && ha.link_url) || '';
+    var ov = (countryOverrides[activeCc] || {}).linkUrl;
+
+    var wrap = document.createElement('label');
+    wrap.className = 'vclfe-comment__f';
+    var span = document.createElement('span');
+    span.textContent = 'Behördenlink / Gebührenseite (URL)'
+      + ((ha && ha.link_text) ? ' — ' + ha.link_text : '');
+    var input = document.createElement('input');
+    input.type = 'url';
+    input.className = 'vclfe-comment__input';
+    input.value = (ov !== undefined && ov !== null) ? ov : base;
+    input.placeholder = base || 'https://…';
+    input.addEventListener('input', function () {
+      if (!countryOverrides[activeCc]) { countryOverrides[activeCc] = {}; }
+      var v = input.value.trim();
+      if (v === '' || v === base) { delete countryOverrides[activeCc].linkUrl; }
+      else { countryOverrides[activeCc].linkUrl = v; }
       applyToEngine();
     });
     wrap.appendChild(span);
@@ -1200,6 +1272,7 @@
     if (countryUnsaved(activeCc)) metaBit(meta, 'ungespeicherte Änderungen');
 
     renderComment(ha);
+    renderHaLink(ha);
     renderAdminFee();
     renderItWsFees();
 
@@ -1399,12 +1472,15 @@
   // fee page in a new tab. Null when the HA sheet has no link for this country.
   function authorityBit(ha) {
     if (!ha || !ha.link_text) { return null; }
+    // The override wins over the Excel link, so the masthead shows the same URL the
+    // maintainer just typed below and the public fee page will use.
+    var url = ((countryOverrides[activeCc] || {}).linkUrl) || ha.link_url;
     var s = document.createElement('span');
     s.className = 'vclfe-prov-ha';
     s.appendChild(document.createTextNode('Behörde '));
-    if (ha.link_url) {
+    if (url) {
       var a = document.createElement('a');
-      a.href = ha.link_url;
+      a.href = url;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = ha.link_text;

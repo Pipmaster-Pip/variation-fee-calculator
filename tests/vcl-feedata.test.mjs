@@ -36,6 +36,14 @@ test("countryMeta: an override wins over the shipped value", () => {
   assert.equal(m.checked, "2026-08-30");
   assert.equal(m.source, "Nuovo decreto");
   assert.equal(m.linkText, "AIFA", "an override must not disturb the shipped link");
+  assert.equal(m.linkUrl, "https://www.aifa.gov.it/tariffe", "no link override -> shipped URL");
+});
+
+test("countryMeta: a linkUrl override wins over the shipped authority link", () => {
+  const ov = { countries: { IT: { linkUrl: "https://www.aifa.gov.it/nuove-tariffe" } } };
+  const m = F.countryMeta("IT", HA, CUR, ov);
+  assert.equal(m.linkUrl, "https://www.aifa.gov.it/nuove-tariffe");
+  assert.equal(m.linkText, "AIFA", "the link text still comes from the workbook");
 });
 
 test("countryMeta: an unknown country yields empty fields, never a throw", () => {

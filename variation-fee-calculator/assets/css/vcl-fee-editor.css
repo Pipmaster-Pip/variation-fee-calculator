@@ -161,8 +161,11 @@
   background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;
 }
 .vclfe-pill.is-active .n{color:rgba(255,255,255,.78)}
-.vclfe-pill.is-edited{border-color:var(--amber); background:var(--amber-soft)}
-.vclfe-pill.is-active.is-edited{background:var(--accent); border-color:var(--amber)}
+/* Override marker disabled per user request (2026-10-14): a cell/country that
+   deviates from the shipped data is no longer tinted amber. The is-edited class
+   is still set in JS (it also drives the coupled-cell logic), but renders like an
+   unedited one. To restore the "this deviates from the shipped table" cue, bring
+   back the amber rules here and for the inputs/amount fields further down. */
 .vclfe-pillnone{margin:2px 0; font-size:13px; color:var(--ink-faint)}
 
 /* ---- role groups ------------------------------------------------------- */
@@ -231,10 +234,7 @@
 }
 #vclfe-root input.vclfe-label:hover,
 #vclfe-root input.vclfe-codeinput:hover{border-color:var(--accent)}
-#vclfe-root input.vclfe-label.is-edited,
-#vclfe-root input.vclfe-codeinput.is-edited{
-  border-style:solid; border-color:var(--amber); background:var(--amber-soft); color:var(--ink);
-}
+/* Override marker disabled (see pills above): label/code overrides are not tinted. */
 
 #vclfe-root input.vclfe-amount{
   font-family:var(--figure); font-size:12.5px; font-variant-numeric:tabular-nums;
@@ -244,9 +244,7 @@
 }
 #vclfe-root input.vclfe-amount:hover{border-color:var(--accent)}
 #vclfe-root input.vclfe-amount.is-zero{color:var(--ink-faint)}
-#vclfe-root input.vclfe-amount.is-edited{
-  border-color:var(--amber); background:var(--amber-soft); color:var(--ink);
-}
+/* Override marker disabled (see pills above): amount overrides are not tinted. */
 #vclfe-root input.vclfe-amount.is-bad{border-color:#b32d2e; background:#fbeaea}
 .vclfe-empty{color:var(--ink-faint)}
 

@@ -7,15 +7,18 @@ from matrix import build_matrix
 ROWS = load_fee_rows()
 
 
-def test_the_data_file_still_holds_444_rows():
+def test_the_data_file_still_holds_456_rows():
     # 421 shipped + 15 (BG MRP/DCP, CZ "neue Studie", DK worksharing) + 3 (IE RMS
     # reduced/complex-reduced variants) + 1 (DK super-grouping lead fee 3119),
-    # all 2026-10-12; + 4 (LT worksharing IB/II for RMS/CMS, 3a.1/3a.2), 2026-10-13.
-    assert len(ROWS) == 444
+    # all 2026-10-12; + 4 (LT worksharing IB/II for RMS/CMS, 3a.1/3a.2), 2026-10-13;
+    # + 8 (NO worksharing: IB + 3xII [ther. indication, harmonisation of SmPC,
+    # standard] for RMS/CMS), 2026-10-14; + 4 (PL worksharing IB/II for RMS/CMS,
+    # Dz.U. 2015 poz. 958), 2026-10-14.
+    assert len(ROWS) == 456
 
 
 def test_matrix_has_the_size_the_spec_states():
-    assert len(build_matrix(ROWS)) == 208215
+    assert len(build_matrix(ROWS)) == 219555
 
 
 def test_matrix_contains_the_hand_checked_italian_case():

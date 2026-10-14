@@ -122,6 +122,7 @@ function vcl_annual_fee_structure() {
  *        'points' => array( '<cc>' => float ),
  *        'countries' => array( '<CC>' => array( 'checked' => 'Y-m-d',
  *                                               'source' => string,
+ *                                               'linkUrl' => string,
  *                                               'updated' => 'Y-m-d' ) ),
  *        'annual' => array( '<CC>' => array( '<tariffId>' => array( 'base' => float,
  *                                                                   'addStrength' => float ) ) ),
@@ -260,6 +261,21 @@ function vcl_sanitize_fee_overrides( $payload ) {
 			if ( ! empty( $fields['source'] ) ) {
 				if ( is_scalar( $fields['source'] ) ) {
 					$entry['source'] = sanitize_text_field( (string) $fields['source'] );
+				} else {
+					$dropped++;
+				}
+			}
+			// Authority fee-page link the maintainer can override (the Excel's moves often).
+			// esc_url_raw keeps it to http(s) and strips anything that is not a safe URL; a
+			// value that sanitises to empty is dropped, so the row follows the workbook again.
+			if ( ! empty( $fields['linkUrl'] ) ) {
+				if ( is_scalar( $fields['linkUrl'] ) ) {
+					$url = esc_url_raw( trim( (string) $fields['linkUrl'] ) );
+					if ( '' !== $url ) {
+						$entry['linkUrl'] = $url;
+					} else {
+						$dropped++;
+					}
 				} else {
 					$dropped++;
 				}
@@ -500,7 +516,7 @@ function vcl_count_fee_overrides( $overrides ) {
 	// save rather than typed, so it is not a maintained value.
 	if ( ! empty( $overrides['countries'] ) && is_array( $overrides['countries'] ) ) {
 		foreach ( $overrides['countries'] as $fields ) {
-			foreach ( array( 'checked', 'source' ) as $key ) {
+			foreach ( array( 'checked', 'source', 'linkUrl' ) as $key ) {
 				if ( ! empty( $fields[ $key ] ) ) {
 					$n++;
 				}
@@ -823,6 +839,8 @@ function vcl_render_fees_tab() {
 						<p class="vclfe-meta" id="vclfe-meta"></p>
 						<!-- Editable HA-sheet "Comments" line, filled by vcl-fee-editor.js. -->
 						<div class="vclfe-comment" id="vclfe-comment"></div>
+						<!-- Editable authority fee-page link (changes often), filled by vcl-fee-editor.js. -->
+						<div class="vclfe-comment" id="vclfe-halink"></div>
 						<!-- Editable per-application admin fee, filled by vcl-fee-editor.js. -->
 						<div class="vclfe-comment" id="vclfe-adminfee"></div>
 						<!-- IT-only worksharing/super-grouping per-product amounts, filled by vcl-fee-editor.js. -->
