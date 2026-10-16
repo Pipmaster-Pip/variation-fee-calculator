@@ -181,6 +181,8 @@
   color:var(--ink);
 }
 .vclcalc-app .country-search:focus{ outline:none; border-color:var(--accent); }
+.vclcalc-app .vclcalc-cty-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+.vclcalc-app .vclcalc-cty-actions{ display:flex; gap:8px; flex-shrink:0; }
 .vclcalc-app .country-grid{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(120px,1fr));

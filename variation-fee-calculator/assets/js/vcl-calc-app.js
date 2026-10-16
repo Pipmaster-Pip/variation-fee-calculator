@@ -964,6 +964,10 @@ window.VCLCALC = {
   // name go through this instead of reading `special` directly.
   variantLabel(r) { return variantLabel(r); },
   variantLabelFor(cc, role, type, special) { return variantLabelFor(cc, role, type, special); },
+  // Per-type breakdown (Variation / Special case / Base fee / Per add. strength / Line total + the
+  // grouping/cap mechanic) for ONE country priced with a caller-supplied config + counts. Lets the
+  // WS/SG Fee Calculator render the same detail table as this calculator's result step.
+  countryBreakdown(cc, cfg, counts) { return computeCountryBreakdown(cc, null, cfg, counts); },
   computeFees(input) {
     const counts = { IA: 0, IB: 0, II: 0 };
     if (input && input.counts) ['IA', 'IB', 'II'].forEach((t) => { counts[t] = Math.max(0, parseInt(input.counts[t], 10) || 0); });
@@ -1181,22 +1185,21 @@ function wireCalcInfoPanels() {
 // ---- Step 0: select one or more countries ----
 function renderStepCountries() {
   const codes = Object.keys(COUNTRY_NAMES).sort((a,b) => COUNTRY_NAMES[a].localeCompare(COUNTRY_NAMES[b],'en'));
-  const q = appState.countrySearch.trim().toLowerCase();
-  const filtered = codes.filter(c => !q || COUNTRY_NAMES[c].toLowerCase().includes(q) || c.toLowerCase().includes(q));
   const n = appState.selectedCountries.length;
 
   contentEl.innerHTML = `
     <div class="panel">
-      <h2>Which countries is the variation being submitted in?</h2>
+      <div class="vclcalc-cty-head">
+        <h2 style="margin:0;">Which countries is the variation being submitted in?</h2>
+        <div class="vclcalc-cty-actions">
+          <button class="btn ghost" id="vclcalc-selectAll" style="white-space:nowrap;">Select all</button>
+          <button class="btn ghost" id="vclcalc-resetSelection" ${n===0?'disabled':''} style="white-space:nowrap;">Reset</button>
+        </div>
+      </div>
       <p class="hint">Select one or more markets. You'll set the procedure role and number of strengths for each country next, then choose the variations once — they'll apply to every selected country.</p>
       ${appState.prefillNote ? `<div class="prefill-note"><strong>Taken over from your summary:</strong> ${appState.prefillNote}. You can still adjust the numbers at the Variations step.</div>` : ''}
-      <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center; flex-wrap:wrap;">
-        <input type="text" class="country-search" id="vclcalc-countrySearch" placeholder="Search for a country…" value="${appState.countrySearch}" style="flex:1; min-width:180px; margin-bottom:0;">
-        <button class="btn ghost" id="vclcalc-selectAll" style="white-space:nowrap;">Select all</button>
-        <button class="btn ghost" id="vclcalc-resetSelection" ${n===0?'disabled':''} style="white-space:nowrap;">Reset</button>
-      </div>
       <div class="country-grid" id="vclcalc-countryGrid">
-        ${filtered.map(c => `
+        ${codes.map(c => `
           <button class="country-tile ${appState.selectedCountries.includes(c)?'selected':''}" data-cc="${c}">
             <span class="cc">${c}</span>
             <span class="cn">${tileName(c)}</span>
@@ -1206,15 +1209,10 @@ function renderStepCountries() {
     </div>
     <div class="nav-row">
       <span class="hint" style="margin:0;">${n} countr${n===1?'y':'ies'} selected</span>
-      <button class="btn primary" id="vclcalc-toStep2" ${n===0?'disabled':''}>Continue</button>
+      <button class="btn primary" id="vclcalc-toStep2" ${n===0?'disabled':''}>Next</button>
     </div>
     ${calcInfoPanelsHtml()}
   `;
-
-  document.getElementById('vclcalc-countrySearch').addEventListener('input', (e) => {
-    appState.countrySearch = e.target.value;
-    renderStepCountries();
-  });
 
   document.getElementById('vclcalc-selectAll').addEventListener('click', () => {
     codes.forEach(c => {
@@ -1275,7 +1273,7 @@ function renderStepCountryDetails() {
     </div>
     <div class="nav-row">
       <button class="btn primary" id="vclcalc-back1">← Back</button>
-      <button class="btn primary" id="vclcalc-toStep3">Continue</button>
+      <button class="btn primary" id="vclcalc-toStep3">Next</button>
     </div>
     ${calcInfoPanelsHtml()}
   `;
@@ -1940,9 +1938,12 @@ function computeResult() {
 //     that cost. Per variation is the same, one variation at a time.
 //   - cap: each type is priced on its own (uncapped); rawEur is their sum, which the footer
 //     then caps down to the real (capped) total.
-function computeCountryBreakdown(cc, full) {
-  const cfg = ensureCountryConfig(cc);
-  const counts = appState.globalCounts;
+// cfgArg / countsArg let a caller outside the classic wizard (the WS/SG Fee Calculator flow) price a
+// country's per-type breakdown with its OWN config + counts instead of the classic appState. The
+// classic calls pass neither and keep reading appState exactly as before.
+function computeCountryBreakdown(cc, full, cfgArg, countsArg) {
+  const cfg = cfgArg || ensureCountryConfig(cc);
+  const counts = countsArg || appState.globalCounts;
   const s = cfg.strengths;
   const cr = full || computeCountryResult(cc, cfg, counts, true);
 

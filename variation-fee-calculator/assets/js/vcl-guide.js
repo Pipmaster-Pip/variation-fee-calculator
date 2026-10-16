@@ -20,7 +20,7 @@
         "<b>4. Result</b>: please view results per country, including export to Excel.",
       ],
       further: [
-        "Worksharing, Annual-Update and Super-Grouping are not calculated here, please use the Guided Workflow instead.",
+        "Worksharing and Super-Grouping now have their own guided flow here: use the “⇄ Worksharing / Super-Grouping” button in the calculator header to open it. It runs through four stations — Procedures (the lead RMS and all procedures), Strengths, Variations (incl. per-country special cases) and Fees (grouped by procedure, with print and Excel export). Annual Update is still calculated in the Guided Workflow.",
         "It is displayed when a grouping fee or a cap fee applies.",
         "In the results, you can switch between Euro and the national currency.",
         "Live exchange rates are retrieved via the Frankfurt API (ECB reference rates), fetched once a day and cached in the browser – covering CZK, DKK, HUF, ISK, NOK, PLN, SEK, GBP and CHF.",

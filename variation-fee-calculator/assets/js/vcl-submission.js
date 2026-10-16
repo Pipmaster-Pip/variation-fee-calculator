@@ -114,6 +114,43 @@
         && (!r.special || /^standard$/i.test(r.special));
     });
   }
+  // Per-TYPE variants (the fee-category choice is per type, like the classic calculator's Special
+  // cases panel), used by the WS Fee Calculator's per-type special picker. Mirror the all-types
+  // helpers above but filter to a single variation type.
+  function specialOptionsForType(cc, role, type, engines) {
+    var seen = {}, out = [];
+    engines.feeRows.forEach(function (r) {
+      if (r.cc !== cc || r.role !== role || r.type !== type) return;
+      var s = r.special;
+      if (!s || /^standard$/i.test(s) || seen[s]) return;
+      seen[s] = 1; out.push(s);
+    });
+    return out;
+  }
+  function hasStandardRowType(cc, role, type, engines) {
+    return engines.feeRows.some(function (r) {
+      return r.cc === cc && r.role === role && r.type === type && (!r.special || /^standard$/i.test(r.special));
+    });
+  }
+  function wsOptionsForType(cc, role, type, engines) {
+    var all = specialOptionsForType(cc, role, type, engines).filter(function (s) { return !isSuperGroupingSpecial(s); });
+    var ws = all.filter(isWorksharingSpecial);
+    return ws.length ? ws : all;
+  }
+  function leadOptionsForType(sub, cc, role, type, engines) {
+    if (sgActive(sub)) {
+      var sg = specialOptionsForType(cc, role, type, engines).filter(isSuperGroupingSpecial);
+      if (sg.length) return sg;
+    }
+    return wsOptionsForType(cc, role, type, engines);
+  }
+  // Resolve a stored special that may be a per-type object { IA, IB, II } (WS Fee Calculator) or a
+  // plain string (Guided Workflow / Budget, one category for all types). Legacy string -> that
+  // string for every type; null/undefined -> null.
+  function storedSpecialFor(raw, type) {
+    if (raw && typeof raw === "object") return type ? (raw[type] || null) : null;
+    return raw || null;
+  }
   // A non-lead RMS of an MRP/DCP inside a Worksharing or Super-Grouping pays its
   // worksharing-CMS fee, not its standalone RMS fee.
   var WS_RMS_PRICES_AS = "CMS";
@@ -156,9 +193,11 @@
     }
     return null;
   }
-  function wsSpecialFor(sub, cc, role, engines) {
-    var opts = wsOptionsFor(sub, cc, role, engines);
-    var stored = sub.specials.ws[wsSpecialKey(cc, role)];
+  // `type` (optional) selects the per-type fee category -- the WS Fee Calculator stores one choice
+  // per IA/IB/II; without it the all-active-types options are used (legacy, Guided Workflow).
+  function wsSpecialFor(sub, cc, role, engines, type) {
+    var opts = type ? wsOptionsForType(cc, role, type, engines) : wsOptionsFor(sub, cc, role, engines);
+    var stored = storedSpecialFor(sub.specials.ws[wsSpecialKey(cc, role)], type);
     if (stored && opts.indexOf(stored) !== -1) return stored;
     return defaultSpecial(sub, cc, role, opts, engines);
   }
@@ -174,13 +213,14 @@
     if (stored && opts.indexOf(stored) !== -1) return stored;
     return defaultSpecial(sub, cc, role, opts, engines);
   }
-  // Same rule for the lead's own pick.
-  function leadSpecial(sub, engines) {
+  // Same rule for the lead's own pick (per-type when `type` is given, like wsSpecialFor).
+  function leadSpecial(sub, engines, type) {
     if (!sub.lead) return null;
-    var opts = leadOptionsFor(sub, sub.lead, leadPricingRole(sub, engines), engines);
-    var stored = sub.specials.lead;
+    var role = leadPricingRole(sub, engines);
+    var opts = type ? leadOptionsForType(sub, sub.lead, role, type, engines) : leadOptionsFor(sub, sub.lead, role, engines);
+    var stored = storedSpecialFor(sub.specials.lead, type);
     if (stored && opts.indexOf(stored) !== -1) return stored;
-    return defaultSpecial(sub, sub.lead, leadPricingRole(sub, engines), opts, engines);
+    return defaultSpecial(sub, sub.lead, role, opts, engines);
   }
   // The role the lead is priced under: the EMA as EMA; otherwise RMS where the authority
   // publishes RMS rows, falling back to national, then CMS.
@@ -203,8 +243,12 @@
     });
     return list.filter(function (x) { return x.cc !== sub.lead; }).map(function (x) {
       var role = wsPricingRole(x.role);
-      var s = wsSpecialFor(sub, x.cc, role, engines);
-      return { cc: x.cc, role: role, strengths: x.strengths, special: { IA: s, IB: s, II: s } };
+      // Per-type fee category (IA/IB/II resolved independently), so a country can carry e.g. a
+      // standard IB and an "analytical" II, exactly like the classic calculator's Special cases.
+      return { cc: x.cc, role: role, strengths: x.strengths, special: {
+        IA: wsSpecialFor(sub, x.cc, role, engines, "IA"),
+        IB: wsSpecialFor(sub, x.cc, role, engines, "IB"),
+        II: wsSpecialFor(sub, x.cc, role, engines, "II") } };
     });
   }
   // Fees for one procedure, via the shared engine (engines.computeFees).
@@ -223,10 +267,10 @@
   function leadFees(sub, counts, engines) {
     if (!leadPricingActive(sub) || !sub.lead || !engines.computeFees) return null;
     if (feeCountsTotal(counts) === 0) return null;
-    var s = leadSpecial(sub, engines);
     var role = leadPricingRole(sub, engines);
     var r = engines.computeFees({
-      countries: [{ cc: sub.lead, role: role, strengths: strengthsFor(sub, sub.lead), special: { IA: s, IB: s, II: s } }],
+      countries: [{ cc: sub.lead, role: role, strengths: strengthsFor(sub, sub.lead), special: {
+        IA: leadSpecial(sub, engines, "IA"), IB: leadSpecial(sub, engines, "IB"), II: leadSpecial(sub, engines, "II") } }],
       counts: counts,
       adminFees: false, processFees: false,  // charged once at the submission level
     });
@@ -270,7 +314,7 @@
   // real base rate rather than a hard-coded assumption. Marginal = fee(II=2) - fee(II=1).
   function itMarginalTypeIIRate(sub, role, engines) {
     if (!engines.computeFees) return null;
-    var special = (sub.lead === IT_CC) ? leadSpecial(sub, engines) : wsSpecialFor(sub, IT_CC, role, engines);
+    var special = (sub.lead === IT_CC) ? leadSpecial(sub, engines, "II") : wsSpecialFor(sub, IT_CC, role, engines, "II");
     var sp = { IA: null, IB: null, II: special };
     function fee(n) {
       var r = engines.computeFees({ countries: [{ cc: IT_CC, role: role, strengths: 1, special: sp }],
@@ -325,18 +369,27 @@
     var counts = feeCounts(sub);
     if (feeCountsTotal(counts) === 0) return { total: null, byCountry: [] };
     var byCc = {}; var total = 0; var any = false; var roleByCc = {};
+    // Additive per-country component breakdown (new; existing total/byCountry are unchanged, so the
+    // Guided Workflow and Budget keep working and simply ignore `details`). Captures the pieces that
+    // make up each country's total -- the worksharing/super-grouping variation fee, the lead one-off,
+    // admin, process and the IT per-product adjustment -- plus its currency/fx for a local view.
+    var detByCc = {};
+    function det(cc) {
+      return detByCc[cc] || (detByCc[cc] = { cc: cc, role: null, currency: null, fxRate: null,
+        varFee: 0, lead: 0, it: 0, admin: 0, process: 0, adminLocal: null, adminCurrency: null });
+    }
     allPricedProcedures(sub).forEach(function (p) {
       // The role each country is priced under this procedure, for the process fee below.
-      procPricedCountries(sub, p, engines).forEach(function (x) { if (roleByCc[x.cc] === undefined) roleByCc[x.cc] = x.role; });
+      procPricedCountries(sub, p, engines).forEach(function (x) { if (roleByCc[x.cc] === undefined) roleByCc[x.cc] = x.role; if (!det(x.cc).role) det(x.cc).role = x.role; });
       var r = procFees(sub, p, counts, engines);
       if (!r) return;
       total += r.grandTotal || 0;
       if (procCountries(sub, p, engines).length) any = true;
-      (r.countries || []).forEach(function (c) { byCc[c.cc] = (byCc[c.cc] || 0) + (c.total || 0); });
+      (r.countries || []).forEach(function (c) { byCc[c.cc] = (byCc[c.cc] || 0) + (c.total || 0); var dc = det(c.cc); dc.varFee += (c.total || 0); if (c.currency) { dc.currency = c.currency; dc.fxRate = c.fxRate; } });
     });
     if (leadPricingActive(sub)) {
       var lf = leadFees(sub, counts, engines);
-      if (lf) { total += lf.total || 0; byCc[lf.cc] = (byCc[lf.cc] || 0) + (lf.total || 0); any = true; }
+      if (lf) { total += lf.total || 0; byCc[lf.cc] = (byCc[lf.cc] || 0) + (lf.total || 0); any = true; var dl = det(lf.cc); dl.lead += (lf.total || 0); dl.role = leadPricingRole(sub, engines); if (lf.currency) { dl.currency = lf.currency; dl.fxRate = lf.fxRate; } }
     }
     // Per-application admin fee (CZ 2000 CZK, EE 16 EUR, ...): once per distinct
     // involved country, no matter how many procedures it took part in. The
@@ -350,6 +403,7 @@
         adminSeen[af.cc] = true;
         total += af.eur;
         byCc[cc] = (byCc[cc] || 0) + af.eur;
+        var dadm = det(cc); dadm.admin += af.eur; dadm.adminLocal = af.amountLocal; dadm.adminCurrency = af.currency;
         any = true;
       });
     }
@@ -363,6 +417,7 @@
         if (!pf) return;
         total += pf;
         byCc[cc] = (byCc[cc] || 0) + pf;
+        det(cc).process += pf;
         any = true;
       });
     }
@@ -372,10 +427,24 @@
     if (itAdj) {
       total += itAdj;
       byCc[IT_CC] = (byCc[IT_CC] || 0) + itAdj;
+      det(IT_CC).it += itAdj;
       any = true;
     }
     var byCountry = Object.keys(byCc).map(function (cc) { return { cc: cc, total: byCc[cc] }; });
-    return { total: any ? total : null, byCountry: byCountry };
+    // Build the per-country component list (sums to byCc[cc]). Labels follow the submission mode.
+    var varLbl = sgActive(sub) ? "Super-Grouping fee" : (wsActive(sub) ? "Worksharing fee" : "Variation fee");
+    var leadLbl = sgActive(sub) ? "Super-Grouping lead fee" : "Worksharing lead fee";
+    var details = Object.keys(detByCc).map(function (cc) {
+      var d = detByCc[cc];
+      var comps = [];
+      if (d.varFee) comps.push({ label: varLbl, eur: d.varFee });
+      if (d.lead) comps.push({ label: leadLbl, eur: d.lead });
+      if (d.it) comps.push({ label: "Per-product adjustment (AIFA)", eur: d.it });
+      if (d.admin) comps.push({ label: "Administrative fee (once per application)", eur: d.admin, local: d.adminLocal, currency: d.adminCurrency });
+      if (d.process) comps.push({ label: "Process fee (once per application)", eur: d.process });
+      return { cc: cc, role: d.role, currency: d.currency, fxRate: d.fxRate, components: comps, total: byCc[cc] || 0 };
+    });
+    return { total: any ? total : null, byCountry: byCountry, details: details, mode: sub.mode || null };
   }
 
   // RA effort via the additive workload model (engines.workload + engines.workloadData, generated
@@ -431,6 +500,8 @@
     multiProcedureMode: multiProcedureMode, annualUpdateActive: annualUpdateActive, displayMode: displayMode,
     emaCc: emaCc, strengthsFor: strengthsFor, procCountries: procCountries,
     specialOptionsFor: specialOptionsFor, hasStandardRow: hasStandardRow,
+    specialOptionsForType: specialOptionsForType, hasStandardRowType: hasStandardRowType,
+    wsOptionsForType: wsOptionsForType, leadOptionsForType: leadOptionsForType,
     wsPricingRole: wsPricingRole, wsSpecialKey: wsSpecialKey, isWorksharingSpecial: isWorksharingSpecial,
     isSuperGroupingSpecial: isSuperGroupingSpecial, leadOptionsFor: leadOptionsFor,
     wsOptionsFor: wsOptionsFor, defaultSpecial: defaultSpecial, wsSpecialFor: wsSpecialFor,

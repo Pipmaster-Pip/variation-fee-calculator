@@ -201,6 +201,22 @@
   // and uses the same admin-editable "Reference"/"Last updated" mechanism (key "calculator").
   // The last-updated fallback comes from the calculator's own fee-data date once its script
   // has booted (window.VCLCALC_META); re-run on first open so a late boot still shows it.
+  // --- Worksharing / Super-Grouping toggle. The classic single/grouping calculator (#vclcalc-app)
+  // is left completely untouched; this only shows/hides it and reveals the procedure-first WS/SG
+  // flow (#vcl-wsMount, rendered once by vcl-ws.js) in its place. The same head button flips back. ---
+  let wsMode = false;
+  let wsRendered = false;
+  function applyWsMode() {
+    const calcApp = document.getElementById("vclcalc-app");
+    const wsMount = document.getElementById("vcl-wsMount");
+    if (!calcApp || !wsMount) return;
+    if (wsMode && !wsRendered && window.VCL_WS) { window.VCL_WS.render(wsMount); wsRendered = true; }
+    calcApp.classList.toggle("hidden", wsMode);
+    wsMount.classList.toggle("hidden", !wsMode);
+    const btn = el.calcHead && el.calcHead.querySelector("#vcl-calcWsBtn");
+    if (btn) btn.textContent = wsMode ? "⇄ Classic Calculator" : "⇄ Worksharing / Super-Grouping";
+  }
+
   function fillCalcHead() {
     if (!el.calcHead) return;
     const calcUpdated = (window.VCLCALC_META && window.VCLCALC_META.lastUpdated) || "see fee schedules";
@@ -209,7 +225,10 @@
       <p>${introHtml("calculator", "Calculate the official regulatory fees for variation applications (Type IA / IB / II) across one or more markets &mdash; EU-27, EMA, CH, IS, NO, UK and RS. Select markets and roles, set the number of strengths, then choose the variations.")}</p>
       <p class="ref-line">Reference: ${referenceText("calculator", "Official fee schedules of the respective authorities (EU-27, EMA, CH, IS, NO, UK, RS).")}</p>
       <p class="ref-updated">Last updated in Variation Toolbox: ${lastUpdated("calculator", calcUpdated)}</p>
-      <p class="calc-head-actions"><button type="button" class="calc-feedata-btn" id="vcl-calcFeeDataBtn">Fee data &mdash; country details</button></p>
+      <p class="calc-head-actions">
+        <button type="button" class="calc-feedata-btn" id="vcl-calcFeeDataBtn">Fee data &mdash; country details</button>
+        <button type="button" class="calc-feedata-btn" id="vcl-calcWsBtn">${wsMode ? "⇄ Classic Calculator" : "⇄ Worksharing / Super-Grouping"}</button>
+      </p>
     `;
     // Entry point into the public fee-data page. It replaces both the Excel download link that
     // used to sit here (the workbook is no longer maintained) and the "Fee data by country" box
@@ -219,9 +238,20 @@
     const feeDataBtn = el.calcHead.querySelector("#vcl-calcFeeDataBtn");
     if (feeDataBtn) {
       feeDataBtn.addEventListener("click", () => {
+        if (wsMode) { wsMode = false; applyWsMode(); } // fee data belongs to the classic calculator
         if (window.VCLCALC && window.VCLCALC.openFeeData) window.VCLCALC.openFeeData();
       });
     }
+    // The toggle into / out of the Worksharing / Super-Grouping flow.
+    const wsBtn = el.calcHead.querySelector("#vcl-calcWsBtn");
+    if (wsBtn) {
+      wsBtn.addEventListener("click", () => {
+        wsMode = !wsMode;
+        applyWsMode();
+        if (window.VCL_APP && window.VCL_APP.scrollToContentTop) window.VCL_APP.scrollToContentTop();
+      });
+    }
+    applyWsMode(); // sync container visibility + button label with the current mode
   }
   fillCalcHead();
 
@@ -4038,12 +4068,14 @@
     state.guidanceOpen = false;
     state.treeCollapsed = false;
     state.guidanceHub = dest === "guidance";
-    // The three embedded tools keep their own inner position (wizard step, station, open
-    // editor) in their own IIFE, which the state resets above cannot reach -- so a tile click
-    // used to land on step 3 / station D / the fee-data page again instead of on the tool's
-    // first screen. Each tool exposes a narrow reset() on its public interface that rewinds
-    // the position WITHOUT discarding what the user typed; see the comments there.
-    if (dest === "calculator" && window.VCLCALC && window.VCLCALC.reset) window.VCLCALC.reset();
+    // Every tool tile rewinds its embedded tool to its first screen on a tile click (the inner
+    // position lives in each tool's own IIFE, out of reach of the state resets above). For the Fee
+    // Calculator that means: a click on its tile ALWAYS lands on the country selection and leaves
+    // the Worksharing / Super-Grouping flow, wherever the user was (user decision 2026-10-16).
+    if (dest === "calculator") {
+      wsMode = false; // leave the WS/SG flow; applyWsMode() (via fillCalcHead below) shows the classic
+      if (window.VCLCALC && window.VCLCALC.reset) window.VCLCALC.reset();
+    }
     else if (dest === "workflow" && window.VCL_WORKFLOW && window.VCL_WORKFLOW.reset) window.VCL_WORKFLOW.reset();
     else if (dest === "budget" && window.VCL_BUDGET && window.VCL_BUDGET.reset) window.VCL_BUDGET.reset();
     if (dest === "calculator") state.view = "calculator";

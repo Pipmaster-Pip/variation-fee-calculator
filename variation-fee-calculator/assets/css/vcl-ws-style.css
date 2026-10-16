@@ -1,0 +1,330 @@
+/* ============================================================================
+ * Worksharing / Super-Grouping flow (vcl-ws.js) -- the Fee Calculator's gold-themed
+ * variant of the shared Variations+Procedures editor. The geometry is Budget's
+ * editor CSS (.vcl-bud-*) 1:1 -- itself a verbatim port of the Guided Workflow --
+ * recoloured from the budget plum to the Fee Calculator's gold. Own namespace
+ * (.vclws-*). Tokens are defined on .vclws-app so the flow also styles correctly in
+ * the standalone dev harness; inside the Toolbox it simply sits under .vcl-app.
+ * ============================================================================ */
+
+.vclws-app {
+  /* shared tokens (match the calculator's palette) */
+  --ink: #1b212c;
+  --muted: #838da0;
+  --ink-faint: #9aa3b2;
+  --paper: #f3f5f8;
+  --panel: #ffffff;
+  --border: #dde2e9;
+  --border-soft: #e8ecf1;
+  --ink-soft: #4d5566;
+  --line: #dde2e9;
+  --line-strong: #c3cbd6;
+  --figure: "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
+  /* type-badge colours */
+  --ia: #3f6b45; --ia-bg: #eef3ee;
+  --ib: #7a5c00; --ib-bg: #f5eedd;
+  --ii: #a8651a; --ii-bg: #fbf0e2;
+  /* gold accent (replaces budget's --budget / --budget-bg / --budget-tint) */
+  --accent: #8f6e2e;
+  --accent-bg: #f5eedd;
+  --accent-tint: rgba(143, 110, 46, 0.07);
+  --accent-deep: #5f4a1e;
+  font-family: var(--figure);
+  color: var(--ink);
+}
+
+/* ---- Station rail (A B C) ---- */
+.vclws-app .vclws-stations { display: flex; gap: 6px; margin-bottom: 18px; position: relative; }
+.vclws-app .vclws-station { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; background: none; border: none; cursor: pointer; padding: 0; font: inherit; }
+.vclws-app .vclws-station:disabled { cursor: default; opacity: 0.45; }
+.vclws-app .vclws-station__dot { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; background: #fff; border: 1.5px solid var(--line); color: var(--muted); }
+.vclws-app .vclws-station.is-active .vclws-station__dot { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.vclws-app .vclws-station.is-done .vclws-station__dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+.vclws-app .vclws-station__label { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.3; }
+.vclws-app .vclws-station.is-active .vclws-station__label { color: var(--accent); font-weight: 600; }
+
+/* ---- Station body card ---- */
+.vclws-app .vclws-body { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 18px 20px; margin-bottom: 14px; }
+.vclws-app .vclws-body__title { font-size: 16px; font-weight: 600; color: var(--ink); margin: 0 0 2px; }
+.vclws-app .vclws-body__sub { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
+
+/* ---- fields / inputs / selects ---- */
+.vclws-app .vclws-field { margin-bottom: 14px; }
+.vclws-app .vclws-field--narrow { max-width: 200px; }
+
+/* Strengths station: a highlighted default box, then 2-column country cards each with a stepper.
+   Mirrors the classic calculator's Country-details step (role removed), recoloured gold. */
+.vclws-app .vclws-num-stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; width: fit-content; }
+.vclws-app .vclws-num-stepper button { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; padding: 0; border: none; background: var(--paper); color: var(--accent-deep); font-size: 16px; line-height: 1; cursor: pointer; }
+.vclws-app .vclws-num-stepper button:hover { background: var(--accent-soft); }
+.vclws-app .vclws-num-stepper input { width: 48px; height: 34px; text-align: center; border: none; border-left: 1px solid var(--line-strong); border-right: 1px solid var(--line-strong); font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink); background: var(--panel); }
+.vclws-app .vclws-num-stepper input:focus { outline: none; }
+
+/* Light-brown highlight box, matching the classic calculator's result/"Country details" box. */
+.vclws-app .vclws-strbox { background: #f4ebd5; border: 1px solid #d4bd85; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+.vclws-app .vclws-strbox__head { font-size: 13px; font-weight: 600; color: #5a4519; margin-bottom: 4px; }
+.vclws-app .vclws-strbox__sub { font-size: 12px; color: var(--ink-soft); margin: 0 0 12px; }
+.vclws-app .vclws-strbox__row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.vclws-app .vclws-strbox__fieldlabel { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin: 0 0 6px; }
+.vclws-app .vclws-strbox__reset { margin-left: auto; font-family: inherit; font-size: 12px; font-weight: 500; padding: 7px 12px; border-radius: 8px; cursor: pointer; color: var(--accent-deep); background: var(--panel); border: 1px solid var(--accent); }
+.vclws-app .vclws-strbox__reset:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.vclws-app .vclws-strbox__reset[disabled] { opacity: .45; cursor: default; color: var(--ink-faint); border-color: var(--line-strong); }
+.vclws-app .vclws-strbox__note { font-size: 12px; color: var(--ink-soft); margin: 12px 0 0; }
+
+.vclws-app .vclws-strbox-prochead { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin: 16px 0 8px; }
+.vclws-app .vclws-strlist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.vclws-app .vclws-strrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.vclws-app .vclws-strrow.has-own-strengths { border-color: var(--accent); background: var(--accent-soft); }
+.vclws-app .vclws-strrow__name { font-size: 14px; font-weight: 600; color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+.vclws-app .vclws-strrow--none { background: transparent; border-style: dashed; }
+.vclws-app .vclws-strrow__note { font-size: 12.5px; color: var(--ink-faint); font-weight: 500; }
+.vclws-app .vclws-strrow__ccs { font-size: 12.5px; color: var(--ink-soft); text-align: right; }
+.vclws-app .vclws-field-label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 5px; }
+.vclws-app .vclws-input, .vclws-app .vclws-select { box-sizing: border-box; height: 40px; width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.4; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--paper); color: var(--ink); }
+.vclws-app .vclws-input:focus, .vclws-app .vclws-select:focus { outline: none; border-color: var(--accent); }
+.vclws-app .vclws-select--country { max-width: 380px; }
+
+/* ---- type badges ---- */
+.vclws-app .vclws-type-badge { display: inline-block; font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; border: 1px solid transparent; }
+.vclws-app .vclws-type-badge--ia { color: var(--ia); background: var(--ia-bg); }
+.vclws-app .vclws-type-badge--ib { color: var(--ib); background: var(--ib-bg); }
+.vclws-app .vclws-type-badge--ii { color: var(--ii); background: var(--ii-bg); }
+
+/* ---- Station: Variations (VFC-style type steppers + special cases) ---- */
+.vclws-app .vclws-typegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 2px; }
+.vclws-app .vclws-typecard { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--panel); }
+.vclws-app .vclws-typecard.is-zero { background: var(--paper); }
+.vclws-app .vclws-typecard__t { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+.vclws-app .vclws-badge { display: inline-block; font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--paper); border: 1px solid var(--border); color: var(--muted); }
+.vclws-app .vclws-sp { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.vclws-app .vclws-sp__title { margin-top: 0; }
+/* Per-country card with a per-type variant table -- the classic calculator's Special cases panel
+   (.sp-card / .sp-tbl), recoloured via the WS gold tokens. */
+.vclws-app .vclws-sp-card { border: 1px solid var(--line); border-radius: 6px; background: var(--paper); padding: 12px 16px 14px; margin-bottom: 12px; }
+.vclws-app .vclws-sp-card:last-child { margin-bottom: 0; }
+.vclws-app .vclws-sp-card__head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--ink); padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.vclws-app .vclws-sp-lead { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent-deep); background: var(--accent-bg); padding: 2px 7px; border-radius: 5px; }
+.vclws-app .vclws-sp-tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
+.vclws-app .vclws-sp-tbl th:nth-child(1), .vclws-app .vclws-sp-tbl td:nth-child(1) { width: 80px; }
+.vclws-app .vclws-sp-tbl th:nth-child(2), .vclws-app .vclws-sp-tbl td:nth-child(2) { width: 150px; }
+.vclws-app .vclws-sp-tbl thead th { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 600; color: var(--ink-faint); text-align: left; padding: 8px 10px 6px 0; border: 0; }
+.vclws-app .vclws-sp-tbl td { padding: 6px 10px 6px 0; border: 0; border-top: 1px solid var(--line); vertical-align: middle; }
+.vclws-app .vclws-sp-tbl th:last-child, .vclws-app .vclws-sp-tbl td:last-child { text-align: right; padding-right: 0; }
+.vclws-app .vclws-sp-tbl .vclws-sp-scope { font-size: 12px; color: var(--ink-faint); }
+/* All variant selects the same width (not auto-sized to the selected label), so "standard" and
+   "simple - worksharing" line up. Caps to the column on a narrow embed. */
+.vclws-app .vclws-sp-tbl .vclws-select { width: 260px; max-width: 100%; min-width: 0; background: var(--panel); }
+
+/* ---- classification search ---- */
+.vclws-app .vclws-search-results { border: 1px solid var(--border); border-radius: 7px; margin-top: 4px; max-height: 180px; overflow-y: auto; background: var(--panel); }
+.vclws-app .vclws-search-result { display: block; width: 100%; text-align: left; padding: 8px 10px; font-size: 12.5px; border: none; background: none; cursor: pointer; border-bottom: 1px solid var(--border-soft); }
+.vclws-app .vclws-search-result:hover { background: var(--accent-tint); }
+
+/* ---- picked base header + Change ---- */
+.vclws-app .vclws-picked { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); font-size: 13.5px; }
+.vclws-app .vclws-picked__code { font-family: var(--figure); font-variant-numeric: tabular-nums; font-weight: 600; }
+.vclws-app .vclws-picked__muted { color: var(--muted); }
+.vclws-app .vclws-picked__right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.vclws-app .vclws-change { font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px 6px; flex: none; }
+.vclws-app .vclws-change:hover { text-decoration: underline; }
+
+/* ---- variations builder panel ---- */
+.vclws-app .vclws-builder { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 16px; background: var(--panel); }
+.vclws-app .vclws-builder__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.vclws-app .vclws-count { font-family: var(--figure); font-variant-numeric: tabular-nums; background: var(--border-soft); border-radius: 20px; padding: 1px 8px; font-size: 11px; }
+.vclws-app .vclws-subhead { font-size: 12.5px; font-weight: 600; color: var(--ink); margin: 12px 0 7px; }
+.vclws-app .vclws-rule { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+.vclws-app .vclws-mult { font-weight: 600; color: var(--accent); margin-right: 8px; font-family: var(--figure); font-variant-numeric: tabular-nums; }
+.vclws-app .vclws-add { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 8px; background: var(--panel); color: var(--accent); cursor: pointer; }
+.vclws-app .vclws-add:hover { border-color: var(--accent); background: var(--accent-tint); }
+
+/* ---- grouping variation rows ---- */
+.vclws-app .vclws-brow { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); margin-bottom: 8px; }
+.vclws-app .vclws-brow--compact { align-items: center; padding: 7px 10px; }
+.vclws-app .vclws-brow__main { flex: 1; min-width: 0; font-size: 13.5px; }
+.vclws-app .vclws-brow__text { min-width: 0; }
+.vclws-app .vclws-brow--compact .vclws-brow__main:has(> .vclws-brow__text) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vclws-app .vclws-brow__input { width: 100%; font-family: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--ink); }
+.vclws-app .vclws-brow__input:focus { outline: none; border-color: var(--accent); }
+.vclws-app .vclws-brow__matches { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.vclws-app .vclws-brow__match { display: block; width: 100%; text-align: left; padding: 6px 8px; font-size: 12.5px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--panel); cursor: pointer; }
+.vclws-app .vclws-brow__match:hover { border-color: var(--accent); background: var(--accent-tint); }
+.vclws-app .vclws-brow__pick { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.vclws-app .vclws-var-row__code { font-family: var(--figure); font-variant-numeric: tabular-nums; font-weight: 600; margin-right: 4px; }
+.vclws-app .vclws-rm { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: 13px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 7px; width: 32px; height: 32px; cursor: pointer; flex: none; }
+.vclws-app .vclws-rm:hover { border-color: var(--ii); color: var(--ii); }
+
+/* ---- type counters (reuse the shared RA-tasks stepper, in gold) ---- */
+.vclws-app .vclws-typecount { margin-top: 0; --vcl-rat-accent: var(--accent); --vcl-rat-accent-bg: var(--accent-bg); --vcl-rat-accent-tint: var(--accent-tint); }
+.vclws-app .vclws-typecount__label { display: block; margin: 0 0 8px; }
+.vclws-app .vclws-typecount__row { display: flex; flex-wrap: wrap; gap: 18px; }
+.vclws-app .vclws-typecount__cell { display: flex; flex-direction: column; gap: 5px; }
+.vclws-app .vclws-typecount__l { font-size: 12.5px; color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---- descriptive variant list under a picked code ---- */
+.vclws-app .vclws-variants { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.vclws-app .vclws-variant { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.vclws-app .vclws-variant:hover { border-color: var(--accent); background: var(--accent-tint); }
+.vclws-app .vclws-variant__label { font-size: 13px; color: var(--ink); }
+.vclws-app .vclws-vgroup { font-size: 12.5px; font-weight: 700; color: var(--ink); margin: 12px 2px 0; }
+.vclws-app .vclws-variants > .vclws-vgroup:first-child { margin-top: 0; }
+.vclws-app .vclws-vpre { font-weight: 600; color: var(--accent); margin-right: 6px; font-family: var(--figure); font-variant-numeric: tabular-nums; }
+
+/* ---- hints ---- */
+.vclws-app .vclws-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.vclws-app .vclws-hint--req { color: var(--accent); font-weight: 600; }
+
+/* ---- Procedures: submission-type chips, kind chips, CMS grid, procedure cards ---- */
+.vclws-app .vclws-section-label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 16px 0 6px; }
+.vclws-app .vclws-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+.vclws-app .vclws-chip { font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; }
+.vclws-app .vclws-chip:hover { border-color: var(--accent); }
+.vclws-app .vclws-chip.is-on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.vclws-app .vclws-chip.is-disabled { opacity: 0.4; pointer-events: none; }
+.vclws-app .vclws-derived { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+.vclws-app .vclws-derived strong { color: var(--accent); font-weight: 600; }
+.vclws-app .vclws-cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 5px; }
+/* Select all / Reset toggle after the CMS grid (WS flow). */
+.vclws-app .vclws-cms-selectall { margin-top: 8px; font-family: inherit; font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 7px; cursor: pointer; color: var(--accent-deep); background: var(--panel); border: 1px solid var(--accent); }
+.vclws-app .vclws-cms-selectall:hover { background: var(--accent); color: #fff; }
+.vclws-app .vclws-cc-chip-btn { font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; padding: 5px 4px; border-radius: 6px; border: 0.5px solid var(--border); background: var(--paper); color: var(--ink); cursor: pointer; display: inline-flex; align-items: baseline; justify-content: center; gap: 3px; }
+.vclws-app .vclws-cc-chip-btn:hover { border-color: var(--accent); }
+.vclws-app .vclws-cc-chip-btn.is-on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.vclws-app .vclws-cc__sfx { font-size: 9px; font-weight: 500; opacity: 0.7; }
+.vclws-app .vclws-proc-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+/* Procedure boxes (base + additional) sit in a light blue, per the WS redesign. */
+.vclws-app .vclws-proc-card { border: 1px solid #cddff2; border-radius: 9px; padding: 12px 14px; background: #eef4fb; margin-bottom: 10px; }
+.vclws-app .vclws-proc-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.vclws-app .vclws-proc-card__title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.vclws-app .vclws-proc-card .vclws-field { margin-bottom: 10px; }
+.vclws-app .vclws-proc-card .vclws-field:last-child { margin-bottom: 0; }
+
+/* ---- buttons / nav ---- */
+.vclws-app .vclws-btn { font-family: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.vclws-app .vclws-btn:hover { border-color: var(--accent); }
+.vclws-app .vclws-btn--primary { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.vclws-app .vclws-btn--primary:hover { background: #efe3c8; }
+.vclws-app .vclws-btn--ghost { border-color: transparent; background: transparent; padding: 9px 10px; }
+.vclws-app .vclws-btn--small { font-size: 12.5px; padding: 6px 10px; }
+.vclws-app .vclws-btn--danger { color: var(--muted); }
+.vclws-app .vclws-btn--danger:hover { border-color: var(--ii); color: var(--ii); }
+.vclws-app .vclws-btn[disabled] { opacity: 0.4; cursor: default; }
+.vclws-app .vclws-btn[disabled]:hover { border-color: var(--border); background: var(--panel); }
+.vclws-app .vclws-btn--primary[disabled]:hover { background: var(--accent-bg); }
+.vclws-app .vclws-nav { display: flex; justify-content: space-between; margin-top: 18px; }
+
+/* ---- Station D: Fees result -- the Classic Calculator's Overview + Details layout (.vres-*),
+   recoloured via the shared gold tokens for recognition. Rendered inside the station's own white
+   body card, so these carry no extra box of their own. ---- */
+.vclws-app .vclws-res-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.vclws-app .vclws-res-head--details { margin-top: 24px; }
+.vclws-app .vclws-res-h { font-family: var(--figure); font-size: 15px; font-weight: 600; color: var(--ink); margin: 0; }
+
+/* Print / Excel export buttons + their toolbar -- copied verbatim from the classic calculator
+   (.vclcalc-app .btn-export / .vres-headtools), which the WS flow never inherited because those
+   rules are scoped to .vclcalc-app. Without this the buttons render as unstyled (teal) controls. */
+.vclws-app .vres-headtools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vclws-app .btn-export { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel); font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--ink-soft); cursor: pointer; transition: background .12s, border-color .12s; }
+.vclws-app .btn-export:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-deep); }
+.vclws-app .btn-export svg { flex-shrink: 0; }
+
+.vclws-app .vres-curtoggle { display: inline-flex; border: 1.5px solid var(--accent); border-radius: 999px; overflow: hidden; }
+.vclws-app .vres-curtoggle .vres-ct { font-family: var(--figure); font-size: 11.5px; font-weight: 600; padding: 5px 14px; border: none; background: #fff; color: var(--accent-deep); cursor: pointer; }
+.vclws-app .vres-curtoggle .vres-ct.on { background: var(--accent); color: #fff; }
+
+.vclws-app .badge { display: inline-block; font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--border-soft); color: var(--ink-faint); }
+
+/* Suppress the host WordPress theme's default vertical cell borders on the result tables (the theme
+   sets `td { border: 1px }`, which the per-side rules below do not otherwise override, so faint
+   vertical lines leak between columns). Horizontal rules are managed explicitly. Mirrors the classic
+   calculator's own border reset. */
+.vclws-app .vres-ov th, .vclws-app .vres-ov td,
+.vclws-app .vres-tbl th, .vclws-app .vres-tbl td { border-left: 0; border-right: 0; }
+/* The host WP theme adds `table { margin-bottom }`, which inside the rounded .vres-ovwrap / card
+   leaves a white strip below the last (brown) row. Drop it so the total row is flush with the
+   rounded bottom edge. */
+.vclws-app .vres-ov, .vclws-app .vres-tbl, .vclws-app .vclws-sp-tbl { margin: 0; }
+
+/* Overview table */
+.vclws-app .vres-ovwrap { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; overflow-x: auto; background: var(--panel); }
+.vclws-app .vres-ov { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+/* Header row in the same light brown as the total row (+ a defining bottom border), so the overview
+   is framed brown top and bottom. */
+.vclws-app .vres-ov thead th { font-family: var(--figure); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #5a4519; background: #f4ebd5; border-bottom: 1px solid #d4bd85; text-align: right; padding: 9px 14px; }
+.vclws-app .vres-ov thead th:first-child { text-align: left; }
+.vclws-app .vres-ov tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border-soft); text-align: right; color: var(--ink-soft); }
+.vclws-app .vres-ov tbody td:first-child { text-align: left; color: var(--ink); }
+.vclws-app .vres-ov tbody tr:nth-child(even) td { background: #fafbfd; }
+.vclws-app .vres-ovname { display: inline-flex; align-items: center; gap: 7px; }
+/* Country code pills + total row in the classic calculator's light brown (user request). */
+.vclws-app .vres-ovcode { background: #f4ebd5; color: #5a4519; }
+.vclws-app .vres-ovmoney { font-family: var(--figure); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.vclws-app .vres-ov tfoot td { padding: 11px 14px; font-weight: 600; color: #5a4519; background: #f4ebd5; border-top: 1px solid #d4bd85; text-align: right; font-variant-numeric: tabular-nums; }
+.vclws-app .vres-ov tfoot td:first-child { border-bottom-left-radius: 11px; }
+.vclws-app .vres-ov tfoot td:last-child { border-bottom-right-radius: 11px; }
+/* Collapsed MRP/DCP summary row: the CMS-count subline, the lead flag, the default-strength asterisk + its note. */
+.vclws-app .vclws-ovsub { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
+.vclws-app .vclws-ovlead { font-size: 10px; color: var(--accent-deep); }
+.vclws-app .vclws-ovstar { color: var(--accent-deep); font-weight: 700; }
+.vclws-app .vclws-ovnote { font-size: 11.5px; color: var(--ink-faint); margin: 8px 0 0; }
+.vclws-app .vres-ov tfoot td:first-child { text-align: left; }
+.vclws-app .vres-ov tbody tr.vclws-ovproc td { background: var(--accent-soft); color: var(--accent-deep); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-align: left; padding: 7px 14px; }
+.vclws-app .vclws-res-prochead { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-deep); margin: 16px 0 8px; }
+
+/* Detail cards */
+.vclws-app .vres-cty { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 12px; background: #fff; }
+.vclws-app .vres-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 15px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.vclws-app .vres-name { font-size: 14.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vclws-app .vres-meta { font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+.vclws-app .vres-meta b { color: var(--ink-soft); font-weight: 700; }
+.vclws-app .vres-total { text-align: right; flex-shrink: 0; }
+.vclws-app .vres-eq { display: block; font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 10px; color: var(--ink-faint); }
+.vclws-app .vres-amt { font-family: "Source Serif 4", "Georgia", serif; font-size: 18px; font-weight: 600; color: var(--accent-deep); }
+.vclws-app .vres-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.vclws-app .vres-tbl thead th { font-family: var(--figure); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-deep); background: var(--accent-soft); text-align: right; padding: 7px 15px; }
+.vclws-app .vres-tbl thead th:first-child { text-align: left; }
+.vclws-app .vres-tbl tbody td { padding: 8px 15px; border-bottom: 1px solid #f0ece3; color: var(--ink-soft); text-align: right; }
+.vclws-app .vres-tbl tbody td:first-child { text-align: left; color: var(--ink); }
+.vclws-app .vres-num { font-family: var(--figure); font-variant-numeric: tabular-nums; }
+.vclws-app .vres-tbl tfoot td { padding: 9px 15px; font-weight: 600; color: var(--ink); border-top: 1px solid var(--line-strong); text-align: right; background: #fff; }
+.vclws-app .vres-tbl tfoot td:first-child { text-align: left; }
+
+/* Per-type detail table (Variation · Special case · Base fee · Per add. strength · Line total) +
+   mechanic chips -- the classic calculator's result markup, recoloured for the WS gold theme. */
+.vclws-app .vres-var { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; white-space: nowrap; }
+.vclws-app .vres-cnt { font-family: var(--figure); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink-soft); }
+.vclws-app .vres-caret { display: inline-block; width: 16px; text-align: center; font-size: 13px; line-height: 1; color: var(--accent); flex-shrink: 0; }
+.vclws-app .vres-caret--none { color: transparent; }
+.vclws-app .vres-subnote { color: var(--ink-faint); font-size: 10.5px; font-family: var(--figure); font-variant-numeric: tabular-nums; }
+.vclws-app .vres-mult { color: var(--ink-faint); font-weight: 400; }
+.vclws-app .vres-sc { font-size: 12px; color: var(--ink-soft); text-align: right; white-space: nowrap; }
+.vclws-app .vres-sc--std { color: var(--ink-faint); }
+.vclws-app .vres-tbl--indicative tbody td.vres-num { color: var(--ink-faint); }
+.vclws-app .vres-feerow td { background: #faf7f0; font-style: italic; color: var(--ink-soft); }
+.vclws-app .vres-feerow td.vres-num { font-style: normal; }
+.vclws-app .vres-fnote { font-weight: 400; font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 10.5px; }
+.vclws-app .vres-fnote--grp { color: var(--accent-deep); }
+.vclws-app .vres-fnote--cap { color: #a8651a; }
+.vclws-app .vres-chip { display: inline-block; font-family: var(--figure); font-variant-numeric: tabular-nums; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; margin-right: 8px; white-space: nowrap; background: var(--accent-soft); color: var(--accent-deep); }
+.vclws-app .vres-chip--cap { background: #fbf0e2; color: #a8651a; }
+.vclws-app .vres-chip--none { background: transparent; color: var(--ink-faint); }
+.vclws-app .vres-total .vres-chip, .vclws-app .vres-total .vres-amt { vertical-align: middle; }
+/* In the overview's Mechanic column the chip/dash is flush right (no trailing margin, which otherwise
+   nudges it left of the right-aligned column). */
+.vclws-app .vres-ov td .vres-chip { margin-right: 0; }
+
+/* Clickable overview rows -- hover highlight, and a brief flash on the detail card jumped to. */
+.vclws-app .vres-ov tbody tr[data-ovrow] { cursor: pointer; }
+.vclws-app .vres-ov tbody tr[data-ovrow]:hover td { background: #faf4e4; }
+.vclws-app .vres-ov tbody tr[data-ovrow]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.vclws-app .vres-cty.vclws-flash { animation: vclws-flash 1.4s ease-out; }
+@keyframes vclws-flash { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+
+.vclws-app .vres-grand { display: flex; justify-content: space-between; align-items: center; border: 1.5px solid var(--accent); background: var(--accent-soft); border-radius: 12px; padding: 13px 16px; margin-top: 4px; }
+.vclws-app .vres-grand-l { font-size: 15px; font-weight: 600; color: var(--accent-deep); }
+.vclws-app .vres-grand-r { font-family: "Source Serif 4", "Georgia", serif; font-size: 19px; font-weight: 600; color: var(--accent-deep); font-variant-numeric: tabular-nums; }
+
+/* Clean printout from the Fees station: drop the wizard chrome, keep the result. */
+@media print {
+  .vclws-app .vclws-stations, .vclws-app .vclws-nav { display: none !important; }
+}

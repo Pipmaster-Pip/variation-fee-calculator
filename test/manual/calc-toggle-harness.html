@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Calculator ⇄ WS/SG toggle — dev harness</title>
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-style.css" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-calc-style.css" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-ra-tasks.css" />
+<link rel="stylesheet" href="../../variation-fee-calculator/assets/css/vcl-ws-style.css" />
+<style>
+  body { margin: 0; padding: 24px; background: #EFEFEC; font-family: -apple-system, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .hidden { display: none !important; }
+  /* mirror the calc head action buttons so the two buttons read as a pair */
+  .calc-head-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .calc-feedata-btn { font: inherit; font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: 3px; cursor: pointer; background: #f4ebd5; border: 1px solid #d4bd85; color: #5a4519; }
+  .calc-feedata-btn:hover { border-color: #8f6e2e; }
+</style>
+</head>
+<body>
+  <div class="vcl-app"><div class="wrap">
+    <div class="classification-head classification-head--calc" id="vcl-calcHead"></div>
+    <div class="vclcalc-app" id="vclcalc-app">
+      <div class="rail" id="vclcalc-rail"></div>
+      <div id="vclcalc-stepContent"></div>
+      <div class="src"><div class="fx-status-row"><span id="vclcalc-fxStatus"></span></div></div>
+    </div>
+    <div class="vclws-mount hidden" id="vcl-wsMount"></div>
+  </div></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-calc-app.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours-data.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-workload-hours.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-sg-logic.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-submission.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-ra-tasks-ui.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-budget-engine.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-proc-editor.js"></script>
+  <script src="../../variation-fee-calculator/assets/js/vcl-ws.js"></script>
+  <script>
+    // This mirrors vcl-app.js's fillCalcHead() toggle wiring (the real shell's own code), so the
+    // harness verifies the exact integration pattern with the real classic calculator mounted.
+    var calcHead = document.getElementById("vcl-calcHead");
+    var wsMode = false, wsRendered = false;
+    function applyWsMode() {
+      var calcApp = document.getElementById("vclcalc-app");
+      var wsMount = document.getElementById("vcl-wsMount");
+      if (wsMode && !wsRendered && window.VCL_WS) { window.VCL_WS.render(wsMount); wsRendered = true; }
+      calcApp.classList.toggle("hidden", wsMode);
+      wsMount.classList.toggle("hidden", !wsMode);
+      var btn = calcHead.querySelector("#vcl-calcWsBtn");
+      if (btn) btn.textContent = wsMode ? "Classic Calculator" : "Worksharing / Super-Grouping";
+    }
+    calcHead.innerHTML = '<h3>Variation Fee Calculator</h3>'
+      + '<p class="calc-head-actions">'
+      + '<button type="button" class="calc-feedata-btn" id="vcl-calcFeeDataBtn">Fee data — country details</button>'
+      + '<button type="button" class="calc-feedata-btn" id="vcl-calcWsBtn">Worksharing / Super-Grouping</button>'
+      + '</p>';
+    calcHead.querySelector("#vcl-calcWsBtn").addEventListener("click", function () { wsMode = !wsMode; applyWsMode(); });
+    calcHead.querySelector("#vcl-calcFeeDataBtn").addEventListener("click", function () {
+      if (wsMode) { wsMode = false; applyWsMode(); }
+      if (window.VCLCALC && window.VCLCALC.openFeeData) window.VCLCALC.openFeeData();
+    });
+    applyWsMode();
+  </script>
+</body>
+</html>

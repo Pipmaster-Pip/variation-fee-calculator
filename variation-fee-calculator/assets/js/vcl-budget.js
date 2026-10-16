@@ -154,6 +154,23 @@
   var state = { lines: plan.lines, annualLines: plan.annualLines || [], hoursPerHead: plan.hoursPerHead, internalRate: plan.internalRate || "", trackExternal: !!plan.trackExternal, resultsById: {}, storageOk: true, expandedId: null, sortKey: "quarter", sortDir: "desc", breakdownMode: "combined" };
   var container = null;
   var modalState = null; // null when closed, else { editingId, draft, station, query, searchResults }
+  // Shared Variations+Procedures editor (vcl-proc-editor.js) -- the single, GW-exact implementation
+  // used by both this tool and the Fee Calculator's WS/SG flow. Lazily created (prefix "vcl-bud", so
+  // its markup/CSS is byte-identical to this tool's own former renderStationA/B). getSub reads the
+  // live modalState, so one instance serves every opened line.
+  var procEditor = null;
+  function getProcEditor() {
+    if (!procEditor && window.VCL_PROC_EDITOR) {
+      procEditor = window.VCL_PROC_EDITOR.create({
+        prefix: "vcl-bud",
+        getSub: function () { return modalState.draft.submission; },
+        engines: engines,
+        onChange: refreshEditor,
+        onFullRerender: rerender,
+      });
+    }
+    return procEditor;
+  }
   // Annual "Add product" editor (Task 7) -- a second, independent takeover, mutually exclusive with
   // modalState (only one editor is ever open at a time). null when closed, else
   // { editingId, draft, station:"A"|"B", reached:{A,B}, collision:<id>|null }.
@@ -194,6 +211,7 @@
       query: "",
       searchResults: [],
     };
+    if (getProcEditor()) procEditor.resetSearch(); // fresh classification search per opened line
     rerender();
   }
   function closeModal() { modalState = null; rerender(); scrollToTop(); }
@@ -1212,36 +1230,6 @@
     var ema = all.find(function (c) { return c.roles.indexOf("EMA") !== -1; });
     return ema ? ema.cc : null;
   }
-  // Targeted update: rebuilds only the results host, leaving the search <input> (and its focus/
-  // caret) untouched. A full rerender() on every keystroke would recreate the input and drop focus.
-  // Picking a result APPENDS a new variation onto d.submission.variations (Station A can hold
-  // several -- two or more is a Grouping) rather than overwriting a single variationCode field.
-  function populateSearchResults(host) {
-    if (!host) return;
-    var d = modalState.draft;
-    host.innerHTML = "";
-    host.style.display = modalState.searchResults.length ? "" : "none";
-    modalState.searchResults.forEach(function (entry) {
-      var item = el("button", "vcl-bud-search-result", escapeHtml(entry.code + " — " + entry.title));
-      item.type = "button";
-      item.addEventListener("click", function () {
-        // Match the Guided Workflow: a single-variant code resolves immediately; a multi-variant
-        // code leaves the base unresolved so Station A can show the descriptive variant list.
-        var variants = entry.variants || [];
-        var only = variants.length === 1 ? variants[0] : null;
-        var v = { code: entry.code, variantId: only ? only.id : null, type: only ? only.type : null };
-        // Picking sets the BASE variation (variations[0]); additional variations for a Grouping are
-        // added via the grouping list once a base is chosen. If a (possibly emptied) base slot
-        // already exists it's replaced in place so any additional variations keep their indices.
-        if (d.submission.variations.length) d.submission.variations[0] = v;
-        else d.submission.variations.push(v);
-        modalState.query = "";
-        modalState.searchResults = [];
-        rerender(); // click, not a keystroke -- safe to fully rerender (no focus to preserve)
-      });
-      host.appendChild(item);
-    });
-  }
 
   // The four stations of the editor. A (Product: product identity + number of strengths + year/
   // quarter/probability) leads, then B (Variations), C (Procedures), D (RA tasks).
@@ -1466,125 +1454,10 @@
   // gets a picked-header (+ Change) above the list; a code-less one has nothing to head and lives
   // in the list as one row per type, with how many of them in front. variations[0] is always the
   // base slot; variations[1..] are the additional (grouping) variations.
-  function renderStationA(host) {
-    var sub = modalState.draft.submission;
-    host.appendChild(el("div", "vcl-bud-body__title", "Variations"));
-    host.appendChild(el("div", "vcl-bud-body__sub", "Which variation, or variations, are you submitting?"));
-
-    var base = sub.variations[0];
-    var entry = base && base.code ? ENTRIES.find(function (e) { return e.code === base.code; }) : null;
-
-    // A classification code is picked but its specific variant/type isn't chosen yet: show the
-    // descriptive variant list and stop -- no list until the base variation is resolved.
-    if (entry && !base.type) {
-      renderPickedBaseHeader(host, base);
-      renderVariantChooser(host, entry, base);
-      return;
-    }
-    if (entry) renderPickedBaseHeader(host, base);
-
-    var anythingChosen = sub.variations.some(function (v) { return v.code || v.type; });
-    if (!entry && !anythingChosen) {
-      renderClassificationSearch(host);
-      host.appendChild(el("hr", "vcl-bud-rule"));
-      renderTypeCounters(host);
-      return;
-    }
-    renderVariationsPanel(host, !!entry);
-  }
-
-  // Guided-Workflow-exact variant list for a picked classification code: one full-width row per
-  // variant (descriptive label left, type badge right), same structure as vcl-workflow.js
-  // buildStationA. Picking a row resolves the base variation's variant id + type. Same look as the
-  // GW, in the budget colour (via .vcl-bud-variant).
-  function renderVariantChooser(host, entry, base) {
-    var chooser = el("div", "vcl-bud-variants");
-    appendVariantOptions(chooser, entry, function (v) { base.variantId = v.id; base.type = v.type; rerender(); });
-    host.appendChild(chooser);
-  }
-
-  // ---- Guideline code fragments and names (shared with the Guided Workflow via vcl-data.js) ----
-  function variantPrefix(v, underGroup) { return DATA.variantPrefix ? DATA.variantPrefix(v, underGroup) : ""; }
-  function variantFullName(entry, v) { return DATA.variantFullName ? DATA.variantFullName(entry, v) : (entry && entry.title) || ""; }
-  function fullCodeOf(code, variantId) { return DATA.variantFullCode ? DATA.variantFullCode(code, variantId) : code; }
-  function findVariantById(entry, variantId) {
-    if (!entry || !entry.variants || !entry.variants.length) return null;
-    if (entry.variants.length === 1) return entry.variants[0];
-    return entry.variants.find(function (v) { return v.id === variantId; }) || null;
-  }
-  // One entry's variants, with the Guideline's group headings and the bracketed code fragment
-  // in front of each wording. Used by both variant lists in this editor.
-  function appendVariantOptions(host, entry, onPick) {
-    var lastGroup = null;
-    (entry && entry.variants ? entry.variants : []).forEach(function (v) {
-      if (v.group !== lastGroup) {
-        if (v.group) host.appendChild(el("div", "vcl-bud-vgroup", escapeHtml(v.group)));
-        lastGroup = v.group;
-      }
-      var pre = variantPrefix(v, !!v.group);
-      var row = el("div", "vcl-bud-variant");
-      row.innerHTML = '<span class="vcl-bud-variant__label">'
-        + (pre ? '<span class="vcl-bud-vpre">' + escapeHtml(pre) + "</span>" : "")
-        + escapeHtml(v.label || (entry && entry.title) || v.type) + "</span> "
-        + '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(v.type) + '">' + escapeHtml(v.type) + "</span>";
-      row.addEventListener("click", function () { onPick(v); });
-      host.appendChild(row);
-    });
-  }
-
-  // "Classification" search field (focus-safe targeted-update pattern: populateSearchResults only
-  // ever rebuilds the results host below, never this input).
-  function renderClassificationSearch(host) {
-    var varField = el("div", "vcl-bud-field");
-    varField.appendChild(el("label", "vcl-bud-field-label", "Classification"));
-    var varInput = el("input", "vcl-bud-input");
-    varInput.type = "text";
-    varInput.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ...";
-    varInput.value = modalState.query || "";
-    varInput.addEventListener("input", function () {
-      modalState.query = varInput.value;
-      modalState.searchResults = BUD.searchEntries(ENTRIES, modalState.query);
-      populateSearchResults(document.getElementById("vcl-bud-search-results"));
-    });
-    varField.appendChild(varInput);
-    var results = el("div", "vcl-bud-search-results");
-    results.id = "vcl-bud-search-results";
-    varField.appendChild(results);
-    populateSearchResults(results);
-    host.appendChild(varField);
-  }
+  // Variations station -- delegated to the shared vcl-proc-editor.js (GW-exact, prefix vcl-bud).
+  function renderStationA(host) { getProcEditor().renderVariations(host); }
 
   // "No classification code? Set the type directly:" -- sets the base variation's type with no code.
- 
-  // Picked base header (+ Change) -- GW's buildPickedHeader / buildTypeOnlyHeader. When the picked
-  // classification entry offers more than one type, a small type chooser lets the user switch.
-  function renderPickedBaseHeader(host, base) {
-    var entry = base.code ? ENTRIES.find(function (e) { return e.code === base.code; }) : null;
-    var variant = entry && base.type ? findVariantById(entry, base.variantId) : null;
-    var badge = base.type ? '<span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(base.type) + '">' + escapeHtml(base.type) + "</span>" : "";
-    var picked = el("div", "vcl-bud-picked");
-    var label = el("span");
-    // Full Guideline code and full name (entry - group - variant); the type badge parks at the
-    // right edge next to Change rather than sitting inside the wording.
-    if (entry) label.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(variant ? fullCodeOf(entry.code, variant.id) : entry.code) + "</span> — " + escapeHtml(variant ? variantFullName(entry, variant) : entry.title);
-    else if (base.code) label.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(base.code) + "</span>";
-    else label.innerHTML = 'Variation type <span class="vcl-bud-picked__muted">— no classification code</span>';
-    picked.appendChild(label);
-    var right = el("span", "vcl-bud-picked__right", badge);
-    var change = el("button", "vcl-bud-change", "Change");
-    change.type = "button";
-    change.addEventListener("click", function () {
-      // Empty the base slot (keep it at index 0 so additional variations keep their indices) --
-      // reverts to the search / quick-pick.
-      modalState.draft.submission.variations[0] = { code: null, variantId: null, type: null };
-      modalState.query = "";
-      modalState.searchResults = [];
-      rerender();
-    });
-    right.appendChild(change);
-    picked.appendChild(right);
-    host.appendChild(picked);
-  }
 
   // Additional variations (variations[1..]) -- GW's buildGroupingList. Two or more variations total
   // are priced as a Grouping.
@@ -1592,203 +1465,6 @@
   // row and leave it open, so one is routinely left standing; it carries nothing, so it is
   // dropped when the line is saved rather than counting as a variation.
   function isBlankVariation(v) { return !v.type && !v.code && !(v.query || "").trim(); }
-
-  // ---- code-less variations, counted rather than listed one by one ----
-  // The first one occupies the base slot (variations[0]); every further one is an additional
-  // variation without a code. Both are the same thing to the user, so every count spans both.
-  function codelessCount(t) {
-    return modalState.draft.submission.variations
-      .filter(function (v) { return !v.code && v.type === t; }).length;
-  }
-  function addCodeless(t) {
-    var vars = modalState.draft.submission.variations;
-    // Fill the empty base slot first -- the shared engine prices variations[0] as the base.
-    if (vars[0] && !vars[0].code && !vars[0].type) {
-      vars[0] = { code: null, variantId: null, type: t, query: "" };
-      return;
-    }
-    vars.push({ code: null, variantId: null, type: t, query: "" });
-  }
-  function removeCodeless(t, all) {
-    var vars = modalState.draft.submission.variations;
-    for (var i = vars.length - 1; i >= 1; i--) {
-      if (!vars[i].code && vars[i].type === t) { vars.splice(i, 1); if (!all) return; }
-    }
-    // The base slot is never spliced away -- it is emptied, so variations[0] stays the base.
-    if (vars[0] && !vars[0].code && vars[0].type === t) vars[0] = { code: null, variantId: null, type: null, query: "" };
-  }
-  // Variations behind the panel's badge: the code-less ones plus every listed row with a code.
-  function panelVariationCount() {
-    var codeless = ["IA", "IB", "II"].reduce(function (n, t) { return n + codelessCount(t); }, 0);
-    return codeless + modalState.draft.submission.variations
-      .filter(function (v, i) { return i >= 1 && !!v.code && !!v.type; }).length;
-  }
-
-  // The three type counters at the foot of the variations block. "+" adds one code-less
-  // variation of that type, "-" takes the last one away. Mirrors the Guided Workflow.
-  function renderTypeCounters(host) {
-    var wrap = el("div", "vcl-bud-typecount");
-    wrap.appendChild(el("span", "vcl-bud-hint vcl-bud-typecount__label", "or add variations without a classification code:"));
-    var cells = el("div", "vcl-bud-typecount__row");
-    ["IA", "IB", "II"].forEach(function (t) {
-      var n = codelessCount(t);
-      var cell = el("div", "vcl-bud-typecount__cell");
-      cell.appendChild(el("span", "vcl-bud-typecount__l",
-        "Type " + escapeHtml(t) + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>"));
-      var st = el("span", "vcl-rat-stepper");
-      var minus = el("button", null, "&minus;");
-      minus.type = "button"; minus.disabled = n === 0;
-      minus.setAttribute("aria-label", "Remove one Type " + t + " variation without a classification code");
-      minus.addEventListener("click", function () { removeCodeless(t, false); rerender(); });
-      var plus = el("button", null, "+");
-      plus.type = "button";
-      plus.setAttribute("aria-label", "Add one Type " + t + " variation without a classification code");
-      plus.addEventListener("click", function () { addCodeless(t); rerender(); });
-      st.appendChild(minus);
-      st.appendChild(el("span", "vcl-rat-stepper__val" + (n === 0 ? " is-zero" : ""), String(n)));
-      st.appendChild(plus);
-      cell.appendChild(st);
-      cells.appendChild(cell);
-    });
-    wrap.appendChild(cells);
-    host.appendChild(wrap);
-  }
-
-  // The variations list. Headed "Additional variations" when a coded base variation sits above
-  // it, otherwise "Variations" -- because then the list holds the base variation too.
-  function renderVariationsPanel(host, hasCodeHeader) {
-    var sub = modalState.draft.submission;
-    var panel = el("div", "vcl-bud-builder");
-    var head = el("div", "vcl-bud-builder__head");
-    head.appendChild(el("span", null, hasCodeHeader ? "Additional variations" : "Variations"));
-    head.appendChild(el("span", "vcl-bud-count", String(panelVariationCount())));
-    panel.appendChild(head);
-
-    // One row per type for the code-less variations, with how many of them in front.
-    ["IA", "IB", "II"].forEach(function (t) {
-      var n = codelessCount(t);
-      if (!n) return;
-      var row = el("div", "vcl-bud-brow vcl-bud-brow--compact");
-      var main = el("div", "vcl-bud-brow__main");
-      main.innerHTML = '<span class="vcl-bud-brow__text"><span class="vcl-bud-mult">' + n + " &times;</span>Type "
-        + escapeHtml(t) + ' <span class="vcl-bud-picked__muted">— no classification code</span></span>'
-        + ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(t) + '">' + escapeHtml(t) + "</span>";
-      row.appendChild(main);
-      var rm = el("button", "vcl-bud-rm", "✕");
-      rm.type = "button";
-      rm.setAttribute("aria-label", "Remove all " + n + " Type " + t + " variations without a classification code");
-      rm.addEventListener("click", function () { removeCodeless(t, true); rerender(); });
-      row.appendChild(rm);
-      panel.appendChild(row);
-    });
-
-    // The row currently being added by code -- a blank search form, or one where a code is
-    // picked but its variant is not. It belongs under the heading below, not in the list.
-    var openIdx = sub.variations.findIndex(function (v, i) { return i >= 1 && !v.type; });
-
-    // Then the coded ones, each on its own row (they are all different).
-    sub.variations.forEach(function (v, i) {
-      if (i === 0 || i === openIdx) return;
-      if (!v.code && v.type) return;   // already covered by the counted rows above
-      panel.appendChild(renderVariationRow(v, i));
-    });
-
-    // Adding by code: a small button that opens the familiar search row in its place.
-    panel.appendChild(el("div", "vcl-bud-subhead", "Add a variation by code"));
-    if (openIdx !== -1) {
-      panel.appendChild(renderVariationRow(sub.variations[openIdx], openIdx));
-    } else {
-      var add = el("button", "vcl-bud-add", "＋ Add variation");
-      add.type = "button";
-      add.addEventListener("click", function () { sub.variations.push({ code: null, variantId: null, type: null, query: "" }); rerender(); });
-      panel.appendChild(add);
-    }
-
-    panel.appendChild(el("hr", "vcl-bud-rule"));
-    renderTypeCounters(panel);
-    host.appendChild(panel);
-
-    var total = panelVariationCount() + (hasCodeHeader ? 1 : 0);
-    if (total >= 2) {
-      host.appendChild(el("p", "vcl-bud-hint", total + " variations — this line is priced as a Grouping."));
-    }
-  }
-
-  // One additional (grouping) variation row -- mirrors the Guided Workflow's buildGroupingRow
-  // state machine: resolved (code+title+badge, or bare type) → text; a code with several types →
-  // a type chooser; empty → a per-row search + "or set the type directly:" quick-pick. The row's
-  // search rebuilds only its own matches host (focus-safe), never the whole editor.
-  function renderVariationRow(v, idx) {
-    var sub = modalState.draft.submission;
-    var row = el("div", "vcl-bud-brow");
-
-    if (v.type) {
-      row.classList.add("vcl-bud-brow--compact"); // single resolved line -> compact, vertically centered
-      var main = el("div", "vcl-bud-brow__main");
-      if (v.code) {
-        var e0 = ENTRIES.find(function (x) { return x.code === v.code; });
-        var v0 = findVariantById(e0, v.variantId);
-        main.innerHTML = '<span class="vcl-bud-brow__text"><span class="vcl-bud-picked__code">' + escapeHtml(v0 ? fullCodeOf(v.code, v0.id) : v.code) + "</span> " + escapeHtml(e0 ? variantFullName(e0, v0) : "") + "</span>" +
-          ' <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(v.type) + '">' + escapeHtml(v.type) + "</span>";
-      } else {
-        main.innerHTML = 'Type <span class="vcl-bud-type-badge vcl-bud-type-badge--' + typeBucketClass(v.type) + '">' + escapeHtml(v.type) +
-          '</span> <span class="vcl-bud-picked__muted">— no classification code</span>';
-      }
-      row.appendChild(main);
-    } else if (v.code) {
-      // Code picked, but its variant isn't chosen -- Guided-Workflow-exact descriptive variant
-      // list (label left, type badge right), mirroring vcl-workflow.js buildGroupingRow.
-      var e1 = ENTRIES.find(function (x) { return x.code === v.code; });
-      var mainC = el("div", "vcl-bud-brow__main");
-      mainC.innerHTML = '<span class="vcl-bud-picked__code">' + escapeHtml(v.code) + "</span> " + escapeHtml(e1 ? e1.title : "");
-      var chooser = el("div", "vcl-bud-brow__pick vcl-bud-variants");
-      appendVariantOptions(chooser, e1, function (variant) { v.variantId = variant.id; v.type = variant.type; rerender(); });
-      mainC.appendChild(chooser);
-      row.appendChild(mainC);
-    } else {
-      // Empty -- search by code/title, or set the type directly (no classification).
-      var mainE = el("div", "vcl-bud-brow__main");
-      var inp = el("input", "vcl-bud-brow__input");
-      inp.type = "text";
-      inp.placeholder = "Search by code or keyword (i. e. shape, shelf, leaflet) ...";
-      inp.value = v.query || "";
-      inp.addEventListener("input", function () { v.query = inp.value; renderMatches(); });
-      mainE.appendChild(inp);
-      var matches = el("div", "vcl-bud-brow__matches");
-      mainE.appendChild(matches);
-      row.appendChild(mainE);
-      renderMatches();
-      function renderMatches() {
-        matches.innerHTML = "";
-        var q = (v.query || "").trim().toLowerCase();
-        if (!q) return;
-        ENTRIES.filter(function (e) {
-          return e.code.toLowerCase().indexOf(q) !== -1 || (e.title || "").toLowerCase().indexOf(q) !== -1;
-        }).slice(0, 6).forEach(function (e) {
-          var m = el("button", "vcl-bud-brow__match");
-          m.type = "button";
-          m.innerHTML = '<span class="vcl-bud-var-row__code">' + escapeHtml(e.code) + "</span> " + escapeHtml(e.title);
-          m.addEventListener("click", function () {
-            // Single-variant code resolves immediately; else leave it for the variant list.
-            v.code = e.code;
-            var variants = e.variants || [];
-            var only = variants.length === 1 ? variants[0] : null;
-            v.variantId = only ? only.id : null;
-            v.type = only ? only.type : null;
-            rerender();
-          });
-          matches.appendChild(m);
-        });
-      }
-    }
-
-    var rm = el("button", "vcl-bud-rm", "✕");
-    rm.type = "button";
-    rm.setAttribute("aria-label", "Remove variation");
-    rm.addEventListener("click", function () { sub.variations.splice(idx, 1); rerender(); });
-    row.appendChild(rm);
-    return row;
-  }
 
   // ---- Station B: Procedures + multi-authorisation strategy ----
   // A labelled country <select> in the budget field style: options are country objects
@@ -1813,101 +1489,6 @@
     sel.addEventListener("change", function () { onPick(sel.value || null); });
     field.appendChild(sel);
     return field;
-  }
-
-  // Kind chips (National / MRP-DCP / CP) for one procedure. In a Super-Grouping the kinds NOT in
-  // VCL_SG_LOGIC.computeAllowedProcedureKinds are disabled (CP-exclusivity is the shared module's
-  // job, never reimplemented here); outside SG every kind stays selectable.
-  function procKindChips(p) {
-    var sub = modalState.draft.submission;
-    var kinds = [{ k: "national", l: "National" }, { k: "mrpdcp", l: "MRP / DCP" }, { k: "cp", l: "CP" }];
-    var allowed = SUB.sgActive(sub) ? engines().sgLogic.computeAllowedProcedureKinds(sub.procedures, p) : null;
-    var row = el("div", "vcl-bud-chips");
-    kinds.forEach(function (it) {
-      var isAllowed = !allowed || allowed.indexOf(it.k) !== -1;
-      var chip = el("button", "vcl-bud-chip" + (p.kind === it.k ? " is-on" : "") + (isAllowed ? "" : " is-disabled"), escapeHtml(it.l));
-      chip.type = "button";
-      if (!isAllowed) {
-        chip.disabled = true;
-        chip.title = it.k === "cp"
-          ? "Not allowed together with national/MRP-DCP procedures in Super-Grouping"
-          : "Not allowed together with CP in Super-Grouping";
-      } else {
-        chip.addEventListener("click", function () {
-          p.kind = it.k;
-          if (it.k === "cp") p.ema = SUB.emaCc(engines()); // recorded for display; pricing reads emaCc directly
-          refreshEditor();
-        });
-      }
-      row.appendChild(chip);
-    });
-    return row;
-  }
-
-  // CMS multi-select for an MRP/DCP procedure -- a GW-style clickable country-code chip grid
-  // (mirrors vcl-workflow.js procEditor's vcl-wf-cgrid), NOT checkboxes. The current RMS is
-  // excluded. Composite codes ("DE - BfArM") render as the base code + a tiny authority suffix.
-  function cmsChips(p) {
-    var wrap = el("div", "vcl-bud-field");
-    wrap.appendChild(el("label", "vcl-bud-field-label", "CMS (Concerned Member States)"));
-    var grid = el("div", "vcl-bud-cgrid");
-    countriesByRole("CMS").forEach(function (c) {
-      if (c.cc === p.rms) return; // the RMS cannot also be a CMS
-      var on = (p.cms || []).indexOf(c.cc) !== -1;
-      var m = /^([A-Za-z]{2})\s*[-–]\s*(.+)$/.exec(c.cc);
-      var label = m ? escapeHtml(m[1]) + '<span class="vcl-bud-cc__sfx">' + escapeHtml(m[2]) + "</span>" : escapeHtml(c.cc);
-      var chip = el("button", "vcl-bud-cc-chip-btn" + (on ? " is-on" : ""), label);
-      chip.type = "button";
-      chip.title = c.name || c.cc;
-      chip.addEventListener("click", function () {
-        if (on) p.cms = p.cms.filter(function (x) { return x !== c.cc; });
-        else if (p.cms.indexOf(c.cc) === -1) p.cms.push(c.cc);
-        refreshEditor();
-      });
-      grid.appendChild(chip);
-    });
-    wrap.appendChild(grid);
-    return wrap;
-  }
-
-  // Inner content of one procedure: the kind chips (National / MRP-DCP / CP) + the country-level
-  // fields for the chosen kind. Shared by the base procedure (rendered inline under "Procedure",
-  // GW-style) and by each additional procedure card (in WS/SG).
-  function procedureBody(host, p) {
-    var sub = modalState.draft.submission;
-    host.appendChild(procKindChips(p));
-    if (p.kind === "national") {
-      // EU-only national list once a multi-procedure / annual-update strategy is active.
-      var euOnly = SUB.multiProcedureMode(sub) || SUB.auActive(sub);
-      var natList = countriesByRole("national").filter(function (c) {
-        return !euOnly || NON_EU_PROCEDURE_COUNTRIES.indexOf(c.cc) === -1;
-      });
-      host.appendChild(countrySelectField("Country", natList, p.nat, function (cc) { p.nat = cc; refreshEditor(); }));
-    } else if (p.kind === "mrpdcp") {
-      host.appendChild(countrySelectField("RMS (Reference Member State)", countriesByRole("RMS"), p.rms, function (cc) {
-        p.rms = cc; p.cms = (p.cms || []).filter(function (x) { return x !== cc; }); refreshEditor();
-      }));
-      host.appendChild(cmsChips(p));
-      host.appendChild(el("p", "vcl-bud-hint", "Each selected CMS is charged its own national fee. The RMS cannot also be a CMS."));
-    } else if (p.kind === "cp") {
-      host.appendChild(el("p", "vcl-bud-hint", "CP · EMA — centralised procedure, one authority (EMA), no country selection."));
-    }
-  }
-
-  // An *additional* procedure (procedures[1..], WS/SG only) -- a removable card wrapping the shared
-  // procedureBody. The base procedure (procedures[0]) is rendered inline by renderStationB instead.
-  function renderProcedureRow(p, idx) {
-    var sub = modalState.draft.submission;
-    var card = el("div", "vcl-bud-proc-card");
-    var head = el("div", "vcl-bud-proc-card__head");
-    head.appendChild(el("span", "vcl-bud-proc-card__title", "Procedure " + (idx + 1)));
-    var rm = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small vcl-bud-btn--danger", "✕");
-    rm.type = "button"; rm.setAttribute("aria-label", "Remove procedure");
-    rm.addEventListener("click", function () { sub.procedures.splice(idx, 1); refreshEditor(); });
-    head.appendChild(rm);
-    card.appendChild(head);
-    procedureBody(card, p);
-    return card;
   }
 
   // Strategy-enablement rule shared by the chips (renderStationB) AND the always-on normaliser.
@@ -1937,99 +1518,8 @@
     return allIA;
   }
 
-  function renderStationB(host) {
-    var sub = modalState.draft.submission;
-
-    // Same enablement rule the preview/Apply paths already ran; reuse it so chip state and the
-    // invalidated-mode clear can never diverge.
-    var allIA = normalizeModeEnablement(sub);
-
-    host.appendChild(el("div", "vcl-bud-body__title", "Procedures"));
-    host.appendChild(el("div", "vcl-bud-body__sub", "How is it submitted, and where? Fees are per country, so the countries are set here."));
-
-    // --- 1. Base procedure first (GW order): kind + country, rendered inline under "Procedure". ---
-    host.appendChild(el("div", "vcl-bud-section-label", "Procedure"));
-    procedureBody(host, sub.procedures[0]);
-
-    // --- 2. Submission type: Worksharing (mixed), or Super-Grouping / Annual Update (all Type IA).
-    // Only the applicable option(s) are offered, exactly as the Guided Workflow does. ---
-    host.appendChild(el("div", "vcl-bud-section-label", "Submission type"));
-    var chips = el("div", "vcl-bud-chips");
-    (allIA
-      ? [{ mode: "superGrouping", label: "Super-Grouping" }, { mode: "annualUpdate", label: "Annual Update" }]
-      : [{ mode: "worksharing", label: "Worksharing" }]
-    ).forEach(function (s) {
-      var on = sub.mode === s.mode;
-      var chip = el("button", "vcl-bud-chip" + (on ? " is-on" : ""), escapeHtml(s.label));
-      chip.type = "button";
-      chip.addEventListener("click", function () { sub.mode = on ? null : s.mode; refreshEditor(); });
-      chips.appendChild(chip);
-    });
-    host.appendChild(chips);
-    host.appendChild(el("p", "vcl-bud-hint", allIA
-      ? "Available because every listed variation is Type IA. Super-Grouping shares the change across several authorisations; Annual Update keeps it within this one."
-      : "Turn on when the change is shared across several procedures or authorisations. Grouping is applied automatically when you list more than one variation."));
-    if (allIA && !sub.mode) {
-      host.appendChild(el("p", "vcl-bud-hint vcl-bud-hint--req", "Select Super-Grouping or Annual Update to continue — a Type IA is never submitted on its own."));
-    }
-    // With no submission type set, show the DERIVED state (Single / Grouping) as a plain label.
-    // Suppressed while a mode is required (all-IA): the required hint above already governs.
-    if (!sub.mode && !allIA) {
-      var dm = SUB.displayMode(sub); // "single" | "grouping"
-      var derived = el("div", "vcl-bud-derived");
-      derived.innerHTML = "No submission type — priced as <strong>" + escapeHtml(MODE_LABEL[dm]) + "</strong>.";
-      host.appendChild(derived);
-    }
-
-    // --- 3. Lead + additional procedures (WS / SG only, after the submission type is chosen). ---
-    // --- Lead (WS / SG only): RMS-role authorities + the EMA, writing d.submission.lead ---
-    if (SUB.leadPricingActive(sub)) {
-      var leadList = countriesByRole("RMS").slice();
-      countriesByRole("EMA").forEach(function (c) {
-        if (!leadList.some(function (x) { return x.cc === c.cc; })) leadList.push(c);
-      });
-      // Mirror the Guided Workflow (vcl-workflow.js:2244 / buildWorksharingLead:947): a Centralised
-      // procedure in the group auto-leads it. Same condition as the GW -- leadPricingActive AND any
-      // CP procedure -- so the lead is forced to the EMA and the select is locked; without this a
-      // CP-in-Worksharing could keep an RMS lead, which leadPricingRole would then price under that
-      // RMS's role -- a different fee than the GW's forced-EMA lead. No CP => selectable as before.
-      // The sub.lead assignment itself now lives in normalizeModeEnablement (run at the top of this
-      // function and from every other normalize call-site) so it's symmetric across all entry
-      // points, not just whenever Station B happens to paint; hasCP is re-derived here only to
-      // drive this select's lock/hint.
-      var hasCP = sub.procedures.some(function (p) { return p.kind === "cp"; });
-      host.appendChild(countrySelectField(
-        SUB.sgActive(sub) ? "Super-Grouping RMS (lead)" : "Worksharing RMS (lead)",
-        leadList, sub.lead, function (cc) { sub.lead = cc; refreshEditor(); }, hasCP));
-      if (hasCP) {
-        host.appendChild(el("p", "vcl-bud-hint", SUB.sgActive(sub)
-          ? "Automatically the EMA — this Super-Grouping consists of Centralised procedures."
-          : "Automatically the EMA, because a Centralised procedure (CP) is part of the worksharing."));
-      }
-    }
-
-    // Additional procedures (procedures[1..]) -- only in a multi-procedure submission (WS / SG).
-    if (SUB.multiProcedureMode(sub)) {
-      host.appendChild(el("div", "vcl-bud-section-label", "Additional procedures"));
-      var list = el("div", "vcl-bud-proc-list");
-      sub.procedures.slice(1).forEach(function (p, i) { list.appendChild(renderProcedureRow(p, i + 1)); });
-      host.appendChild(list);
-      var add = el("button", "vcl-bud-btn vcl-bud-btn--ghost vcl-bud-btn--small", "+ Add procedure");
-      add.type = "button";
-      add.addEventListener("click", function () {
-        var np = { kind: "national", nat: null, rms: null, cms: [] };
-        // Respect CP-exclusivity from the outset: if 'national' is not allowed (a CP already sits
-        // in the group), start the new procedure on the first allowed kind instead.
-        if (SUB.sgActive(sub)) {
-          var allowed = engines().sgLogic.computeAllowedProcedureKinds(sub.procedures, np);
-          if (allowed.indexOf(np.kind) === -1) np.kind = allowed[0];
-        }
-        sub.procedures.push(np);
-        refreshEditor();
-      });
-      host.appendChild(add);
-    }
-  }
+  // Procedures station (incl. Worksharing/Super-Grouping) -- delegated to the shared vcl-proc-editor.js.
+  function renderStationB(host) { getProcEditor().renderProcedures(host); }
 
   // Station "RA tasks" in the line editor — the SAME shared component the Guided Workflow's
   // Station C uses, in the Budget tool's own colour. One implementation, so the two can't drift.

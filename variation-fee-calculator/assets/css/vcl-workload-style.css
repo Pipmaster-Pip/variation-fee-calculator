@@ -568,7 +568,7 @@
    exact same shape as the masthead's Summary pill (.app-header__summary) and the same three gold
    values the calculator tile in the tool bar carries: #8F6E2E / #F5EEDD / #5F4A1E. No icon and no
    arrow -- the label says where it goes. */
-.vcl-app #vcl-calcHead .calc-head-actions { margin: 14px 0 0; }
+.vcl-app #vcl-calcHead .calc-head-actions { margin: 14px 0 0; display: flex; gap: 12px; flex-wrap: wrap; }
 .vcl-app #vcl-calcHead .calc-feedata-btn {
   display: inline-flex;
   align-items: center;

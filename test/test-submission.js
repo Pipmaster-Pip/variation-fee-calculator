@@ -16,6 +16,9 @@ function eq(a, b, msg) {
   console.log((ok ? "  PASS " : "  FAIL ") + msg + (ok ? "" : " — expected " + JSON.stringify(b) + ", got " + JSON.stringify(a)));
   if (!ok) failures++;
 }
+// computeSubmissionFees also returns an additive `details`/`mode` breakdown now; these two cases
+// assert only the headline total + byCountry, so project to those before comparing.
+function tb(r) { return { total: r.total, byCountry: r.byCountry }; }
 function approx(a, b, msg) {
   var ok = Math.abs(a - b) < 1e-9;
   console.log((ok ? "  PASS " : "  FAIL ") + msg + (ok ? "" : " — expected " + b + ", got " + a));
@@ -75,7 +78,7 @@ function stubFees(input) {
 var feeEng = { computeFees: stubFees, feeRows: [], countries: [{ cc: "EU", roles: ["EMA"] }] };
 // single national submission
 var sSingle = mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "FR", cms: [] }] });
-eq(SUB.computeSubmissionFees(sSingle, feeEng), { total: 100, byCountry: [{ cc: "FR", total: 100 }] }, "fees: single national");
+eq(tb(SUB.computeSubmissionFees(sSingle, feeEng)), { total: 100, byCountry: [{ cc: "FR", total: 100 }] }, "fees: single national");
 // worksharing: lead DE excluded from its procedure, priced once as lead
 var sWs = mk({ mode: "worksharing", lead: "DE - BfArM",
   variations: [{ type: "II" }],
@@ -93,7 +96,7 @@ var feeEngAdmin = Object.assign({}, feeEng, {
   adminFeeFor: function (cc) { return (cc && cc.indexOf("CZ") === 0) ? { cc: "CZ", eur: 50 } : null; },
 });
 // single CZ national: base 100 + admin 50 once
-eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "CZ", cms: [] }] }), feeEngAdmin),
+eq(tb(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "CZ", cms: [] }] }), feeEngAdmin)),
   { total: 150, byCountry: [{ cc: "CZ", total: 150 }] }, "admin fee: single CZ = 100 + 50");
 // single FR national: no admin fee for FR
 eq(SUB.computeSubmissionFees(mk({ variations: [{ type: "IA" }], procedures: [{ kind: "national", nat: "FR", cms: [] }] }), feeEngAdmin).total,

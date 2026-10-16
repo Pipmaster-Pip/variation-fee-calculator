@@ -324,7 +324,7 @@ function vcl_register_assets() {
 	wp_register_script(
 		'vcl-budget',
 		VFC_PLUGIN_URL . 'assets/js/vcl-budget.js',
-		array( 'vcl-data', 'vcl-calc-app', 'vclcalc-xlsx', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-annual-overrides', 'vcl-budget-engine', 'vcl-budget-import', 'vcl-submission', 'vcl-sg-logic', 'vcl-ra-tasks-ui' ),
+		array( 'vcl-data', 'vcl-calc-app', 'vclcalc-xlsx', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-annual-data', 'vcl-annual-overrides', 'vcl-budget-engine', 'vcl-budget-import', 'vcl-submission', 'vcl-sg-logic', 'vcl-ra-tasks-ui', 'vcl-proc-editor' ),
 		$budget_app_ver,
 		true
 	);
@@ -417,6 +417,41 @@ function vcl_register_assets() {
 		$calc_app_ver,
 		true
 	);
+
+	// Shared Variations+Procedures editor (window.VCL_PROC_EDITOR) -- extracted from the Budget line
+	// editor so Budget Planning and the Fee Calculator's Worksharing/Super-Grouping flow render the
+	// same Guided-Workflow-exact input and can never drift. Used by both tools.
+	$proc_editor_file = VFC_PLUGIN_DIR . 'assets/js/vcl-proc-editor.js';
+	$proc_editor_ver  = file_exists( $proc_editor_file ) ? filemtime( $proc_editor_file ) : VFC_VERSION;
+	wp_register_script(
+		'vcl-proc-editor',
+		VFC_PLUGIN_URL . 'assets/js/vcl-proc-editor.js',
+		array( 'vcl-data', 'vcl-submission', 'vcl-budget-engine' ),
+		$proc_editor_ver,
+		true
+	);
+
+	// Worksharing / Super-Grouping flow (window.VCL_WS) -- the Fee Calculator's procedure-first flow
+	// the "Worksharing / Super-Grouping" toggle mounts. Reuses vcl-proc-editor for Variations +
+	// Procedures and prices through the shared engine (vcl-submission -> vcl-calc-app.computeFees).
+	$ws_app_file = VFC_PLUGIN_DIR . 'assets/js/vcl-ws.js';
+	$ws_app_ver  = file_exists( $ws_app_file ) ? filemtime( $ws_app_file ) : VFC_VERSION;
+	wp_register_script(
+		'vcl-ws',
+		VFC_PLUGIN_URL . 'assets/js/vcl-ws.js',
+		array( 'vcl-proc-editor', 'vcl-submission', 'vcl-sg-logic', 'vcl-calc-app', 'vcl-budget-engine', 'vcl-ra-tasks-ui', 'vcl-workload-hours', 'vcl-workload-hours-data', 'vcl-data' ),
+		$ws_app_ver,
+		true
+	);
+
+	$ws_style_file = VFC_PLUGIN_DIR . 'assets/css/vcl-ws-style.css';
+	$ws_style_ver  = file_exists( $ws_style_file ) ? filemtime( $ws_style_file ) : VFC_VERSION;
+	wp_register_style(
+		'vcl-ws-style',
+		VFC_PLUGIN_URL . 'assets/css/vcl-ws-style.css',
+		array( 'vcl-style' ),
+		$ws_style_ver
+	);
 }
 add_action( 'wp_enqueue_scripts', 'vcl_register_assets' );
 
@@ -451,6 +486,9 @@ function vcl_shortcode( $atts ) {
 	wp_enqueue_script( 'vcl-budget' );
 	wp_enqueue_script( 'vcl-ra-tasks-ui' );
 	wp_enqueue_style( 'vcl-ra-tasks-style' );
+	wp_enqueue_script( 'vcl-proc-editor' );
+	wp_enqueue_script( 'vcl-ws' );
+	wp_enqueue_style( 'vcl-ws-style' );
 	wp_localize_script( 'vcl-app', 'VCL_CONFIG', array(
 		'calculatorUrl' => $atts['calculator_url'],
 		// Admin-editable via the "Variation Toolbox" section on the plugin's settings
@@ -603,6 +641,9 @@ function vcl_shortcode( $atts ) {
 	        </div>
 	      </div>
 	    </div>
+	    <!-- Worksharing / Super-Grouping flow (vcl-ws.js) mounts here; toggled with #vclcalc-app by
+	         the "Worksharing / Super-Grouping" button in the calculator head (vcl-app.js). -->
+	    <div class="vclws-mount hidden" id="vcl-wsMount"></div>
 	  </div>
 	</div>
 

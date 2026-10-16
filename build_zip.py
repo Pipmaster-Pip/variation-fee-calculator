@@ -67,6 +67,9 @@ FILES = [
     "assets/js/vcl-feedata.js",
     "assets/js/vcl-calc-app.js",
     "assets/js/vcl-calc-data.js",
+    "assets/js/vcl-proc-editor.js",
+    "assets/js/vcl-ws.js",
+    "assets/css/vcl-ws-style.css",
 ]
 
 
