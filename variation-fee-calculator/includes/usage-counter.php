@@ -152,3 +152,33 @@ function vfc_usage_count_callback( $request ) {
 
 	return new WP_REST_Response( array( 'ok' => true ), 200 );
 }
+
+/**
+ * One-time reset of the all-time Classification "started" counter.
+ *
+ * Until v1.57.8, Classification was the app's landing view, so switchViewVisibility()
+ * counted a "classification started" on every page load -- even when the visitor never
+ * touched Classification. The counter was therefore effectively a page-load tally and its
+ * historical value is not comparable to the new, far smaller numbers now that Classification
+ * is counted only on genuine interaction (search / tree / code link). We zero it once so the
+ * dashboard starts clean. Guarded by a flag option so it never runs more than once, no matter
+ * how often 'init' fires.
+ */
+function vfc_usage_maybe_reset_classification() {
+	if ( get_option( 'vfc_usage_classification_reset_v1', false ) ) {
+		return;
+	}
+
+	update_option( 'vfc_usage_classification_started', 0, false );
+
+	// Also drop today's Classification "start" tally so the per-day view does not keep
+	// today's pre-reset page-load counts.
+	$data = get_option( 'vfc_usage_today_counts', array() );
+	if ( is_array( $data ) && isset( $data['counts']['classification']['s'] ) ) {
+		$data['counts']['classification']['s'] = 0;
+		update_option( 'vfc_usage_today_counts', $data, false );
+	}
+
+	update_option( 'vfc_usage_classification_reset_v1', 1, false );
+}
+add_action( 'init', 'vfc_usage_maybe_reset_classification' );

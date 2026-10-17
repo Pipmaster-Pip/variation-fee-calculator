@@ -275,6 +275,16 @@
     return "classification";
   }
 
+  // Fires the Classification "start" usage event -- the ONLY place it is counted. Called at the
+  // points where the visitor genuinely interacts with Classification: opening it from the tool
+  // bar / overview tile (goToDestination), typing a search, or following a code/deep link to a
+  // variation. switchViewVisibility() deliberately no longer counts Classification, since it is
+  // the landing view and would otherwise count every page load. vcl-usage.js dedup caps this at
+  // one POST per page load, so calling it from several entry points is safe.
+  function trackClassificationUse() {
+    if (window.VCL_USAGE) window.VCL_USAGE.track("classification", "start");
+  }
+
   // Maps state.view to the guide's tool id (see vcl-guide.js's TOOLS array) so the "How to
   // use" button opens on whichever tool the visitor is currently looking at, instead of
   // always starting at the first tool. Deliberately mirrors usageToolForView() above --
@@ -320,7 +330,16 @@
   // panels, and decides whether the browse column (search + chapter/section/subsection
   // accordion) is on screen at all -- it only is in the views that actually use the tree.
   function switchViewVisibility() {
-    if (window.VCL_USAGE) window.VCL_USAGE.track(usageToolForView(), "start");
+    // Count the "start" of whichever tool the visitor switched into -- EXCEPT Classification.
+    // Classification is the app's landing view (usageToolForView() falls back to it for the
+    // welcome/overview screen), so counting it here fired on every page load even when the
+    // visitor never touched Classification. It is now counted only on genuine interaction --
+    // see trackClassificationUse() and its call sites (Classification tool, search, code/deep
+    // link). Every other view switch here is a real tool start.
+    if (window.VCL_USAGE) {
+      const usageTool = usageToolForView();
+      if (usageTool !== "classification") window.VCL_USAGE.track(usageTool, "start");
+    }
     const isSummary = state.view === "summary";
     const isGrouping = state.view === "grouping";
     const isPreciseScope = state.view === "precisescope";
@@ -524,6 +543,7 @@
     // tree/search navigation reverts to the normal multi-entry listing.
     state.focusCode = code;
     state.classifyOpen = true;
+    trackClassificationUse(); // following a code/deep link into a variation is genuine Classification use
     state.guidanceOpen = false;
     state.activeChapter = entry.chapter;
     state.activeSection = entry.section || null;
@@ -4079,7 +4099,7 @@
     else if (dest === "workflow" && window.VCL_WORKFLOW && window.VCL_WORKFLOW.reset) window.VCL_WORKFLOW.reset();
     else if (dest === "budget" && window.VCL_BUDGET && window.VCL_BUDGET.reset) window.VCL_BUDGET.reset();
     if (dest === "calculator") state.view = "calculator";
-    else if (dest === "classification") { state.view = "browse"; state.classifyOpen = true; }
+    else if (dest === "classification") { state.view = "browse"; state.classifyOpen = true; trackClassificationUse(); }
     else if (dest === "guidance") { state.view = "browse"; state.guidanceOpen = true; }
     else if (dest === "grouping") { state.view = "grouping"; state.guidanceOpen = true; }
     else if (dest === "precisescope") { state.view = "precisescope"; state.guidanceOpen = true; }
@@ -4473,6 +4493,7 @@
     state.query = ev.target.value;
     if (state.query) {
       state.classifyOpen = true; // typing a query implies "show me matches"
+      trackClassificationUse(); // searching the codes is genuine Classification use
       // Surface the matches in the detail area immediately, from any view, without
       // needing to click "Classification" first.
       state.view = "browse";
